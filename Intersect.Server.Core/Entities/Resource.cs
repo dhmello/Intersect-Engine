@@ -3,6 +3,8 @@ using Intersect.GameObjects;
 using Intersect.Network.Packets.Server;
 using Intersect.Server.Database;
 using Intersect.Server.Database.PlayerData.Players;
+using Intersect.Server.Framework.Entities;
+using Intersect.Server.Framework.Items;
 using Intersect.Server.Maps;
 using Intersect.Server.Networking;
 using Intersect.Utilities;
@@ -156,6 +158,8 @@ public partial class Resource : Entity
             {
                 selectedTile = tiles[Randomization.Next(0, tiles.Count)];
             }
+            
+            var itemSource = AsItemSource();
 
             // Drop items
             foreach (var item in Items)
@@ -165,14 +169,26 @@ public partial class Resource : Entity
                     var mapId = selectedTile.GetMapId();
                     if (MapController.TryGetInstanceFromMap(mapId, MapInstanceId, out var mapInstance))
                     {
+
                         var randomQuantity = Randomization.Next(1, item.Quantity + 1);
-                        mapInstance.SpawnItem(selectedTile.GetX(), selectedTile.GetY(), item, item.Quantity, killer.Id);
+                        mapInstance.SpawnItem(itemSource, selectedTile.GetX(), selectedTile.GetY(), item, randomQuantity, killer.Id);
+
                     }
                 }
             }
         }
 
         Items.Clear();
+    }
+    
+    protected override EntityItemSource? AsItemSource()
+    {
+        return new EntityItemSource
+        {
+            EntityType = GetEntityType(),
+            EntityReference = new WeakReference<IEntity>(this),
+            Id = this.Base.Id
+        };
     }
 
     public override void ProcessRegen()

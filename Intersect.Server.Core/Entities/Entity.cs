@@ -10,6 +10,8 @@ using Intersect.Server.Database;
 using Intersect.Server.Database.PlayerData.Players;
 using Intersect.Server.Entities.Combat;
 using Intersect.Server.Entities.Events;
+using Intersect.Server.Framework.Entities;
+using Intersect.Server.Framework.Items;
 using Intersect.Server.General;
 using Intersect.Server.Localization;
 using Intersect.Server.Maps;
@@ -21,12 +23,13 @@ using Stat = Intersect.Enums.Stat;
 
 namespace Intersect.Server.Entities;
 
-public abstract partial class Entity : IDisposable
+public abstract partial class Entity : IEntity
 {
     //Instance Values
     private Guid _id = Guid.NewGuid();
-
-    public Guid MapInstanceId = Guid.Empty;
+    
+    [NotMapped] 
+    public Guid MapInstanceId { get; set; } = Guid.Empty;
 
     [JsonProperty("MaxVitals"), NotMapped] private long[] _maxVital = new long[Enum.GetValues<Vital>().Length];
 
@@ -3075,7 +3078,9 @@ public abstract partial class Entity : IDisposable
             // Spawn the actual item!
             if (MapController.TryGetInstanceFromMap(MapId, MapInstanceId, out var instance))
             {
-                instance.SpawnItem(X, Y, drop, randomQuantity, lootOwner, sendUpdate);
+                var itemSource = this.AsItemSource();
+                instance.SpawnItem(itemSource, X, Y, drop, drop.Quantity, lootOwner, sendUpdate);
+
             }
 
             // Process the drop (for players this would remove it from their inventory)
@@ -3084,6 +3089,8 @@ public abstract partial class Entity : IDisposable
             PacketSender.SendChatMsg(player, "You dropped: " + drop.ItemName.ToString() + " !", ChatMessageType.Notice, CustomColors.Alerts.Declined);
         }
     }
+
+    protected abstract EntityItemSource? AsItemSource();
 
     public bool IsDead()
     {
