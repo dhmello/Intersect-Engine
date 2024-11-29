@@ -306,11 +306,6 @@ public partial class Menu
         }
     }
 
-    public void ToggleSimplifiedEscapeMenu()
-    {
-        Interface.GameUi?.SimplifiedEscapeMenu?.ToggleHidden(mMenuButton);
-    }
-
     public void ToggleSpellsWindow()
     {
         if (mSpellsWindow.IsVisible())
@@ -384,18 +379,9 @@ public partial class Menu
     }
 
     //Input Handlers
-    private void MenuButtonClicked(Base sender, ClickedEventArgs arguments)
+    private static void MenuButtonClicked(Base sender, ClickedEventArgs arguments)
     {
-        var simplifiedEscapeMenuSetting = Globals.Database.SimplifiedEscapeMenu;
-
-        if (simplifiedEscapeMenuSetting)
-        {
-            ToggleSimplifiedEscapeMenu();
-        }
-        else
-        {
-            Interface.GameUi?.EscapeMenu?.ToggleHidden();
-        }
+        Interface.GameUi?.EscapeMenu?.ToggleHidden();
     }
 
     private void PartyBtn_Clicked(Base sender, ClickedEventArgs arguments)
