@@ -3079,7 +3079,7 @@ public abstract partial class Entity : IEntity
             if (MapController.TryGetInstanceFromMap(MapId, MapInstanceId, out var instance))
             {
                 var itemSource = this.AsItemSource();
-                instance.SpawnItem(itemSource, X, Y, drop, drop.Quantity, lootOwner, sendUpdate);
+                instance.SpawnItem(itemSource, X, Y, drop, randomQuantity, lootOwner, sendUpdate);
 
             }
 
