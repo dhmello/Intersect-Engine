@@ -17,7 +17,6 @@ using Intersect.GameObjects.Maps;
 using Intersect.Logging;
 using Intersect.Network.Packets.Server;
 using Intersect.Utilities;
-using MapAttribute = Intersect.Enums.MapAttribute;
 
 namespace Intersect.Client.Entities;
 
@@ -938,7 +937,7 @@ public partial class Entity : IEntity
             var mousePos = Graphics.ConvertToWorldPoint(Globals.InputManager.MousePosition);
 
             // Entity is considered hovered if the mouse is over its world position and not hovering over the GUI.
-            IsHovered = WorldPos.Contains(mousePos.X, mousePos.Y) && !Interface.Interface.MouseHitGui();
+            IsHovered = WorldPos.Contains(mousePos.X, mousePos.Y) && !Interface.Interface.DoesMouseHitInterface();
 
             // Check the type of entity and return whether its name should be drawn based on settings and conditions.
             switch (this)
@@ -1124,8 +1123,8 @@ public partial class Entity : IEntity
         {
             // We don't have a texture to render, but we still want this to be targetable.
             WorldPos = new FloatRect(
-                map.GetX() + X * Options.TileWidth + OffsetX,
-                map.GetY() + Y * Options.TileHeight + OffsetY,
+                map.X + X * Options.TileWidth + OffsetX,
+                map.Y + Y * Options.TileHeight + OffsetY,
                 Options.TileWidth,
                 Options.TileHeight);
             return;
@@ -1133,8 +1132,8 @@ public partial class Entity : IEntity
 
         var spriteRow = PickSpriteRow(Dir);
 
-        var frameWidth = texture.GetWidth() / SpriteFrames;
-        var frameHeight = texture.GetHeight() / Options.Instance.Sprites.Directions;
+        var frameWidth = texture.Width / SpriteFrames;
+        var frameHeight = texture.Height / Options.Instance.Sprites.Directions;
 
         var frame = SpriteFrame;
         if (Options.AnimatedSprites.Contains(sprite.ToLower()))
@@ -1380,8 +1379,8 @@ public partial class Entity : IEntity
 
         // Calculate: direction, frame width and frame height.
         var spriteRow = PickSpriteRow(Dir);
-        var frameWidth = paperdollTex.GetWidth() / spriteFrames;
-        var frameHeight = paperdollTex.GetHeight() / Options.Instance.Sprites.Directions;
+        var frameWidth = paperdollTex.Width / spriteFrames;
+        var frameHeight = paperdollTex.Height / Options.Instance.Sprites.Directions;
 
         // Calculate: source and destination rectangles.
         var frame = SpriteFrame;
@@ -1945,7 +1944,7 @@ public partial class Entity : IEntity
         {
             Graphics.DrawGameTexture(
                 castForeground,
-                new FloatRect(0, 0, castForeground.GetWidth() * fillRatio, castForeground.Height),
+                new FloatRect(0, 0, castForeground.Width * fillRatio, castForeground.Height),
                 new FloatRect(x - castForeground.Width / 2, y - castForeground.Height / 2, castForeground.Width * fillRatio, castForeground.Height), Color.White
             );
         }
@@ -1968,15 +1967,15 @@ public partial class Entity : IEntity
         }
 
         var srcRectangle = new FloatRect(
-            priority * targetTexture.GetWidth() / 2f,
+            priority * targetTexture.Width / 2f,
             0,
-            targetTexture.GetWidth() / 2f,
-            targetTexture.GetHeight()
+            targetTexture.Width / 2f,
+            targetTexture.Height
         );
 
         var destRectangle = new FloatRect(
-            (float)Math.Ceiling(WorldPos.X + (WorldPos.Width - targetTexture.GetWidth() / 2) / 2),
-            (float)Math.Ceiling(WorldPos.Y + (WorldPos.Height - targetTexture.GetHeight()) / 2),
+            (float)Math.Ceiling(WorldPos.X + (WorldPos.Width - targetTexture.Width / 2) / 2),
+            (float)Math.Ceiling(WorldPos.Y + (WorldPos.Height - targetTexture.Height) / 2),
             srcRectangle.Width,
             srcRectangle.Height
         );
@@ -2524,18 +2523,18 @@ public partial class Entity : IEntity
             {
                 if (gameMap.Attributes[tmpX, tmpY] != null)
                 {
-                    if (gameMap.Attributes[tmpX, tmpY].Type == MapAttribute.Blocked || (gameMap.Attributes[tmpX, tmpY].Type == MapAttribute.Animation && ((MapAnimationAttribute)gameMap.Attributes[tmpX, tmpY]).IsBlock))
+                    if (gameMap.Attributes[tmpX, tmpY].Type == MapAttributeType.Blocked || (gameMap.Attributes[tmpX, tmpY].Type == MapAttributeType.Animation && ((MapAnimationAttribute)gameMap.Attributes[tmpX, tmpY]).IsBlock))
                     {
                         return -2;
                     }
-                    else if (gameMap.Attributes[tmpX, tmpY].Type == MapAttribute.ZDimension)
+                    else if (gameMap.Attributes[tmpX, tmpY].Type == MapAttributeType.ZDimension)
                     {
                         if (((MapZDimensionAttribute)gameMap.Attributes[tmpX, tmpY]).BlockedLevel - 1 == z)
                         {
                             return -3;
                         }
                     }
-                    else if (gameMap.Attributes[tmpX, tmpY].Type == MapAttribute.NpcAvoid)
+                    else if (gameMap.Attributes[tmpX, tmpY].Type == MapAttributeType.NpcAvoid)
                     {
                         if (!ignoreNpcAvoids)
                         {

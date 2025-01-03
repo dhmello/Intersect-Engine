@@ -5,7 +5,6 @@ using Intersect.GameObjects;
 using Intersect.GameObjects.Maps;
 using Intersect.Network.Packets.Server;
 using Intersect.Utilities;
-using MapAttribute = Intersect.Enums.MapAttribute;
 
 namespace Intersect.Client.Entities.Projectiles;
 
@@ -364,8 +363,8 @@ public partial class Projectile : Entity
                         }
 
                         var spawnMapId = Maps.MapInstance.Get(spawn.SpawnMapId);
-                        var spawnX = spawnMapId.GetX() + spawn.SpawnX * Options.TileWidth + spawn.OffsetX + Options.TileWidth / 2;
-                        var spawnY = spawnMapId.GetY() + spawn.SpawnY * Options.TileHeight + spawn.OffsetY + Options.TileHeight / 2;
+                        var spawnX = spawnMapId.X + spawn.SpawnX * Options.TileWidth + spawn.OffsetX + Options.TileWidth / 2;
+                        var spawnY = spawnMapId.Y + spawn.SpawnY * Options.TileHeight + spawn.OffsetY + Options.TileHeight / 2;
                         var spawnDirection = spawn.AutoRotate ? spawn.Dir : Direction.Up;
 
                         spawn.Anim.SetPosition(spawnX, spawnY, X, Y, MapId, spawnDirection, spawn.Z);
@@ -566,7 +565,7 @@ public partial class Projectile : Entity
             {
                 var attribute = spawnMap.Attributes[projectileSpawn.X, projectileSpawn.Y];
 
-                if (attribute != null && attribute.Type == MapAttribute.ZDimension)
+                if (attribute != null && attribute.Type == MapAttributeType.ZDimension)
                 {
                     var zDimensionAttribute = (MapZDimensionAttribute)attribute;
 

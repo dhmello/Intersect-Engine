@@ -20,14 +20,13 @@ public interface IMapInstance
 
     MapZone ZoneType { get; }
 
-    float X { get; }
-    float Y { get; }
+    int X { get; }
+    int Y { get; }
     int GridX { get; set; }
     int GridY { get; set; }
     bool IsLoaded { get; }
 
-    void AddEvent(Guid evtId, EventEntityPacket packet);
-    void AddTileAnimation(Guid animId, int tileX, int tileY, Direction dir = Direction.None, IEntity owner = null);
+    void AddTileAnimation(Guid animId, int tileX, int tileY, Direction dir = Direction.None, IEntity? owner = null);
     void CompareEffects(IMapInstance oldMap);
     bool InView();
     void Load(string json);
