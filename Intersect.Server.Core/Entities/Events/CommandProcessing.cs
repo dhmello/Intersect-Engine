@@ -162,13 +162,28 @@ public static partial class CommandProcessing
 
         if (command.ShowChatBubble)
         {
-            PacketSender.SendChatBubbleToPlayer(
-                player,
-                instance.PageInstance.Id,
-                instance.PageInstance.GetEntityType(),
-                txt,
-                instance.PageInstance.MapId
-            );
+            if (command.ShowChatBubbleInProximity)
+            {
+                
+                PacketSender.SendChatBubbleToProximity(
+                        player,
+                        instance.PageInstance.Id,
+                        instance.PageInstance.GetEntityType(),
+                        txt,
+                        instance.PageInstance.MapId
+                    );
+            }
+            else
+            {
+                
+                PacketSender.SendChatBubbleToPlayer(
+                    player,
+                    instance.PageInstance.Id,
+                    instance.PageInstance.GetEntityType(),
+                    txt,
+                    instance.PageInstance.MapId
+                );
+            }
         }
     }
 
@@ -1748,7 +1763,7 @@ public static partial class CommandProcessing
     {
         if (input == null)
         {
-            input = "";
+            input = string.Empty;
         }
 
         if (player != null && input.Contains("\\"))
