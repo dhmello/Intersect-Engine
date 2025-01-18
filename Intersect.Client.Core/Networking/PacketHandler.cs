@@ -1164,23 +1164,12 @@ internal sealed partial class PacketHandler
     //InputVariablePacket
     public void HandlePacket(IPacketSender packetSender, InputVariablePacket packet)
     {
-        var type = InputBox.InputType.NumericInput;
-        switch (packet.Type)
+        var type = packet.Type switch
         {
-            case VariableDataType.String:
-                type = InputBox.InputType.TextInput;
-
-                break;
-            case VariableDataType.Integer:
-            case VariableDataType.Number:
-                type = InputBox.InputType.NumericInput;
-
-                break;
-            case VariableDataType.Boolean:
-                type = InputBox.InputType.YesNo;
-
-                break;
-        }
+            VariableDataType.String => InputBox.InputType.TextInput,
+            VariableDataType.Boolean => InputBox.InputType.YesNoCancel,
+            _ => InputBox.InputType.NumericInput,
+        };
 
         _ = new InputBox(
             title: packet.Title,
@@ -1681,7 +1670,7 @@ internal sealed partial class PacketHandler
     public void HandlePacket(IPacketSender packetSender, GameObjectPacket packet)
     {
         var type = packet.Type;
-        var id = packet.Id;
+        var objectId = packet.Id;
         var another = packet.AnotherFollowing;
         var deleted = packet.Deleted;
         var json = string.Empty;
@@ -1696,9 +1685,9 @@ internal sealed partial class PacketHandler
                 //Handled in a different packet
                 break;
             case GameObjectType.Tileset:
-                var obj = new TilesetBase(id);
+                var obj = new TilesetBase(objectId);
                 obj.Load(json);
-                TilesetBase.Lookup.Set(id, obj);
+                TilesetBase.Lookup.Set(objectId, obj);
                 if (Globals.HasGameData && !another)
                 {
                     Globals.ContentManager.LoadTilesets(TilesetBase.GetNameList());
@@ -1710,15 +1699,18 @@ internal sealed partial class PacketHandler
                 break;
             default:
                 var lookup = type.GetLookup();
-                if (deleted)
+
+                _ = lookup.DeleteAt(objectId);
+                if (!deleted)
                 {
-                    lookup.Get(id)?.Delete();
+                    var objectType = type.GetObjectType();
+                    var databaseObject = lookup.AddNew(objectType, objectId);
+                    databaseObject.Load(json);
                 }
-                else
+
+                if (type == GameObjectType.Resource)
                 {
-                    lookup.DeleteAt(id);
-                    var item = lookup.AddNew(type.GetObjectType(), id);
-                    item.Load(json);
+
                 }
 
                 break;
@@ -2199,12 +2191,19 @@ internal sealed partial class PacketHandler
     //GuildInvitePacket
     public void HandlePacket(IPacketSender packetSender, GuildInvitePacket packet)
     {
-        _ = new InputBox(
-            title: Strings.Guilds.InviteRequestTitle,
-            prompt: Strings.Guilds.InviteRequestPrompt.ToString(packet.Inviter, packet.GuildName),
-            inputType: InputBox.InputType.YesNo,
-            onSuccess: PacketSender.SendGuildInviteAccept,
-            onCancel: PacketSender.SendGuildInviteDecline
+        Interface.Interface.EnqueueInGame(
+            () =>
+            {
+                _ = new InputBox(
+                    title: Strings.Guilds.InviteRequestTitle,
+                    prompt: (string.IsNullOrWhiteSpace(packet.GuildName)
+                        ? Strings.Guilds.InviteRequestPromptMissingGuild
+                        : Strings.Guilds.InviteRequestPrompt).ToString(packet.Inviter, packet.GuildName),
+                    inputType: InputBox.InputType.YesNo,
+                    onSuccess: PacketSender.SendGuildInviteAccept,
+                    onCancel: PacketSender.SendGuildInviteDecline
+                );
+            }
         );
     }
 

@@ -5,12 +5,12 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Intersect.Collections.Slotting;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Crafting;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Events.Commands;
 using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Switches_and_Variables;
 using Intersect.Logging;
 using Intersect.Network;
 using Intersect.Network.Packets.Server;
@@ -198,23 +198,75 @@ public partial class Player : Entity
     [NotMapped, JsonIgnore]
     public bool InOpenInstance => InstanceType != MapInstanceType.Personal && InstanceType != MapInstanceType.Shared;
 
-    /// <summary>
-    /// References the in-memory copy of the guild for this player, reference this instead of the Guild property below.
-    /// </summary>
-    [NotMapped][JsonIgnore] public Guild Guild { get; set; }
-
     [NotMapped][JsonIgnore] public bool IsInGuild => Guild != null;
 
-    [NotMapped] public Guid GuildId => DbGuild?.Id ?? default;
+    public Guid? GuildId { get; set; }
 
-    /// <summary>
-    /// This field is used for EF database fields only and should never be assigned to or used, instead the guild instance will be assigned to CachedGuild above
-    /// </summary>
-    [JsonIgnore] public Guild DbGuild { get; set; }
+    [JsonIgnore]
+    [ForeignKey(nameof(GuildId))]
+    public Guild? Guild
+    {
+        get => _guild;
+        set
+        {
+            _guild = value;
+            GuildId = _guild?.Id;
+        }
+    }
+
+    public Guid? PendingGuildInviteFromId
+    {
+        get => _pendingGuildInviteFromId;
+        private set
+        {
+            _pendingGuildInviteFromId = value;
+            if (_pendingGuildInviteFromId != PendingGuildInviteFrom?.Id)
+            {
+                PendingGuildInviteFrom = null;
+            }
+        }
+    }
+
+    [JsonIgnore]
+    [ForeignKey(nameof(PendingGuildInviteFromId))]
+    public Player? PendingGuildInviteFrom { get; set; }
+
+    public Guid? PendingGuildInviteToId
+    {
+        get => _pendingGuildInviteToId;
+        private set
+        {
+            _pendingGuildInviteToId = value;
+            if (_pendingGuildInviteToId != PendingGuildInviteTo?.Id)
+            {
+                PendingGuildInviteTo = null;
+            }
+        }
+    }
+
+    [JsonIgnore]
+    [ForeignKey(nameof(PendingGuildInviteToId))]
+    public Guild? PendingGuildInviteTo { get; set; }
 
     [NotMapped]
-    [JsonIgnore]
-    public Tuple<Player, Guild> GuildInvite { get; set; }
+    public GuildInvite PendingGuildInvite
+    {
+        get => new()
+        {
+            FromId = PendingGuildInviteFrom?.Id ?? PendingGuildInviteFromId ?? default,
+            ToId = PendingGuildInviteTo?.Id ?? PendingGuildInviteToId ?? default,
+        };
+        set
+        {
+            if (value == PendingGuildInvite)
+            {
+                return;
+            }
+
+            PendingGuildInviteFromId = value.FromId == default ? null : value.FromId;
+            PendingGuildInviteToId = value.ToId == default ? null : value.ToId;
+        }
+    }
 
     public int GuildRank { get; set; }
 
@@ -407,6 +459,8 @@ public partial class Player : Entity
             return;
         }
 
+        Guild?.NotifyPlayerDisposed(this);
+
         base.Dispose();
     }
 
@@ -418,7 +472,7 @@ public partial class Player : Entity
         }
     }
 
-    public void TryLogout(bool force = false, bool softLogout = false)
+    public void TryLogout(bool force = false, bool softLogout = false, TaskCompletionSource? logoutCompletionSource = null)
     {
         LastOnline = DateTime.Now;
         Client = default;
@@ -431,14 +485,23 @@ public partial class Player : Entity
 
         if (CombatTimer < Timing.Global.Milliseconds || force)
         {
-            Logout(softLogout);
+            Logout(softLogout: softLogout, logoutCompletionSource: logoutCompletionSource);
+        }
+        else
+        {
+            logoutCompletionSource?.TrySetResult();
         }
     }
 
-    private void Logout(bool softLogout = false)
+    private void Logout(bool softLogout = false, TaskCompletionSource? logoutCompletionSource = null)
     {
         lock (_savingLock)
         {
+            lock (_pendingLogoutLock)
+            {
+                _pendingLogouts.Add(Id);
+            }
+
             _saving = true;
         }
 
@@ -523,7 +586,6 @@ public partial class Player : Entity
 
         //Send guild update to all members when logging out
         Guild?.UpdateMemberList();
-        Guild = null;
         GuildBank = false;
 
         //If our client has disconnected or logged out but we have kept the user logged in due to being in combat then we should try to logout the user now
@@ -532,20 +594,29 @@ public partial class Player : Entity
             User?.TryLogout(softLogout);
         }
 
-#if DIAGNOSTIC
-        var stackTrace = Environment.StackTrace;
-#else
-        var stackTrace = default(string);
-#endif
         var logoutOperationId = Guid.NewGuid();
-        DbInterface.Pool.QueueWorkItem(CompleteLogout, logoutOperationId, stackTrace);
+        DbInterface.Pool.QueueWorkItem(
+            CompleteLogout,
+            logoutOperationId,
+            softLogout,
+            logoutCompletionSource,
+            Debugger.IsAttached ? Environment.StackTrace : default
+        );
     }
 
 #if DIAGNOSTIC
     private int _logoutCounter = 0;
 #endif
 
-    public void CompleteLogout(Guid logoutOperationId, string? stackTrace = default)
+    private static readonly HashSet<Guid> _pendingLogouts = [];
+    private static readonly object _pendingLogoutLock = new();
+
+    public void CompleteLogout(
+        Guid logoutOperationId,
+        bool softLogout,
+        TaskCompletionSource? logoutCompletionSource,
+        string? stackTrace = default
+    )
     {
         if (logoutOperationId != default)
         {
@@ -587,18 +658,31 @@ public partial class Player : Entity
                     throw new UnreachableException();
             }
         }
-        catch
+        catch (Exception exception)
         {
             Log.Warn($"Crashed while saving for logout {logoutOperationId}");
+            logoutCompletionSource?.TrySetException(exception);
             throw;
         }
 
         lock (_savingLock)
         {
+            var logoutType = softLogout ? "soft" : "hard";
+            Log.Info($"[Player.CompleteLogout] Done saving {Name} ({logoutType} logout, {Id})");
             _saving = false;
-        }
 
-        Dispose();
+            if (!softLogout)
+            {
+                Dispose();
+            }
+
+            lock (_pendingLogoutLock)
+            {
+                _pendingLogouts.Remove(Id);
+            }
+
+            logoutCompletionSource?.TrySetResult();
+        }
 
 #if DIAGNOSTIC
         Log.Debug($"Finished {nameof(CompleteLogout)}() #{currentExecutionId} on {Name} ({User?.Name})");
@@ -2821,7 +2905,7 @@ public partial class Player : Entity
         }
 
         var bankInterface = new BankInterface<BankSlot>(this, Bank);
-        return bankOverflow && bankInterface.TryDepositItem(item, sendUpdate);
+        return bankOverflow && bankInterface.TryDepositItem(item: item, sendUpdate: sendUpdate, giveItem: true);
     }
 
     /// <summary>
@@ -5183,23 +5267,28 @@ public partial class Player : Entity
             WarpToLastOverworldLocation(false);
         }
 
-        Party ??= new List<Player>();
+        Party ??= [];
         if (Party.Count < 1 || !Party.Contains(this))
         {
             return;
         }
 
-        var currentParty = Party.ToList();
-        currentParty.Remove(this);
+        var remainingPartyMembers = Party.Except([this]).ToList();
 
-        string partyMessage = currentParty.Count > 1
-            ? Strings.Parties.MemberLeft.ToString(Name)
-            : Strings.Parties.Disbanded;
+        var partyIsDisbanding = remainingPartyMembers.Count <= 1;
+        string partyMessage = partyIsDisbanding ? Strings.Parties.Disbanded : Strings.Parties.MemberLeft.ToString(Name);
+
+        var playersToNotify = remainingPartyMembers.ToArray();
+
+        if (partyIsDisbanding)
+        {
+            remainingPartyMembers = [];
+        }
 
         // Update all members of the party with the new list
-        foreach (var partyMember in currentParty)
+        foreach (var partyMember in playersToNotify)
         {
-            partyMember.Party = currentParty.ToList();
+            partyMember.Party = remainingPartyMembers.ToList();
             PacketSender.SendParty(partyMember);
             PacketSender.SendChatMsg(
                 partyMember,
@@ -5209,7 +5298,7 @@ public partial class Player : Entity
             );
         }
 
-        Party = new List<Player>();
+        Party = [];
         PacketSender.SendParty(this);
         PacketSender.SendChatMsg(this, Strings.Parties.Left, ChatMessageType.Party, CustomColors.Alerts.Error);
     }
@@ -6438,7 +6527,7 @@ public partial class Player : Entity
 
     private PlayerVariable CreateVariable(Guid id)
     {
-        if (PlayerVariableBase.Get(id) == null)
+        if (PlayerVariableDescriptor.Get(id) == null)
         {
             return null;
         }
@@ -6659,7 +6748,7 @@ public partial class Player : Entity
         }
     }
 
-    public void RespondToEventInput(Guid eventId, int newValue, string newValueString, bool canceled = false)
+    public void RespondToEventInput(Guid eventId, bool newValueBool, int newValue, string newValueString, bool canceled = false)
     {
         lock (mEventLock)
         {
@@ -6687,40 +6776,40 @@ public partial class Player : Entity
                         var type = VariableDataType.Boolean;
                         if (cmd.VariableType == VariableType.PlayerVariable)
                         {
-                            var variable = PlayerVariableBase.Get(cmd.VariableId);
+                            var variable = PlayerVariableDescriptor.Get(cmd.VariableId);
                             if (variable != null)
                             {
-                                type = variable.Type;
+                                type = variable.DataType;
                             }
 
                             value = GetVariableValue(cmd.VariableId);
                         }
                         else if (cmd.VariableType == VariableType.ServerVariable)
                         {
-                            var variable = ServerVariableBase.Get(cmd.VariableId);
+                            var variable = ServerVariableDescriptor.Get(cmd.VariableId);
                             if (variable != null)
                             {
-                                type = variable.Type;
+                                type = variable.DataType;
                             }
 
-                            value = ServerVariableBase.Get(cmd.VariableId)?.Value;
+                            value = ServerVariableDescriptor.Get(cmd.VariableId)?.Value;
                         }
                         else if (cmd.VariableType == VariableType.GuildVariable)
                         {
-                            var variable = GuildVariableBase.Get(cmd.VariableId);
+                            var variable = GuildVariableDescriptor.Get(cmd.VariableId);
                             if (variable != null)
                             {
-                                type = variable.Type;
+                                type = variable.DataType;
                             }
 
                             value = Guild?.GetVariableValue(cmd.VariableId) ?? new VariableValue();
                         }
                         else if (cmd.VariableType == VariableType.UserVariable)
                         {
-                            var variable = UserVariableBase.Get(cmd.VariableId);
+                            var variable = UserVariableDescriptor.Get(cmd.VariableId);
                             if (variable != null)
                             {
-                                type = variable.Type;
+                                type = variable.DataType;
                             }
 
                             value = User.GetVariableValue(cmd.VariableId) ?? new VariableValue();
@@ -6776,11 +6865,11 @@ public partial class Player : Entity
 
                                     break;
                                 case VariableDataType.Boolean:
-                                    if (value.Boolean != newValue > 0)
+                                    if (value.Boolean != newValueBool)
                                     {
                                         changed = true;
                                     }
-                                    value.Boolean = newValue > 0;
+                                    value.Boolean = newValueBool;
                                     success = true;
 
                                     break;
@@ -6799,7 +6888,7 @@ public partial class Player : Entity
                         }
                         else if (cmd.VariableType == VariableType.ServerVariable)
                         {
-                            var variable = ServerVariableBase.Get(cmd.VariableId);
+                            var variable = ServerVariableDescriptor.Get(cmd.VariableId);
                             if (changed)
                             {
                                 variable.Value = value;
@@ -6816,7 +6905,7 @@ public partial class Player : Entity
                                 {
                                     variable.Value = value;
                                     Guild.StartCommonEventsWithTriggerForAll(Enums.CommonEventTrigger.GuildVariableChange, "", cmd.VariableId.ToString());
-                                    Guild.UpdatedVariables.AddOrUpdate(cmd.VariableId, GuildVariableBase.Get(cmd.VariableId), (key, oldValue) => GuildVariableBase.Get(cmd.VariableId));
+                                    Guild.UpdatedVariables.AddOrUpdate(cmd.VariableId, GuildVariableDescriptor.Get(cmd.VariableId), (key, oldValue) => GuildVariableDescriptor.Get(cmd.VariableId));
                                 }
                             }
                         }
@@ -6827,7 +6916,7 @@ public partial class Player : Entity
                             {
                                 variable.Value = value;
                                 User.StartCommonEventsWithTriggerForAll(CommonEventTrigger.UserVariableChange, "", cmd.VariableId.ToString());
-                                User.UpdatedVariables.AddOrUpdate(cmd.VariableId, UserVariableBase.Get(cmd.VariableId), (key, oldValue) => UserVariableBase.Get(cmd.VariableId));
+                                User.UpdatedVariables.AddOrUpdate(cmd.VariableId, UserVariableDescriptor.Get(cmd.VariableId), (key, oldValue) => UserVariableDescriptor.Get(cmd.VariableId));
                             }
                         }
 
@@ -7601,7 +7690,7 @@ public partial class Player : Entity
         pair => pair.Key?.Id ?? Guid.Empty, pair => pair.Value
     );
 
-    [JsonIgnore, NotMapped] public List<Player> Party = new List<Player>();
+    [JsonIgnore, NotMapped] public List<Player> Party { get; set; } = [];
 
     [JsonIgnore, NotMapped] public Player PartyLeader => Party.FirstOrDefault();
 
@@ -7655,6 +7744,9 @@ public partial class Player : Entity
     }
 
     [JsonIgnore] public ConcurrentDictionary<Guid, long> ItemCooldowns = new ConcurrentDictionary<Guid, long>();
+    private Guild _guild;
+    private Guid? _pendingGuildInviteFromId;
+    private Guid? _pendingGuildInviteToId;
 
     #endregion
 

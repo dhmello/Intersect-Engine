@@ -1,15 +1,19 @@
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.Framework.Reflection;
 using Intersect.GameObjects;
 using Intersect.Logging;
 using Intersect.Reflection;
 using Intersect.Security;
+using Intersect.Server.Collections.Indexing;
+using Intersect.Server.Collections.Sorting;
 using Intersect.Server.Core;
 using Intersect.Server.Database.Logging.Entities;
 using Intersect.Server.Database.PlayerData.Api;
@@ -19,11 +23,10 @@ using Intersect.Server.Entities;
 using Intersect.Server.General;
 using Intersect.Server.Localization;
 using Intersect.Server.Networking;
-using Intersect.Server.Web.RestApi.Payloads;
 using Intersect.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
-using VariableValue = Intersect.GameObjects.Switches_and_Variables.VariableValue;
+using VariableValue = Intersect.Framework.Core.GameObjects.Variables.VariableValue;
 
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 
@@ -43,7 +46,7 @@ public partial class User
     ///     Variables that have been updated for this account which need to be saved to the db
     /// </summary>
     [JsonIgnore]
-    public ConcurrentDictionary<Guid, UserVariableBase> UpdatedVariables = new();
+    public ConcurrentDictionary<Guid, UserVariableDescriptor> UpdatedVariables = new();
 
     public static int OnlineCount => OnlineUsers.Count;
 
@@ -71,6 +74,8 @@ public partial class User
     }
 
     [NotMapped] public UserRights Power { get; set; }
+
+    [JsonIgnore, NotMapped] public ImmutableList<string> Roles => Power.Roles;
 
     [JsonIgnore] public virtual List<Player> Players { get; set; } = new();
 
@@ -313,7 +318,7 @@ public partial class User
     private int _saveCounter = 0;
 #endif
 
-    private UserSaveResult Save(PlayerContext? playerContext, bool force = false, bool create = false)
+    public UserSaveResult Save(PlayerContext? playerContext, bool force = false, bool create = false)
     {
         lock (_lastSaveLock)
         {
@@ -529,18 +534,89 @@ public partial class User
         return user;
     }
 
-    public static Tuple<Client, User> Fetch(Guid userId)
+    public static bool TryFind(LookupKey lookupKey, [NotNullWhen(true)] out User? user)
     {
-        var client = Globals.Clients.Find(queryClient => userId == queryClient?.User?.Id);
-
-        return new Tuple<Client, User>(client, client?.User ?? FindById(userId));
+        using var playerContext = DbInterface.CreatePlayerContext();
+        return TryFind(lookupKey, playerContext, out user);
     }
 
-    public static Tuple<Client, User> Fetch(string userName)
-    {
-        var client = Globals.Clients.Find(queryClient => Entity.CompareName(userName, queryClient?.User?.Name));
+    public static bool TryFetch(LookupKey lookupKey, [NotNullWhen(true)] out User? user) => TryFetch(lookupKey, out user, out _);
 
-        return new Tuple<Client, User>(client, client?.User ?? Find(userName));
+    public static bool TryFetch(LookupKey lookupKey, [NotNullWhen(true)] out User? user, out Client? client)
+    {
+        if (lookupKey.IsInvalid)
+        {
+            user = default;
+            client = default;
+            return false;
+        }
+
+        if (lookupKey.IsId)
+        {
+            client = Globals.Clients.Find(queryClient => lookupKey.Id == queryClient?.User?.Id);
+            user = client?.User ?? FindById(lookupKey.Id);
+            return user != default;
+        }
+
+        client = Globals.Clients.Find(queryClient => Entity.CompareName(lookupKey.Name, queryClient?.User?.Name));
+        user = client?.User ?? Find(lookupKey.Name);
+        return user != default;
+    }
+
+    public bool TryLoadAvatarName(
+        [NotNullWhen(true)] out Player? playerWithAvatar,
+        [NotNullWhen(true)] out string? avatarName,
+        out bool isFace
+    )
+    {
+        foreach (var player in Players)
+        {
+            if (!player.TryLoadAvatarName(out avatarName, out isFace) || string.IsNullOrWhiteSpace(avatarName))
+            {
+                continue;
+            }
+
+            playerWithAvatar = player;
+            return true;
+        }
+
+        avatarName = null;
+        isFace = false;
+        playerWithAvatar = null;
+        return false;
+    }
+
+    public static bool TryAuthenticate(string username, string password, [NotNullWhen(true)] out User? user)
+    {
+        user = FindOnline(username);
+        if (user != default)
+        {
+            var hashedPassword = SaltPasswordHash(password, user.Salt);
+            if (string.Equals(user.Password, hashedPassword, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            user = default;
+            return false;
+        }
+
+        try
+        {
+            using var context = DbInterface.CreatePlayerContext();
+            var salt = GetUserSalt(username);
+            if (!string.IsNullOrWhiteSpace(salt))
+            {
+                var pass = SaltPasswordHash(password, salt);
+                user = QueryUserByNameAndPasswordShallow(context, username, pass);
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Error(exception);
+        }
+
+        return user != default;
     }
 
     public static bool TryLogin(
@@ -583,7 +659,6 @@ public partial class User
             user = default;
             failureReason = new LoginFailureReason(LoginFailureType.ServerError);
             return false;
-
         }
 
         try
@@ -620,36 +695,14 @@ public partial class User
         }
     }
 
-    public static bool TryFetch(LookupKey lookupKey, [NotNullWhen(true)] out User? user) =>
-        TryFetch(lookupKey, out user, out _);
-
-    public static bool TryFetch(LookupKey lookupKey, [NotNullWhen(true)] out User? user, out Client? client)
-    {
-        if (lookupKey is { HasName: false, HasId: false })
-        {
-            user = default;
-            client = default;
-            return false;
-        }
-
-        (client, user) = lookupKey.HasId ? Fetch(lookupKey.Id) : Fetch(lookupKey.Name);
-        return user != default;
-    }
-
-    public static bool TryFind(LookupKey lookupKey, [NotNullWhen(true)] out User? user)
-    {
-        using var playerContext = DbInterface.CreatePlayerContext();
-        return TryFind(lookupKey, playerContext, out user);
-    }
-
     public static bool TryFind(LookupKey lookupKey, PlayerContext playerContext, [NotNullWhen(true)] out User? user)
     {
-        if (lookupKey.HasId)
+        if (lookupKey.IsId)
         {
             return TryFindById(lookupKey.Id, playerContext, out user);
         }
 
-        if (lookupKey.HasName)
+        if (lookupKey.IsName)
         {
             return TryFindByName(lookupKey.Name, playerContext, out user);
         }
@@ -932,7 +985,7 @@ public partial class User
     /// <returns></returns>
     private Variable CreateVariable(Guid id)
     {
-        if (UserVariableBase.Get(id) == null)
+        if (UserVariableDescriptor.Get(id) == null)
         {
             return null;
         }

@@ -3,6 +3,7 @@ using System;
 using Intersect.Server.Database.PlayerData;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -16,8 +17,10 @@ namespace Intersect.Server.Migrations.MySql.Player
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "7.0.11")
+                .HasAnnotation("ProductVersion", "8.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
+
+            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
             modelBuilder.Entity("Intersect.Server.Database.PlayerData.Api.RefreshToken", b =>
                 {
@@ -579,10 +582,6 @@ namespace Intersect.Server.Migrations.MySql.Player
                     b.Property<DateTime?>("CreationDate")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<Guid?>("DbGuildId")
-                        .HasColumnType("char(36)")
-                        .UseCollation("ascii_general_ci");
-
                     b.Property<int>("Dir")
                         .HasColumnType("int");
 
@@ -602,6 +601,10 @@ namespace Intersect.Server.Migrations.MySql.Player
 
                     b.Property<int>("Gender")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("GuildId")
+                        .HasColumnType("char(36)")
+                        .UseCollation("ascii_general_ci");
 
                     b.Property<DateTime>("GuildJoinDate")
                         .HasColumnType("datetime(6)");
@@ -652,6 +655,14 @@ namespace Intersect.Server.Migrations.MySql.Player
                     b.Property<string>("NameColorJson")
                         .HasColumnType("longtext")
                         .HasColumnName("NameColor");
+
+                    b.Property<Guid?>("PendingGuildInviteFromId")
+                        .HasColumnType("char(36)")
+                        .UseCollation("ascii_general_ci");
+
+                    b.Property<Guid?>("PendingGuildInviteToId")
+                        .HasColumnType("char(36)")
+                        .UseCollation("ascii_general_ci");
 
                     b.Property<Guid>("PersonalMapInstanceId")
                         .HasColumnType("char(36)")
@@ -715,7 +726,11 @@ namespace Intersect.Server.Migrations.MySql.Player
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DbGuildId");
+                    b.HasIndex("GuildId");
+
+                    b.HasIndex("PendingGuildInviteFromId");
+
+                    b.HasIndex("PendingGuildInviteToId");
 
                     b.HasIndex("UserId");
 
@@ -908,9 +923,20 @@ namespace Intersect.Server.Migrations.MySql.Player
 
             modelBuilder.Entity("Intersect.Server.Entities.Player", b =>
                 {
-                    b.HasOne("Intersect.Server.Database.PlayerData.Players.Guild", "DbGuild")
+                    b.HasOne("Intersect.Server.Database.PlayerData.Players.Guild", "Guild")
                         .WithMany()
-                        .HasForeignKey("DbGuildId");
+                        .HasForeignKey("GuildId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Intersect.Server.Entities.Player", "PendingGuildInviteFrom")
+                        .WithMany()
+                        .HasForeignKey("PendingGuildInviteFromId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Intersect.Server.Database.PlayerData.Players.Guild", "PendingGuildInviteTo")
+                        .WithMany()
+                        .HasForeignKey("PendingGuildInviteToId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Intersect.Server.Database.PlayerData.User", "User")
                         .WithMany("Players")
@@ -918,7 +944,11 @@ namespace Intersect.Server.Migrations.MySql.Player
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("DbGuild");
+                    b.Navigation("Guild");
+
+                    b.Navigation("PendingGuildInviteFrom");
+
+                    b.Navigation("PendingGuildInviteTo");
 
                     b.Navigation("User");
                 });

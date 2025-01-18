@@ -18,9 +18,9 @@ public abstract partial class DatabaseObject<TObject> : IDatabaseObject where TO
     protected DatabaseObject() { }
 
     [JsonConstructor]
-    protected DatabaseObject(Guid guid)
+    protected DatabaseObject(Guid descriptorId)
     {
-        Id = guid;
+        Id = descriptorId;
         TimeCreated = DateTime.Now.ToBinary();
     }
 
@@ -57,6 +57,8 @@ public abstract partial class DatabaseObject<TObject> : IDatabaseObject where TO
     [JsonProperty(Order = -4)]
     [Column(Order = 0)]
     public string Name { get; set; }
+
+    [NotMapped, JsonIgnore] public bool IsDeleted => !Lookup.TryGetValue(Id, out var descriptor) || descriptor != this;
 
     public virtual void Load(string json, bool keepCreationTime = false)
     {
