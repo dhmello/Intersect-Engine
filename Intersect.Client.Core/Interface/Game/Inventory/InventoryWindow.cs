@@ -4,7 +4,9 @@ using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.General;
 using Intersect.Client.Localization;
+using Intersect.Core;
 using Intersect.GameObjects;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Client.Interface.Game.Inventory;
 
@@ -26,7 +28,7 @@ public partial class InventoryWindow
     private List<Label> mValues = new List<Label>();
 
     // Context menu
-    private Framework.Gwen.Control.Menu mContextMenu;
+    private ContextMenu mContextMenu;
 
     private MenuItem mUseItemContextItem;
 
@@ -45,11 +47,11 @@ public partial class InventoryWindow
         mInventoryWindow.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
 
         // Generate our context menu with basic options.
-        mContextMenu = new Framework.Gwen.Control.Menu(gameCanvas, "InventoryContextMenu");
+        mContextMenu = new ContextMenu(gameCanvas, "InventoryContextMenu");
         mContextMenu.IsHidden = true;
         mContextMenu.IconMarginDisabled = true;
         //TODO: Is this a memory leak?
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
         mUseItemContextItem = mContextMenu.AddItem(Strings.ItemContextMenu.Use);
         mUseItemContextItem.Clicked += MUseItemContextItem_Clicked;
         mDropItemContextItem = mContextMenu.AddItem(Strings.ItemContextMenu.Drop);
@@ -62,11 +64,8 @@ public partial class InventoryWindow
 
     public void OpenContextMenu(int slot)
     {
-        // Clear out the old options.
-        mContextMenu.RemoveChild(mUseItemContextItem, false);
-        mContextMenu.RemoveChild(mActionItemContextItem, false);
-        mContextMenu.RemoveChild(mDropItemContextItem, false);
-        mContextMenu.Children.Clear();
+        // Clear out the old options since we might not show all of them
+        mContextMenu.ClearChildren();
 
         var item = ItemBase.Get(Globals.Me.Inventory[slot].ItemId);
 
@@ -81,20 +80,19 @@ public partial class InventoryWindow
         {
             case Enums.ItemType.Spell:
                 mContextMenu.AddChild(mUseItemContextItem);
-                mUseItemContextItem.SetText(item.QuickCast
-                    ? Strings.ItemContextMenu.Cast.ToString(item.Name)
-                    : Strings.ItemContextMenu.Learn.ToString(item.Name));
+                var useItemLabel = item.QuickCast ? Strings.ItemContextMenu.Cast : Strings.ItemContextMenu.Learn;
+                mUseItemContextItem.Text = useItemLabel.ToString(item.Name);
                 break;
 
             case Enums.ItemType.Event:
             case Enums.ItemType.Consumable:
                 mContextMenu.AddChild(mUseItemContextItem);
-                mUseItemContextItem.SetText(Strings.ItemContextMenu.Use.ToString(item.Name));
+                mUseItemContextItem.Text = Strings.ItemContextMenu.Use.ToString(item.Name);
                 break;
 
             case Enums.ItemType.Bag:
                 mContextMenu.AddChild(mUseItemContextItem);
-                mUseItemContextItem.SetText(Strings.ItemContextMenu.Open.ToString(item.Name));
+                mUseItemContextItem.Text = Strings.ItemContextMenu.Open.ToString(item.Name);
                 break;
 
             case Enums.ItemType.Equipment:
@@ -102,13 +100,13 @@ public partial class InventoryWindow
                 // Show the correct equip/unequip prompts.
                 if (Globals.Me.MyEquipment.Contains(slot))
                 {
-                    mUseItemContextItem.SetText(Strings.ItemContextMenu.Unequip.ToString(item.Name));
+                    mUseItemContextItem.Text = Strings.ItemContextMenu.Unequip.ToString(item.Name);
                 }
                 else
                 {
-                    mUseItemContextItem.SetText(Strings.ItemContextMenu.Equip.ToString(item.Name));
+                    mUseItemContextItem.Text = Strings.ItemContextMenu.Equip.ToString(item.Name);
                 }
-                
+
                 break;
         }
 
@@ -144,21 +142,20 @@ public partial class InventoryWindow
         // Set our Inventory slot as userdata for future reference.
         mContextMenu.UserData = slot;
 
-        // Display our menu.. If we have anything to display.
+        // Display our menu... If we have anything to display.
         if (mContextMenu.Children.Count > 0)
         {
-            mContextMenu.SizeToChildren();
             mContextMenu.Open(Framework.Gwen.Pos.None);
         }
     }
 
-    private void MUseItemContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MUseItemContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         var slot = (int)sender.Parent.UserData;
         Globals.Me.TryUseItem(slot);
     }
 
-    private void MActionItemContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MActionItemContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         var slot = (int)sender.Parent.UserData;
         if (Globals.GameShop != null)
@@ -167,19 +164,19 @@ public partial class InventoryWindow
         }
         else if (Globals.InBank)
         {
-            Globals.Me.TryDepositItem(slot);
+            Globals.Me.TryStoreItemInBank(slot);
         }
         else if (Globals.InBag)
         {
-            Globals.Me.TryStoreBagItem(slot, -1);
+            Globals.Me.TryStoreItemInBag(slot, -1);
         }
         else if (Globals.InTrade)
         {
-            Globals.Me.TryTradeItem(slot);
+            Globals.Me.TryOfferItemToTrade(slot);
         }
     }
 
-    private void MDropItemContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MDropItemContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         var slot = (int) sender.Parent.UserData;
         Globals.Me.TryDropItem(slot);
@@ -207,41 +204,76 @@ public partial class InventoryWindow
 
         mInventoryWindow.IsClosable = Globals.CanCloseInventory;
 
-        for (var i = 0; i < Options.MaxInvItems; i++)
+        if (Globals.Me?.Inventory is not { } inventory)
         {
-            var item = ItemBase.Get(Globals.Me.Inventory[i].ItemId);
-            if (item != null)
+            return;
+        }
+
+        var slotCount = Math.Min(Options.Instance.Player.MaxInventory, Items.Count);
+        for (var slotIndex = 0; slotIndex < slotCount; slotIndex++)
+        {
+            var slotComponent = Items[slotIndex];
+            var slotLabel = mValues[slotIndex];
+
+            var inventorySlot = inventory[slotIndex];
+            if (!ItemBase.TryGet(inventorySlot.ItemId, out var itemDescriptor))
             {
-                Items[i].Pnl.IsHidden = false;
-                if (item.IsStackable)
+                if (inventorySlot.ItemId != default)
                 {
-                    mValues[i].IsHidden = Globals.Me.Inventory[i].Quantity <= 1;
-                    mValues[i].Text = Strings.FormatQuantityAbbreviated(Globals.Me.Inventory[i].Quantity);
-                }
-                else
-                {
-                    mValues[i].IsHidden = true;
+                    ApplicationContext.CurrentContext.Logger.LogWarning(
+                        "Inventory slot {SlotIndex} refers to missing Item descriptor {DescriptorId}",
+                        slotIndex,
+                        inventorySlot.ItemId
+                    );
                 }
 
-                if (Items[i].IsDragging)
+                if (slotComponent.Pnl.IsVisibleInTree)
                 {
-                    Items[i].Pnl.IsHidden = true;
-                    mValues[i].IsHidden = true;
+                    slotComponent.Pnl.IsHidden = true;
                 }
 
-                Items[i].Update();
+                if (slotLabel.IsVisibleInTree)
+                {
+                    slotLabel.IsHidden = true;
+                }
+                continue;
+            }
+
+            if (slotComponent.Pnl.IsHidden)
+            {
+                slotComponent.Pnl.IsVisibleInTree = true;
+            }
+
+            var shouldHideLabel = !itemDescriptor.IsStackable || inventorySlot.Quantity <= 1;
+            if (shouldHideLabel)
+            {
+                if (slotLabel.IsVisibleInTree)
+                {
+                    slotLabel.IsVisibleInTree = false;
+                }
             }
             else
             {
-                Items[i].Pnl.IsHidden = true;
-                mValues[i].IsHidden = true;
+                if (slotLabel.IsHidden)
+                {
+                    slotLabel.IsVisibleInTree = true;
+                }
+                slotLabel.Text = Strings.FormatQuantityAbbreviated(inventorySlot.Quantity);
             }
+
+            if (slotComponent.IsDragging)
+            {
+                slotComponent.Pnl.IsHidden = true;
+                slotLabel.IsHidden = true;
+            }
+
+            slotComponent.Update();
         }
     }
 
     private void InitItemContainer()
     {
-        for (var i = 0; i < Options.MaxInvItems; i++)
+        for (var i = 0; i < Options.Instance.Player.MaxInventory; i++)
         {
             Items.Add(new InventoryItem(this, i));
             Items[i].Container = new ImagePanel(mItemContainer, "InventoryItem");
@@ -254,7 +286,7 @@ public partial class InventoryWindow
 
             if (Items[i].EquipPanel.Texture == null)
             {
-                Items[i].EquipPanel.Texture = Graphics.Renderer.GetWhiteTexture();
+                Items[i].EquipPanel.Texture = Graphics.Renderer.WhitePixel;
             }
 
             var xPadding = Items[i].Container.Margin.Left + Items[i].Container.Margin.Right;
@@ -298,9 +330,9 @@ public partial class InventoryWindow
     {
         var rect = new FloatRect()
         {
-            X = mInventoryWindow.LocalPosToCanvas(new Point(0, 0)).X -
+            X = mInventoryWindow.ToCanvas(new Point(0, 0)).X -
                 (Items[0].Container.Padding.Left + Items[0].Container.Padding.Right) / 2,
-            Y = mInventoryWindow.LocalPosToCanvas(new Point(0, 0)).Y -
+            Y = mInventoryWindow.ToCanvas(new Point(0, 0)).Y -
                 (Items[0].Container.Padding.Top + Items[0].Container.Padding.Bottom) / 2,
             Width = mInventoryWindow.Width + Items[0].Container.Padding.Left + Items[0].Container.Padding.Right,
             Height = mInventoryWindow.Height + Items[0].Container.Padding.Top + Items[0].Container.Padding.Bottom

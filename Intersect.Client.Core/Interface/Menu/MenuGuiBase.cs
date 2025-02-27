@@ -1,6 +1,7 @@
 using Intersect.Client.Core;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.Gwen.Control;
+using Intersect.Client.Interface.Shared;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 
@@ -11,6 +12,7 @@ public partial class MenuGuiBase : IMutableInterface
     private readonly Canvas _menuCanvas;
     private readonly ImagePanel _serverStatusArea;
     private readonly Label _serverStatusLabel;
+    private readonly VersionPanel _versionPanel;
 
     public MainMenu MainMenu { get; }
 
@@ -21,7 +23,13 @@ public partial class MenuGuiBase : IMutableInterface
         _menuCanvas = myCanvas;
 
         MainMenu = new MainMenu(_menuCanvas);
-        _serverStatusArea = new ImagePanel(_menuCanvas, "ServerStatusArea");
+
+        _versionPanel = new VersionPanel(_menuCanvas, name: nameof(_versionPanel));
+
+        _serverStatusArea = new ImagePanel(_menuCanvas, "ServerStatusArea")
+        {
+            IsHidden = ClientContext.IsSinglePlayer,
+        };
         _serverStatusLabel = new Label(_serverStatusArea, "ServerStatusLabel")
         {
             IsHidden = ClientContext.IsSinglePlayer,
@@ -43,7 +51,7 @@ public partial class MenuGuiBase : IMutableInterface
         _serverStatusLabel.Text = Strings.Server.StatusLabel.ToString(MainMenu.ActiveNetworkStatus.ToLocalizedString());
     }
 
-    public void Update()
+    public void Update(TimeSpan elapsed, TimeSpan total)
     {
         if (_shouldReset)
         {
@@ -51,13 +59,12 @@ public partial class MenuGuiBase : IMutableInterface
             _shouldReset = false;
         }
 
-        _serverStatusArea.IsHidden = ClientContext.IsSinglePlayer;
-        MainMenu.Update();
+        MainMenu.Update(elapsed, total);
     }
 
-    public void Draw()
+    public void Draw(TimeSpan elapsed, TimeSpan total)
     {
-        _menuCanvas.RenderCanvas();
+        _menuCanvas.RenderCanvas(elapsed, total);
     }
 
     public void Reset()
@@ -72,7 +79,7 @@ public partial class MenuGuiBase : IMutableInterface
     }
 
     /// <inheritdoc />
-    public List<Base> Children => MainMenu.Children;
+    public IReadOnlyList<Base> Children => MainMenu.Children;
 
     /// <inheritdoc />
     public TElement Create<TElement>(params object[] parameters) where TElement : Base =>

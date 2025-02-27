@@ -2,43 +2,39 @@
 
 namespace Intersect.Client.Framework.Gwen.Control;
 
-
 /// <summary>
 ///     Tree control.
 /// </summary>
 public partial class TreeControl : TreeNode
 {
-
-    private readonly ScrollControl mScrollControl;
-
-    private bool mMultiSelect;
+    private readonly ScrollControl _scrollControl;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="TreeControl" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public TreeControl(Base parent) : base(parent)
+    /// <param name="name"></param>
+    public TreeControl(Base parent, string? name = default) : base(parent, name)
     {
-        mTreeControl = this;
+        _treeControl = this;
 
-        RemoveChild(mToggleButton, true);
-        mToggleButton = null;
-        RemoveChild(mTitle, true);
-        mTitle = null;
-        RemoveChild(mInnerPanel, true);
-        mInnerPanel = null;
+        RemoveChild(_toggleButton, true);
+        RemoveChild(_trigger, true);
+        RemoveChild(_innerPanel, true);
+        _toggleButton = null;
+        _trigger = null;
+        _innerPanel = null;
 
-        mMultiSelect = false;
+        AllowMultiSelect = false;
 
-        mScrollControl = new ScrollControl(this);
-        mScrollControl.Dock = Pos.Fill;
-        mScrollControl.EnableScroll(false, true);
-        mScrollControl.AutoHideBars = true;
-        mScrollControl.Margin = Margin.One;
+        _scrollControl = new ScrollControl(this, nameof(_innerPanel))
+        {
+            Dock = Pos.Fill, Margin = Margin.One,
+        };
 
-        mInnerPanel = mScrollControl;
+        _innerPanel = _scrollControl;
 
-        mScrollControl.SetInnerSize(1000, 1000); // todo: why such arbitrary numbers?
+        _scrollControl.SetInnerSize(1000, 1000); // todo: why such arbitrary numbers?
 
         Dock = Pos.None;
     }
@@ -46,11 +42,7 @@ public partial class TreeControl : TreeNode
     /// <summary>
     ///     Determines if multiple nodes can be selected at the same time.
     /// </summary>
-    public bool AllowMultiSelect
-    {
-        get => mMultiSelect;
-        set => mMultiSelect = value;
-    }
+    public bool AllowMultiSelect { get; set; }
 
     /// <summary>
     ///     Renders the control using specified skin.
@@ -67,13 +59,14 @@ public partial class TreeControl : TreeNode
     /// <summary>
     ///     Handler invoked when control children's bounds change.
     /// </summary>
-    /// <param name="oldChildBounds"></param>
     /// <param name="child"></param>
-    protected override void OnChildBoundsChanged(Rectangle oldChildBounds, Base child)
+    /// <param name="oldChildBounds"></param>
+    /// <param name="newChildBounds"></param>
+    protected override void OnChildBoundsChanged(Base child, Rectangle oldChildBounds, Rectangle newChildBounds)
     {
-        if (mScrollControl != null)
+        if (_scrollControl != null)
         {
-            mScrollControl.UpdateScrollBars();
+            _scrollControl.UpdateScrollBars();
         }
     }
 
@@ -82,7 +75,7 @@ public partial class TreeControl : TreeNode
     /// </summary>
     public virtual void RemoveAll()
     {
-        mScrollControl.DeleteAll();
+        _scrollControl.DeleteAll();
     }
 
     /// <summary>
@@ -100,10 +93,9 @@ public partial class TreeControl : TreeNode
     /// <param name="control">Node selected.</param>
     protected virtual void OnNodeSelected(Base control, EventArgs args)
     {
-        if (!mMultiSelect /*|| InputHandler.InputHandler.IsKeyDown(Key.Control)*/)
+        if (!AllowMultiSelect /*|| InputHandler.InputHandler.IsKeyDown(Key.Control)*/)
         {
             UnselectAll();
         }
     }
-
 }

@@ -1,7 +1,6 @@
 using System.Text;
-
-using Intersect.Logging;
-
+using Intersect.Core;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace Intersect;
@@ -195,6 +194,8 @@ public static partial class CustomColors
 
         public Color LevelUp = Color.Cyan;
 
+        public Color LevelLost = Color.Red;
+
         public Color MagicDamage = new Color(255, 255, 0, 255);
 
         public Color Missed = new Color(255, 255, 255, 255);
@@ -238,7 +239,7 @@ public static partial class CustomColors
             {5, Color.Yellow},
         };
 
-        public Dictionary<int, LabelColor> MapRarities = new Dictionary<int, LabelColor>() 
+        public Dictionary<int, LabelColor> MapRarities = new Dictionary<int, LabelColor>()
         {
             { 0, new LabelColor(Color.White, Color.Black, new Color(100, 0, 0, 0)) },
             { 1, new LabelColor(Color.Gray, Color.Black, new Color(100, 0, 0, 0)) },
@@ -269,7 +270,11 @@ public static partial class CustomColors
             }
             catch (Exception exception)
             {
-                Log.Error(exception);
+                ApplicationContext.Context.Value?.Logger.LogError(
+                    exception,
+                    "Failed to deserialize '{Path}'",
+                    filepath
+                );
 
                 return false;
             }
@@ -282,9 +287,9 @@ public static partial class CustomColors
     {
         Console.WriteLine("Saving custom colors...");
 
+        var filepath = Path.Combine(Options.ResourcesDirectory, "colors.json");
         try
         {
-            var filepath = Path.Combine(Options.ResourcesDirectory, "colors.json");
             Directory.CreateDirectory(Options.ResourcesDirectory);
             var json = JsonConvert.SerializeObject(Root, Formatting.Indented, new ColorConverter());
             File.WriteAllText(filepath, json, Encoding.UTF8);
@@ -293,7 +298,7 @@ public static partial class CustomColors
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to save to '{Path}'", filepath);
 
             return false;
         }

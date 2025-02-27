@@ -42,14 +42,14 @@ public partial class BankWindow
     {
         // Create a new window to display the contents of the bank.
         mBankWindow = new WindowControl(gameCanvas,
-            Globals.GuildBank
+            Globals.IsGuildBank
                 ? Strings.Guilds.Bank.ToString(Globals.Me?.Guild)
                 : Strings.Bank.Title.ToString(),
             false, "BankWindow");
 
         // Disable resizing and add to the list of input-blocking elements.
         mBankWindow.DisableResizing();
-        Interface.InputBlockingElements.Add(mBankWindow);
+        Interface.InputBlockingComponents.Add(mBankWindow);
 
         // Create a new scroll control for the items in the bank.
         mItemContainer = new ScrollControl(mBankWindow, "ItemContainer");
@@ -65,7 +65,7 @@ public partial class BankWindow
         mContextMenu.IconMarginDisabled = true;
 
         // Clear the children of the context menu and add a "Withdraw" option.
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
         mWithdrawContextItem = mContextMenu.AddItem(Strings.BankContextMenu.Withdraw);
         mWithdrawContextItem.Clicked += MWithdrawContextItem_Clicked;
         mContextMenu.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
@@ -76,7 +76,7 @@ public partial class BankWindow
 
     public void OpenContextMenu(int slot)
     {
-        var item = ItemBase.Get(Globals.Bank[slot].ItemId);
+        var item = ItemBase.Get(Globals.BankSlots[slot].ItemId);
 
         // No point showing a menu for blank space.
         if (item == null)
@@ -93,10 +93,10 @@ public partial class BankWindow
         mContextMenu.Open(Framework.Gwen.Pos.None);
     }
 
-    private void MWithdrawContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MWithdrawContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         var slot = (int)sender.Parent.UserData;
-        Globals.Me.TryWithdrawItem(slot);
+        Globals.Me.TryRetrieveItemFromBank(slot);
     }
 
     public void Close()
@@ -109,7 +109,7 @@ public partial class BankWindow
     public void Open()
     {
         // Hide unavailable bank slots
-        var currentBankSlots = Math.Max(0, Globals.BankSlots);
+        var currentBankSlots = Math.Max(0, Globals.BankSlotCount);
         // For any slot beyond the current bank's maximum slots
         for (var i = currentBankSlots; i < Options.Instance.Bank.MaxSlots; i++)
         {
@@ -146,11 +146,11 @@ public partial class BankWindow
 
         X = mBankWindow.X;
         Y = mBankWindow.Y;
-        for (var i = 0; i < Math.Min(Globals.BankSlots, Options.Instance.Bank.MaxSlots); i++)
+        for (var i = 0; i < Math.Min(Globals.BankSlotCount, Options.Instance.Bank.MaxSlots); i++)
         {
             var bankItem = Items[i];
             var bankLabel = mValues[i];
-            var globalBankItem = Globals.Bank[i];
+            var globalBankItem = Globals.BankSlots[i];
 
             bankItem.Container.Show();
             SetItemPosition(i);
@@ -200,7 +200,7 @@ public partial class BankWindow
             bankLabel.Text = string.Empty;
 
             bankItem.Container.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
-            
+
             Items.Add(bankItem);
             mValues.Add(bankLabel);
         }
@@ -240,8 +240,8 @@ public partial class BankWindow
     {
         var rect = new FloatRect()
         {
-            X = mBankWindow.LocalPosToCanvas(new Point(0, 0)).X - sItemXPadding / 2,
-            Y = mBankWindow.LocalPosToCanvas(new Point(0, 0)).Y - sItemYPadding / 2,
+            X = mBankWindow.ToCanvas(new Point(0, 0)).X - sItemXPadding / 2,
+            Y = mBankWindow.ToCanvas(new Point(0, 0)).Y - sItemYPadding / 2,
             Width = mBankWindow.Width + sItemXPadding,
             Height = mBankWindow.Height + sItemYPadding
         };

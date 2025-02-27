@@ -1,6 +1,7 @@
 ﻿using Intersect.Client.Core;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.GenericClasses;
+using Intersect.Client.Framework.Gwen;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.General;
 
@@ -11,17 +12,23 @@ public partial class HotBarWindow
 {
 
     //Controls
-    public ImagePanel HotbarWindow;
+    public readonly ImagePanel HotbarWindow;
 
     //Item List
-    public List<HotbarItem> Items = new List<HotbarItem>();
+    public readonly List<HotbarItem> Items = [];
 
     //Init
     public HotBarWindow(Canvas gameCanvas)
     {
         HotbarWindow = new ImagePanel(gameCanvas, "HotbarWindow")
         {
-            ShouldCacheToTexture = true
+            AlignmentPadding = new Padding { Top = 4, Right = 4 },
+            Alignment = [Alignments.Top, Alignments.Right],
+            Padding = Padding.Four,
+            RestrictToParent = true,
+            TextureFilename = "hotbar.png",
+            TextureNinePatchMargin = Margin.Three,
+            ShouldCacheToTexture = true,
         };
 
         if (Graphics.Renderer == null)
@@ -29,19 +36,18 @@ public partial class HotBarWindow
             return;
         }
 
-        InitHotbarItems();
-        HotbarWindow.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
-    }
-
-    private void InitHotbarItems()
-    {
-        for (var i = 0; i < Options.Instance.PlayerOpts.HotbarSlotCount; i++)
+        var hotbarSlotCount = Options.Instance.Player.HotbarSlotCount;
+        for (var hotbarSlotIndex = 0; hotbarSlotIndex < hotbarSlotCount; hotbarSlotIndex++)
         {
-            Items.Add(new HotbarItem((byte) i, HotbarWindow));
-            Items[i].HotbarIcon = new ImagePanel(HotbarWindow, "HotbarContainer" + i);
-            Items[i].Setup();
-            Items[i].KeyLabel = new Label(Items[i].HotbarIcon, "HotbarLabel" + i);
+            var hotbarItem = new HotbarItem(hotbarSlotIndex, HotbarWindow);
+            Items.Add(hotbarItem);
         }
+
+        HotbarWindow.SizeToChildren();
+
+        HotbarWindow.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
+
+        HotbarWindow.SizeToChildren();
     }
 
     public void Update()
@@ -51,20 +57,20 @@ public partial class HotBarWindow
             return;
         }
 
-        for (var i = 0; i < Options.Instance.PlayerOpts.HotbarSlotCount; i++)
+        foreach (var slot in Items)
         {
-            Items[i].Update();
+            slot.Update();
         }
     }
 
     public FloatRect RenderBounds()
     {
-        var rect = new FloatRect()
+        var rect = new FloatRect
         {
-            X = HotbarWindow.LocalPosToCanvas(new Point(0, 0)).X,
-            Y = HotbarWindow.LocalPosToCanvas(new Point(0, 0)).Y,
+            X = HotbarWindow.ToCanvas(default).X,
+            Y = HotbarWindow.ToCanvas(default).Y,
             Width = HotbarWindow.Width,
-            Height = HotbarWindow.Height
+            Height = HotbarWindow.Height,
         };
 
         return rect;

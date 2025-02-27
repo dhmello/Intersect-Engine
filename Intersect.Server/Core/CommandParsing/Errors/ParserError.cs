@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Immutable;
-
+﻿using System.Collections.Immutable;
 using Intersect.Server.Core.CommandParsing.Commands;
 
 namespace Intersect.Server.Core.CommandParsing.Errors

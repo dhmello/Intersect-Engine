@@ -1,5 +1,6 @@
 ﻿using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Gwen.Input;
+using Intersect.Client.Framework.Input;
 
 namespace Intersect.Client.Framework.Gwen.Control;
 
@@ -39,14 +40,6 @@ public partial class ColorLerpBox : Base
     ///     Invoked when the selected color has been changed.
     /// </summary>
     public event GwenEventHandler<EventArgs> ColorChanged;
-
-    /// <summary>
-    ///     Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-    /// </summary>
-    public override void Dispose()
-    {
-        base.Dispose();
-    }
 
     /// <summary>
     ///     Linear color interpolation.
@@ -124,26 +117,34 @@ public partial class ColorLerpBox : Base
         }
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    /// <param name="down">If set to <c>true</c> mouse button is down.</param>
-    protected override void OnMouseClickedLeft(int x, int y, bool down, bool automated = false)
+    protected override void OnMouseDown(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        base.OnMouseClickedLeft(x, y, down);
-        mDepressed = down;
-        if (down)
+        base.OnMouseDown(mouseButton, mousePosition, userAction);
+
+        if (mouseButton != MouseButton.Left)
         {
-            InputHandler.MouseFocus = this;
-        }
-        else
-        {
-            InputHandler.MouseFocus = null;
+            return;
         }
 
-        OnMouseMoved(x, y, 0, 0);
+        mDepressed = true;
+        InputHandler.MouseFocus = this;
+
+        OnMouseMoved(mousePosition.X, mousePosition.Y, 0, 0);
+    }
+
+    protected override void OnMouseUp(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        base.OnMouseUp(mouseButton, mousePosition, userAction);
+
+        if (mouseButton != MouseButton.Left)
+        {
+            return;
+        }
+
+        mDepressed = false;
+        InputHandler.MouseFocus = null;
+
+        OnMouseMoved(mousePosition.X, mousePosition.Y, 0, 0);
     }
 
     /// <summary>

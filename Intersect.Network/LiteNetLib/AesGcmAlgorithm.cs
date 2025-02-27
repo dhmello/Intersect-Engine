@@ -1,7 +1,9 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Security;
 using System.Security.Cryptography;
-using Intersect.Logging;
+using Intersect.Core;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Network.LiteNetLib;
 
@@ -10,9 +12,13 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
     // Encode the version (1 byte), plaindata length (1 int), the nonce length (1 byte), and the tag length (1 byte)
     private const int HeaderSize = sizeof(int) + sizeof(byte) * 3;
 
+    private readonly HashSet<AesGcm> _algorithmInstances = [];
+    private readonly HashSet<AesGcm> _algorithmInstancesToDispose = [];
+    private readonly Stack<AesGcm> _algorithmPool = [];
     private readonly Memory<byte> _key;
+    private readonly byte _nonceSize;
+    private readonly byte _tagSize;
 
-    private AesGcm _aesGcm;
     private MemoryHandle _keyHandle;
 
     public AesGcmAlgorithm(ReadOnlySpan<byte> key = default)
@@ -20,12 +26,10 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
         var buffer = RandomNumberGenerator.GetBytes(32);
         if (key != default)
         {
-            if (key.Length != 32)
+            var keyLength = key.Length;
+            if (keyLength != 32)
             {
-                throw new ArgumentException(
-                    $"Expected a 32-byte key but received a {key.Length} byte key.",
-                    nameof(key)
-                );
+                throw new ArgumentOutOfRangeException(nameof(key), keyLength, "Key size must be exactly 32 bytes.");
             }
 
             if (!key.TryCopyTo(buffer))
@@ -39,13 +43,70 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
 
         _key = new Memory<byte>(buffer);
         _keyHandle = _key.Pin();
-        _aesGcm = new AesGcm(_key.Span);
+
+        if (!TryPickValidSize(AesGcm.NonceByteSizes, out _nonceSize))
+        {
+            throw new SecurityException("Failed to initialize network encryption, no valid nonce sizes");
+        }
+
+        if (!TryPickValidSize(AesGcm.TagByteSizes, out _tagSize))
+        {
+            throw new SecurityException("Failed to initialize network encryption, no valid tag sizes");
+        }
+    }
+
+    private AesGcm AcquireInstance()
+    {
+        lock (_algorithmPool)
+        {
+            if (_algorithmPool.TryPop(out var algorithmInstance))
+            {
+                return algorithmInstance;
+            }
+
+            algorithmInstance = new AesGcm(key: _key.Span, tagSizeInBytes: _tagSize);
+            _algorithmInstances.Add(algorithmInstance);
+            return algorithmInstance;
+        }
+    }
+
+    private void ReleaseInstance(AesGcm algorithmInstance)
+    {
+        lock (_algorithmPool)
+        {
+            if (_algorithmInstancesToDispose.Remove(algorithmInstance))
+            {
+                algorithmInstance.Dispose();
+                return;
+            }
+
+            _algorithmPool.Push(algorithmInstance);
+        }
     }
 
     public override void Dispose()
     {
         _keyHandle.Dispose();
-        _aesGcm.Dispose();
+        ClearPool();
+    }
+
+    private void ClearPool()
+    {
+        lock (_algorithmPool)
+        {
+            while (_algorithmPool.TryPop(out var algorithmInstance))
+            {
+                _algorithmInstances.Remove(algorithmInstance);
+                algorithmInstance.Dispose();
+            }
+
+            foreach (var algorithmInstance in _algorithmInstances)
+            {
+                _algorithmInstancesToDispose.Add(algorithmInstance);
+            }
+
+            _algorithmInstances.Clear();
+        }
     }
 
     public override bool SetKey(ReadOnlySpan<byte> key)
@@ -55,7 +116,7 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
             return false;
         }
 
-        _aesGcm = new AesGcm(_key.Span);
+        ClearPool();
         return true;
     }
 
@@ -122,7 +183,9 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
 
         try
         {
-            _aesGcm.Decrypt(nonce, cipherdataView, tag, memory.Span);
+            var aesGcm = AcquireInstance();
+            aesGcm.Decrypt(nonce, cipherdataView, tag, memory.Span);
+            ReleaseInstance(aesGcm);
 
             plaindata = memory.Span;
             return EncryptionResult.Success;
@@ -130,14 +193,14 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
         catch (Exception exception)
         {
 #if DIAGNOSTIC
-            Log.Debug($"cipherdata({cipherdata.Length})=[nonce={Convert.ToHexString(nonce)}, tag={Convert.ToHexString(tag)}]");
-            Log.Debug($"cipherdataView({cipherdataView.Length})={Convert.ToHexString(cipherdataView)}");
-            Log.Debug($"key={Convert.ToHexString(_key.Span)}");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"cipherdata({cipherdata.Length})=[nonce={Convert.ToHexString(nonce)}, tag={Convert.ToHexString(tag)}]");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"cipherdataView({cipherdataView.Length})={Convert.ToHexString(cipherdataView)}");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"key={Convert.ToHexString(_key.Span)}");
 #endif
-            var configuredLogLevel = Options.Instance?.Logging.Level ?? LogLevel.Diagnostic;
+            var configuredLogLevel = Options.Instance?.Logging.Level ?? LogLevel.Trace;
             if (configuredLogLevel >= LogLevel.Debug)
             {
-                Log.Error(exception);
+                ApplicationContext.Context.Value?.Logger.LogError(exception, "Error decrypting cipherdata");
             }
             plaindata = default;
             return EncryptionResult.Error;
@@ -147,7 +210,7 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
     public override EncryptionResult TryDecrypt(ReadOnlySpan<byte> cipherdata, int offset, int length, out ReadOnlySpan<byte> plaindata) =>
         TryDecrypt(cipherdata[offset..(offset + length)], out plaindata);
 
-    public override EncryptionResult TryEncrypt(ReadOnlySpan<byte> plaindata, out ReadOnlySpan<byte> cipherdata)
+    private EncryptionResult TryEncryptInternal(ReadOnlySpan<byte> plaindata, ReadOnlySpan<byte> nonce, out ReadOnlySpan<byte> cipherdata)
     {
         if (plaindata.Length < 1)
         {
@@ -155,19 +218,15 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
             return EncryptionResult.EmptyInput;
         }
 
-        if (!TryPickValidSize(AesGcm.NonceByteSizes, out var nonceLength))
+        if (nonce.Length != _nonceSize)
         {
             cipherdata = default;
             return EncryptionResult.InvalidNonce;
         }
 
-        if (!TryPickValidSize(AesGcm.TagByteSizes, out var tagLength))
-        {
-            cipherdata = default;
-            return EncryptionResult.InvalidTag;
-        }
+        var nonceLength = (byte)nonce.Length;
 
-        var cipherdataLength = HeaderSize + nonceLength + tagLength + plaindata.Length;
+        var cipherdataLength = HeaderSize + nonceLength + _tagSize + plaindata.Length;
 
         var buffer = new byte[cipherdataLength];
         Memory<byte> memory = new(buffer);
@@ -183,27 +242,29 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
         cipherdataView[0] = nonceLength;
         cipherdataView = cipherdataView[1..];
 
-        cipherdataView[0] = tagLength;
+        cipherdataView[0] = _tagSize;
         cipherdataView = cipherdataView[1..];
 
-        var nonce = cipherdataView[..nonceLength];
-        RandomNumberGenerator.Fill(nonce);
+        nonce.CopyTo(cipherdataView[..nonceLength]);
         cipherdataView = cipherdataView[nonceLength..];
 
-        var tag = cipherdataView[..tagLength];
-        cipherdataView = cipherdataView[tagLength..];
+        var tag = cipherdataView[.._tagSize];
+        cipherdataView = cipherdataView[_tagSize..];
 
         try
         {
-            _aesGcm.Encrypt(nonce, plaindata, cipherdataView, tag);
+            var aesGcm = AcquireInstance();
+            aesGcm.Encrypt(nonce, plaindata, cipherdataView, tag);
+            ReleaseInstance(aesGcm);
+
             cipherdata = memory.Span;
 
 #if DIAGNOSTIC
             if (plaindata.Length > 1000)
             {
-                Log.Debug($"cipherdata({cipherdata.Length})=[nonce={Convert.ToHexString(nonce)}, tag={Convert.ToHexString(tag)}]");
-                Log.Debug($"cipherdataView({cipherdataView.Length})={Convert.ToHexString(cipherdataView)}");
-                Log.Debug($"key={Convert.ToHexString(_key.Span)}");
+                ApplicationContext.Context.Value?.Logger.LogDebug($"cipherdata({cipherdata.Length})=[nonce={Convert.ToHexString(nonce)}, tag={Convert.ToHexString(tag)}]");
+                ApplicationContext.Context.Value?.Logger.LogDebug($"cipherdataView({cipherdataView.Length})={Convert.ToHexString(cipherdataView)}");
+                ApplicationContext.Context.Value?.Logger.LogDebug($"key={Convert.ToHexString(_key.Span)}");
             }
 #endif
 
@@ -211,15 +272,30 @@ public sealed class AesGcmAlgorithm : SymmetricAlgorithm
         }
         catch (Exception exception)
         {
-            var configuredLogLevel = Options.Instance?.Logging.Level ?? LogLevel.Diagnostic;
+            var configuredLogLevel = Options.Instance?.Logging.Level ?? LogLevel.Trace;
             if (configuredLogLevel >= LogLevel.Debug)
             {
-                Log.Error(exception);
+                ApplicationContext.Context.Value?.Logger.LogError(exception, "Error encrypting plaindata");
             }
             cipherdata = default;
             return EncryptionResult.Error;
         }
     }
+
+    public override EncryptionResult TryEncrypt(ReadOnlySpan<byte> plaindata, out ReadOnlySpan<byte> cipherdata)
+    {
+        var nonce = new byte[_nonceSize];
+        RandomNumberGenerator.Fill(nonce);
+
+        return TryEncryptInternal(plaindata, nonce, out cipherdata);
+    }
+
+#if DEBUG
+    public override EncryptionResult TryEncrypt(ReadOnlySpan<byte> plaindata, ReadOnlySpan<byte> nonce, out ReadOnlySpan<byte> cipherdata)
+    {
+        return TryEncryptInternal(plaindata, nonce, out cipherdata);
+    }
+#endif
 
     public override EncryptionResult TryEncrypt(ReadOnlySpan<byte> plaindata, int offset, int length, out ReadOnlySpan<byte> cipherdata) =>
         TryEncrypt(plaindata[offset..(offset + length)], out cipherdata);

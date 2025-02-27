@@ -1,14 +1,10 @@
-﻿using Intersect.Extensions;
+﻿namespace Intersect.Collections;
 
-namespace Intersect.Collections;
-
-
-public partial struct Sanitizer
+public struct Sanitizer
 {
+    private Dictionary<string, SanitizedValue<object>>? _sanitizedValues;
 
-    private Dictionary<string, SanitizedValue<object>> mSanitizedValues;
-
-    public Dictionary<string, SanitizedValue<object>> Sanitized => mSanitizedValues?.ToDictionary();
+    public Dictionary<string, SanitizedValue<object>> Sanitized => _sanitizedValues?.ToDictionary() ?? [];
 
     public Sanitizer Add<T>(string name, T before, T after)
     {
@@ -17,12 +13,9 @@ public partial struct Sanitizer
             throw new ArgumentNullException(nameof(name));
         }
 
-        if (mSanitizedValues == null)
-        {
-            mSanitizedValues = new Dictionary<string, SanitizedValue<object>>(8);
-        }
+        _sanitizedValues ??= new Dictionary<string, SanitizedValue<object>>(8);
 
-        mSanitizedValues.Add(name, new SanitizedValue<object>(before, after));
+        _sanitizedValues.Add(name, new SanitizedValue<object>(before, after));
 
         return this;
     }
@@ -49,7 +42,7 @@ public partial struct Sanitizer
 
     public T Is<T>(string name, T actualValue, T expectedValue)
     {
-        if (expectedValue == null && actualValue == null || (expectedValue?.Equals(actualValue) ?? false))
+        if ((expectedValue == null && actualValue == null) || (expectedValue?.Equals(actualValue) ?? false))
         {
             return actualValue;
         }
@@ -61,7 +54,7 @@ public partial struct Sanitizer
 
     public T IsNot<T>(string name, T actualValue, T expectedValue)
     {
-        if (expectedValue == null && actualValue != null || !(expectedValue?.Equals(actualValue) ?? false))
+        if ((expectedValue == null && actualValue != null) || !(expectedValue?.Equals(actualValue) ?? false))
         {
             return actualValue;
         }
@@ -216,5 +209,4 @@ public partial struct Sanitizer
 
         return expectedMaximum;
     }
-
 }

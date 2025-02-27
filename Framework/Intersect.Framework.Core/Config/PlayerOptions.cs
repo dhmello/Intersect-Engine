@@ -10,6 +10,8 @@ public partial class PlayerOptions
     /// </summary>
     private const int DefaultInitialBankSlots = 100;
 
+    public const int DefaultHotbarSlotCount = 10;
+
     /// <summary>
     /// Unlinks the timers for combat and movement to facilitate complex combat (e.g. kiting)
     /// </summary>
@@ -48,7 +50,7 @@ public partial class PlayerOptions
     /// <summary>
     /// Number of hotbar slots a player has.
     /// </summary>
-    public int HotbarSlotCount { get; set; } = 10;
+    public int HotbarSlotCount { get; set; } = DefaultHotbarSlotCount;
 
     /// <summary>
     /// Number of bank slots a player has.
@@ -91,12 +93,12 @@ public partial class PlayerOptions
     public int RequestTimeout { get; set; } = 300000;
 
     /// <summary>
-    /// Configures whether or not the level of a player is shown next to their name.
+    /// If the level of a player is shown next to their name.
     /// </summary>
     public bool ShowLevelByName { get; set; } = false;
 
     /// <summary>
-    /// Configures whether or not the game client skips the character select window upon login or going back
+    /// If the game client skips the character select window upon login or going back
     /// to characters when the max number of characters allowed per account is one.
     /// </summary>
     public bool SkipCharacterSelect { get; set; } = false;

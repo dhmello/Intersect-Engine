@@ -1,11 +1,10 @@
-﻿using Intersect.Client.Framework.GenericClasses;
+﻿using System.Numerics;
+using Intersect.Client.Framework.GenericClasses;
 
 namespace Intersect.Client.Framework.Graphics;
 
-
 public abstract partial class GameShader
 {
-
     public GameShader(string shaderName)
     {
     }
@@ -16,12 +15,11 @@ public abstract partial class GameShader
 
     public abstract void SetColor(string key, Color val);
 
-    public abstract void SetVector2(string key, Pointf val);
+    public abstract void SetVector2(string key, Vector2 val);
 
     public abstract bool ValuesChanged();
 
     public abstract void ResetChanged();
 
     public abstract object GetShader();
-
 }

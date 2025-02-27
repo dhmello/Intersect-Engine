@@ -1,11 +1,12 @@
+using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Crafting;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Maps;
 using Intersect.GameObjects.Maps.MapList;
-using Intersect.Logging;
 using Intersect.Models;
 using Intersect.Network.Packets.Client;
 using Intersect.Server.Admin.Actions;
@@ -137,15 +138,15 @@ internal sealed partial class NetworkedPacketHandler
             if (client.IsEditor)
             {
                 //Is Editor
-                client.PacketFloodingThreshholds = Options.Instance.SecurityOpts.PacketOpts.EditorThreshholds;
+                client.PacketFloodingThresholds = Options.Instance.Security.Packets.EditorThresholds;
             }
 
 
             client.SetUser(user);
 
-            lock (Globals.ClientLock)
+            lock (Client.GlobalLock)
             {
-                var clients = Globals.Clients.ToArray();
+                var clients = Client.Instances.ToArray();
                 foreach (var cli in clients)
                 {
                     if (cli.Name != null &&
@@ -494,7 +495,7 @@ internal sealed partial class NetworkedPacketHandler
                         parent = MapList.List.FindFolder(packet.TargetId);
                         if (parent == default)
                         {
-                            Log.Warn($"Tried to rename {nameof(MapListFolder)} {packet.TargetId} but it was not found.");
+                            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to rename {nameof(MapListFolder)} {packet.TargetId} but it was not found.");
                             return;
                         }
 
@@ -507,13 +508,13 @@ internal sealed partial class NetworkedPacketHandler
                         var mapListMap = MapList.List.FindMap(packet.TargetId);
                         if (mapListMap == default)
                         {
-                            Log.Warn($"Tried to rename {nameof(MapListMap)} {packet.TargetId} but it was not found in the map list.");
+                            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to rename {nameof(MapListMap)} {packet.TargetId} but it was not found in the map list.");
                             return;
                         }
 
                         if (!MapController.TryGet(packet.TargetId, out var mapToRename))
                         {
-                            Log.Warn($"Tried to rename {nameof(MapListMap)} {packet.TargetId} but the map itself could not be found.");
+                            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to rename {nameof(MapListMap)} {packet.TargetId} but the map itself could not be found.");
                             return;
                         }
 
@@ -535,7 +536,7 @@ internal sealed partial class NetworkedPacketHandler
                     {
                         if (MapController.Lookup == default)
                         {
-                            Log.Warn($"Tried to delete {nameof(MapListMap)} {packet.TargetId} but the {nameof(MapController)}.{nameof(MapController.Lookup)} was null?");
+                            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to delete {nameof(MapListMap)} {packet.TargetId} but the {nameof(MapController)}.{nameof(MapController.Lookup)} was null?");
                             return;
                         }
 
@@ -549,26 +550,26 @@ internal sealed partial class NetworkedPacketHandler
                         var logicLock = logicService?.LogicLock;
                         if (logicLock == default)
                         {
-                            Log.Error($"{nameof(ServerContext)}.{nameof(ServerContext.Instance)}.{nameof(ServerContext.LogicService)}.{nameof(LogicService.LogicLock)} was unexpectedly null when try to delete {nameof(MapListMap)} {packet.TargetId}.");
+                            ApplicationContext.Context.Value?.Logger.LogError($"{nameof(ServerContext)}.{nameof(ServerContext.Instance)}.{nameof(ServerContext.LogicService)}.{nameof(LogicService.LogicLock)} was unexpectedly null when try to delete {nameof(MapListMap)} {packet.TargetId}.");
                             return;
                         }
 
                         var logicPool = logicService.LogicPool;
                         if (logicPool == default)
                         {
-                            Log.Error($"{nameof(ServerContext)}.{nameof(ServerContext.Instance)}.{nameof(ServerContext.LogicService)}.{nameof(LogicService.LogicPool)} was unexpectedly null when try to delete {nameof(MapListMap)} {packet.TargetId}.");
+                            ApplicationContext.Context.Value?.Logger.LogError($"{nameof(ServerContext)}.{nameof(ServerContext.Instance)}.{nameof(ServerContext.LogicService)}.{nameof(LogicService.LogicPool)} was unexpectedly null when try to delete {nameof(MapListMap)} {packet.TargetId}.");
                             return;
                         }
 
                         if (!MapController.TryGet(packet.TargetId, out var mapToDelete))
                         {
-                            Log.Warn($"Tried to delete {nameof(MapListMap)} {packet.TargetId} but the map itself could not be found.");
+                            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to delete {nameof(MapListMap)} {packet.TargetId} but the map itself could not be found.");
                             return;
                         }
 
                         if (!(mapToDelete is MapController mapController))
                         {
-                            Log.Warn($"Tried to delete {nameof(MapListMap)} {packet.TargetId} but {nameof(MapController)}.{nameof(MapController.TryGet)} returned something other than a {nameof(MapController)}.");
+                            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to delete {nameof(MapListMap)} {packet.TargetId} but {nameof(MapController)}.{nameof(MapController.TryGet)} returned something other than a {nameof(MapController)}.");
                             return;
                         }
 
@@ -819,7 +820,7 @@ internal sealed partial class NetworkedPacketHandler
 
                     break;
                 case GameObjectType.Item:
-                    ((ItemBase)obj).DropChanceOnDeath = Options.ItemDropChance;
+                    ((ItemBase)obj).DropChanceOnDeath = Options.Instance.Player.ItemDropChance;
                     changed = true;
 
                     break;
@@ -864,7 +865,7 @@ internal sealed partial class NetworkedPacketHandler
             switch (type)
             {
                 case GameObjectType.Animation:
-                    obj = AnimationBase.Get(id);
+                    obj = AnimationDescriptor.Get(id);
 
                     break;
 
@@ -964,18 +965,21 @@ internal sealed partial class NetworkedPacketHandler
 
             if (obj != null)
             {
-                //if Item or Resource, kill all global entities of that kind
-                if (type == GameObjectType.Item)
+                switch (obj)
                 {
-                    Globals.KillItemsOf((ItemBase) obj);
-                }
-                else if (type == GameObjectType.Resource)
-                {
-                    Globals.KillResourcesOf((ResourceBase) obj);
-                }
-                else if (type == GameObjectType.Npc)
-                {
-                    Globals.KillNpcsOf((NpcBase) obj);
+                    //if Item or Resource, kill all global entities of that kind
+                    case ItemBase itemDescriptor:
+                        MapController.DespawnInstancesOf(itemDescriptor);
+                        break;
+                    case NpcBase npcDescriptor:
+                        MapController.DespawnInstancesOf(npcDescriptor);
+                        break;
+                    case ProjectileBase projectileDescriptor:
+                        MapController.DespawnInstancesOf(projectileDescriptor);
+                        break;
+                    case ResourceBase resourceDescriptor:
+                        MapController.DespawnInstancesOf(resourceDescriptor);
+                        break;
                 }
 
                 DbInterface.DeleteGameObject(obj);
@@ -1000,7 +1004,7 @@ internal sealed partial class NetworkedPacketHandler
             switch (type)
             {
                 case GameObjectType.Animation:
-                    obj = AnimationBase.Get(id);
+                    obj = AnimationDescriptor.Get(id);
 
                     break;
 
@@ -1101,16 +1105,16 @@ internal sealed partial class NetworkedPacketHandler
                     switch (obj)
                     {
                         case ItemBase itemDescriptor:
-                            Globals.KillItemsOf(itemDescriptor);
+                            MapController.DespawnInstancesOf(itemDescriptor);
                             break;
                         case NpcBase npcDescriptor:
-                            Globals.KillNpcsOf(npcDescriptor);
+                            MapController.DespawnInstancesOf(npcDescriptor);
                             break;
                         case ProjectileBase projectileDescriptor:
-                            Globals.KillProjectilesOf(projectileDescriptor);
+                            MapController.DespawnInstancesOf(projectileDescriptor);
                             break;
                         case ResourceBase resourceDescriptor:
-                            Globals.KillResourcesOf(resourceDescriptor);
+                            MapController.DespawnInstancesOf(resourceDescriptor);
                             break;
                     }
 
@@ -1174,7 +1178,7 @@ internal sealed partial class NetworkedPacketHandler
 
                 if (type == GameObjectType.Item)
                 {
-                    foreach (var player in Globals.OnlineList)
+                    foreach (var player in Player.OnlinePlayers)
                     {
                         player.CacheEquipmentTriggers();
                     }

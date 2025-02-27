@@ -1,6 +1,5 @@
 using DarkUI.Controls;
 using DarkUI.Forms;
-
 using Intersect.Editor.Content;
 using Intersect.Editor.Core;
 using Intersect.Editor.Forms.Editors.Events.Event_Commands;
@@ -14,7 +13,6 @@ using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Events.Commands;
 using Intersect.GameObjects.Maps;
 using Intersect.Utilities;
-
 using Newtonsoft.Json;
 using Graphics = System.Drawing.Graphics;
 
@@ -228,16 +226,16 @@ public partial class FrmEvent : Form
                     sourceBitmap,
                     new Rectangle(
                         pnlPreview.Width / 2 -
-                        (Options.TileWidth + CurrentPage.Graphic.Width * Options.TileWidth) / 2,
+                        (Options.Instance.Map.TileWidth + CurrentPage.Graphic.Width * Options.Instance.Map.TileWidth) / 2,
                         pnlPreview.Height / 2 -
-                        (Options.TileHeight + CurrentPage.Graphic.Height * Options.TileHeight) / 2,
-                        Options.TileWidth + CurrentPage.Graphic.Width * Options.TileWidth,
-                        Options.TileHeight + CurrentPage.Graphic.Height * Options.TileHeight
+                        (Options.Instance.Map.TileHeight + CurrentPage.Graphic.Height * Options.Instance.Map.TileHeight) / 2,
+                        Options.Instance.Map.TileWidth + CurrentPage.Graphic.Width * Options.Instance.Map.TileWidth,
+                        Options.Instance.Map.TileHeight + CurrentPage.Graphic.Height * Options.Instance.Map.TileHeight
                     ),
                     new Rectangle(
-                        CurrentPage.Graphic.X * Options.TileWidth, CurrentPage.Graphic.Y * Options.TileHeight,
-                        Options.TileWidth + CurrentPage.Graphic.Width * Options.TileWidth,
-                        Options.TileHeight + CurrentPage.Graphic.Height * Options.TileHeight
+                        CurrentPage.Graphic.X * Options.Instance.Map.TileWidth, CurrentPage.Graphic.Y * Options.Instance.Map.TileHeight,
+                        Options.Instance.Map.TileWidth + CurrentPage.Graphic.Width * Options.Instance.Map.TileWidth,
+                        Options.Instance.Map.TileHeight + CurrentPage.Graphic.Height * Options.Instance.Map.TileHeight
                     ), GraphicsUnit.Pixel
                 );
             }
@@ -442,7 +440,7 @@ public partial class FrmEvent : Form
 
     private void cmbAnimation_SelectedIndexChanged(object sender, EventArgs e)
     {
-        CurrentPage.AnimationId = AnimationBase.IdFromList(cmbAnimation.SelectedIndex - 1);
+        CurrentPage.AnimationId = AnimationDescriptor.IdFromList(cmbAnimation.SelectedIndex - 1);
     }
 
     private void chkIsGlobal_CheckedChanged(object sender, EventArgs e)
@@ -1002,7 +1000,7 @@ public partial class FrmEvent : Form
 
         cmbAnimation.Items.Clear();
         cmbAnimation.Items.Add(Strings.General.None);
-        cmbAnimation.Items.AddRange(AnimationBase.Names);
+        cmbAnimation.Items.AddRange(AnimationDescriptor.Names);
         chkParallelRun.Checked = MyEvent.CanRunInParallel;
         if (MyEvent.CommonEvent || questEvent)
         {
@@ -1094,7 +1092,7 @@ public partial class FrmEvent : Form
             UpdateFacePreview();
         }
 
-        cmbAnimation.SelectedIndex = AnimationBase.ListIndex(CurrentPage.AnimationId) + 1;
+        cmbAnimation.SelectedIndex = AnimationDescriptor.ListIndex(CurrentPage.AnimationId) + 1;
         chkHideName.Checked = Convert.ToBoolean(CurrentPage.HideName);
         chkDisableInspector.Checked = Convert.ToBoolean(CurrentPage.DisablePreview);
         chkDirectionFix.Checked = Convert.ToBoolean(CurrentPage.DirectionFix);

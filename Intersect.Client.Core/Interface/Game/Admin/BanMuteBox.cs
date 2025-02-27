@@ -59,7 +59,7 @@ public partial class BanMuteBox : WindowControl
     )
     {
         DisableResizing();
-        Interface.InputBlockingElements.Add(this);
+        Interface.InputBlockingComponents.Add(this);
 
         // Prompt label
         var promptContainer = new ScrollControl(this, "PromptContainer");
@@ -74,7 +74,7 @@ public partial class BanMuteBox : WindowControl
 
         // Reason textbox
         _textboxReason = new TextBox(this, "TextboxReason");
-        Interface.FocusElements.Add(_textboxReason);
+        Interface.FocusComponents.Add(_textboxReason);
 
         // Duration label
         _ = new Label(this, "LabelDuration")
@@ -115,17 +115,17 @@ public partial class BanMuteBox : WindowControl
         LoadJsonUi(UI.InGame, Graphics.Renderer?.GetResolutionString(), true);
 
         richLabelPrompt.ClearText();
-        richLabelPrompt.Width = promptContainer.Width - promptContainer.GetVerticalScrollBar().Width;
+        richLabelPrompt.Width = promptContainer.Width - promptContainer.VerticalScrollBar.Width;
         richLabelPrompt.AddText(prompt, labelPrompt);
         _ = richLabelPrompt.SizeToChildren(false, true);
     }
 
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
         Close();
         Interface.GameUi.GameCanvas.RemoveChild(this, false);
-        base.Dispose();
-        GC.SuppressFinalize(this);
+
+        base.Dispose(disposing);
     }
 
     public int GetDuration()

@@ -1,19 +1,18 @@
 ﻿using Intersect.Core;
-using Intersect.Logging;
 using Intersect.Network;
 using Intersect.Server.Core.Services;
 using Intersect.Server.Database;
 using Intersect.Server.Localization;
 using Intersect.Server.Networking;
 using System.Diagnostics;
+using System.Reflection;
 using Intersect.Factories;
 using Intersect.Plugins;
 using Intersect.Server.Plugins;
-using Intersect.Server.General;
 using Intersect.Plugins.Interfaces;
 using Intersect.Rsa;
 using Intersect.Server.Database.PlayerData.Players;
-
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Server.Core;
 
@@ -33,14 +32,19 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
     );
 
     public static ServerContextFactory ServerContextFactory { get; set; } = (options, logger, packetHelper) =>
-        new ServerContext(options, logger, packetHelper);
+        new ServerContext(Assembly.GetExecutingAssembly(), options, logger, packetHelper);
 
     protected ServerContext(
+        Assembly entryAssembly,
         ServerCommandLineOptions startupOptions,
-        Logger logger,
+        ILogger logger,
         IPacketHelper packetHelper
     ) : base(
-        startupOptions, logger, packetHelper
+        entryAssembly,
+        "Intersect Server",
+        startupOptions,
+        logger,
+        packetHelper
     )
     {
         // Register the factory for creating service plugin contexts
@@ -48,7 +52,7 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
 
         if (startupOptions.Port > 0)
         {
-            Options.ServerPort = startupOptions.Port;
+            Options.Instance.ServerPort = startupOptions.Port;
         }
 
         Network = CreateNetwork();
@@ -68,7 +72,7 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to start networking");
             Dispose();
 
             throw;
@@ -104,14 +108,14 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
             OnDisposing(stopwatch);
 
             // Except this line, this line is fine.
-            Log.Info("Disposing network..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+            ApplicationContext.Context.Value?.Logger.LogInformation("Disposing network..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
             Network.Dispose();
 
-            Log.Info("Saving updated server variable values");
+            ApplicationContext.Context.Value?.Logger.LogInformation("Saving updated server variable values");
             DbInterface.SaveUpdatedServerVariables();
 
             // TODO: This probably also needs to not be a global, but will require more work to clean up.
-            Log.Info("Saving online users/players..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+            ApplicationContext.Context.Value?.Logger.LogInformation("Saving online users/players..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
 
             var savingTasks = new List<Task>();
             foreach (var user in Database.PlayerData.User.OnlineList.ToArray())
@@ -122,7 +126,7 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
             Task.WaitAll(savingTasks.ToArray());
 
 
-            Log.Info("Saving loaded guilds....");
+            ApplicationContext.Context.Value?.Logger.LogInformation("Saving loaded guilds....");
 
             savingTasks.Clear();
             //Should we send out guild updates?
@@ -134,18 +138,20 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
             Task.WaitAll(savingTasks.ToArray());
 
             // TODO: This probably also needs to not be a global, but will require more work to clean up.
-            Log.Info("Online users/players saved." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+            ApplicationContext.Context.Value?.Logger.LogInformation("Online users/players saved." + $" ({stopwatch.ElapsedMilliseconds}ms)");
 
 
-            //Disconnect All Clients
-            //Will kill their packet handling threads so we have a clean shutdown
-            lock (Globals.ClientLock)
+            // Disconnect All Clients
+            // Will kill their packet handling threads so we have a clean shutdown
+            lock (Client.GlobalLock)
             {
-                var clients = Globals.Clients.ToArray();
+                var clients = Client.Instances.ToArray();
                 foreach (var client in clients)
                 {
                     client.Disconnect("Server Shutdown", true);
                 }
+
+                Client.Instances.Clear();
             }
 
             #endregion
@@ -157,7 +163,7 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
 
             if (ThreadLogic?.IsAlive ?? false)
             {
-                Log.Info("Shutting down the logic thread..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+                ApplicationContext.Context.Value?.Logger.LogInformation("Shutting down the logic thread..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
                 if (!ThreadLogic.Join(10000))
                 {
                     try
@@ -166,7 +172,7 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
                     }
                     catch (ThreadAbortException threadAbortException)
                     {
-                        Log.Error(threadAbortException, $"{nameof(ThreadLogic)} aborted.");
+                        ApplicationContext.Context.Value?.Logger.LogError(threadAbortException, $"{nameof(ThreadLogic)} aborted.");
                     }
                 }
             }
@@ -174,9 +180,9 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
             PacketHelper.HandlerRegistry.Dispose();
         }
 
-        Log.Info("Base dispose." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+        ApplicationContext.Context.Value?.Logger.LogInformation("Base dispose." + $" ({stopwatch.ElapsedMilliseconds}ms)");
         base.Dispose(disposing);
-        Log.Info("Finished disposing server context." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+        ApplicationContext.Context.Value?.Logger.LogInformation("Finished disposing server context." + $" ({stopwatch.ElapsedMilliseconds}ms)");
 
         if (DisposeWithoutExiting)
         {
@@ -218,7 +224,7 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
     {
         #region Apply CLI Options
 
-        //Options.ServerPort = StartupOptions.ValidPort(Options.ServerPort);
+        //Options.Instance.ServerPort = StartupOptions.ValidPort(Options.Instance.ServerPort);
 
         #endregion
 
@@ -248,11 +254,11 @@ internal partial class ServerContext : ApplicationContext<ServerContext, ServerC
 
         if (!Network.Listen())
         {
-            Log.Error("An error occurred while attempting to connect.");
+            ApplicationContext.Context.Value?.Logger.LogError("An error occurred while attempting to connect.");
         }
         else
         {
-            Console.WriteLine(Strings.Intro.ServerStarted.ToString(Options.ServerPort));
+            Console.WriteLine(Strings.Intro.ServerStarted.ToString(Options.Instance.ServerPort));
         }
     }
 

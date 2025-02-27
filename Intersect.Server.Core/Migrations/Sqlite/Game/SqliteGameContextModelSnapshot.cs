@@ -125,7 +125,7 @@ namespace Intersect.Server.Migrations.Sqlite.Game
                     b.ToTable("UserVariables");
                 });
 
-            modelBuilder.Entity("Intersect.GameObjects.AnimationBase", b =>
+            modelBuilder.Entity("Intersect.GameObjects.AnimationDescriptor", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
@@ -1261,11 +1261,11 @@ namespace Intersect.Server.Migrations.Sqlite.Game
                     b.ToTable("Maps");
                 });
 
-            modelBuilder.Entity("Intersect.GameObjects.AnimationBase", b =>
+            modelBuilder.Entity("Intersect.GameObjects.AnimationDescriptor", b =>
                 {
-                    b.OwnsOne("Intersect.GameObjects.AnimationLayer", "Lower", b1 =>
+                    b.OwnsOne("Intersect.Framework.Core.GameObjects.Animations.AnimationLayer", "Lower", b1 =>
                         {
-                            b1.Property<Guid>("AnimationBaseId")
+                            b1.Property<Guid>("AnimationDescriptorId")
                                 .HasColumnType("TEXT");
 
                             b1.Property<bool>("AlternateRenderLayer")
@@ -1295,17 +1295,17 @@ namespace Intersect.Server.Migrations.Sqlite.Game
                             b1.Property<int>("YFrames")
                                 .HasColumnType("INTEGER");
 
-                            b1.HasKey("AnimationBaseId");
+                            b1.HasKey("AnimationDescriptorId");
 
                             b1.ToTable("Animations");
 
                             b1.WithOwner()
-                                .HasForeignKey("AnimationBaseId");
+                                .HasForeignKey("AnimationDescriptorId");
                         });
 
-                    b.OwnsOne("Intersect.GameObjects.AnimationLayer", "Upper", b1 =>
+                    b.OwnsOne("Intersect.Framework.Core.GameObjects.Animations.AnimationLayer", "Upper", b1 =>
                         {
-                            b1.Property<Guid>("AnimationBaseId")
+                            b1.Property<Guid>("AnimationDescriptorId")
                                 .HasColumnType("TEXT");
 
                             b1.Property<bool>("AlternateRenderLayer")
@@ -1335,12 +1335,12 @@ namespace Intersect.Server.Migrations.Sqlite.Game
                             b1.Property<int>("YFrames")
                                 .HasColumnType("INTEGER");
 
-                            b1.HasKey("AnimationBaseId");
+                            b1.HasKey("AnimationDescriptorId");
 
                             b1.ToTable("Animations");
 
                             b1.WithOwner()
-                                .HasForeignKey("AnimationBaseId");
+                                .HasForeignKey("AnimationDescriptorId");
                         });
 
                     b.Navigation("Lower");

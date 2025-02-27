@@ -6,9 +6,7 @@ using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Ranges;
 using Intersect.Models;
 using Intersect.Utilities;
-
 using Microsoft.EntityFrameworkCore;
-
 using Newtonsoft.Json;
 
 namespace Intersect.GameObjects;
@@ -36,9 +34,9 @@ public partial class ItemBase : DatabaseObject<ItemBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase Animation
+    public AnimationDescriptor Animation
     {
-        get => AnimationBase.Get(AnimationId);
+        get => AnimationDescriptor.Get(AnimationId);
         set => AnimationId = value?.Id ?? Guid.Empty;
     }
 
@@ -48,9 +46,9 @@ public partial class ItemBase : DatabaseObject<ItemBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase AttackAnimation
+    public AnimationDescriptor AttackAnimation
     {
-        get => AnimationBase.Get(AttackAnimationId);
+        get => AnimationDescriptor.Get(AttackAnimationId);
         set => AttackAnimationId = value?.Id ?? Guid.Empty;
     }
 
@@ -59,9 +57,9 @@ public partial class ItemBase : DatabaseObject<ItemBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase EquipmentAnimation
+    public AnimationDescriptor EquipmentAnimation
     {
-        get => AnimationBase.Get(EquipmentAnimationId);
+        get => AnimationDescriptor.Get(EquipmentAnimationId);
         set => EquipmentAnimationId = value?.Id ?? Guid.Empty;
     }
 

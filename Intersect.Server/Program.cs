@@ -1,15 +1,14 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Reflection;
 using Intersect.Config;
+using Intersect.Framework.Reflection;
 using Intersect.Network;
 using Intersect.Server.Core;
 using Intersect.Server.Database;
 using Intersect.Server.Networking;
 using Intersect.Server.Networking.LiteNetLib;
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using MySqlConnector;
 
 namespace Intersect.Server;
@@ -23,12 +22,15 @@ internal static class Program
 
         try
         {
+            var executingAssembly = Assembly.GetExecutingAssembly();
+            Console.WriteLine($"Starting {executingAssembly.GetMetadataName()}...");
+
             ServerContext.ServerContextFactory = (options, logger, packetHelper) =>
-                new FullServerContext(options, logger, packetHelper);
+                new FullServerContext(executingAssembly, options, logger, packetHelper);
 
             ServerContext.NetworkFactory = (context, parameters, handlePacket, shouldProcessPacket) =>
             {
-                var config = new NetworkConfiguration(Options.ServerPort);
+                var config = new NetworkConfiguration(Options.Instance.ServerPort);
                 return new ServerNetwork(context as IServerContext, context, config, parameters)
                 {
                     Handler = handlePacket,
@@ -38,7 +40,7 @@ internal static class Program
 
             Client.EnqueueNetworkTask = action => ServerNetwork.Pool.QueueWorkItem(action);
 
-            Bootstrapper.Start(args);
+            Bootstrapper.Start(executingAssembly, args);
         }
         catch (Exception exception)
         {
@@ -53,8 +55,10 @@ internal static class Program
         .CreateDefaultBuilder(args)
         .ConfigureServices((hostContext, services) =>
         {
-            var rawDatabaseType = hostContext.Configuration.GetValue<string>("DatabaseType") ??
-                                  DatabaseType.Sqlite.ToString();
+            var rawDatabaseType = hostContext.Configuration.GetValue(
+                "DatabaseType",
+                DatabaseType.Sqlite.ToString()
+            );
             if (!Enum.TryParse(rawDatabaseType, out DatabaseType databaseType) || databaseType == DatabaseType.Unknown)
             {
                 throw new InvalidOperationException($"Invalid database type: {rawDatabaseType}");

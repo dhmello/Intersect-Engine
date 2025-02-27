@@ -15,10 +15,11 @@ public partial class DownArrow : Base
     ///     Initializes a new instance of the <see cref="DownArrow" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public DownArrow(ComboBox parent) : base(parent) // or Base?
+    /// <param name="name"></param>
+    public DownArrow(ComboBox parent, string? name = default) : base(parent: parent, name: name) // or Base?
     {
         MouseInputEnabled = false;
-        SetSize(15, 15);
+        MinimumSize = new Point(15, 15);
 
         mComboBox = parent;
     }
@@ -30,7 +31,7 @@ public partial class DownArrow : Base
     protected override void Render(Skin.Base skin)
     {
         skin.DrawComboBoxArrow(
-            this, mComboBox.IsHovered, mComboBox.IsDepressed, mComboBox.IsOpen, mComboBox.IsDisabled
+            this, mComboBox.IsHovered, mComboBox.IsActive, mComboBox.IsOpen, mComboBox.IsDisabled
         );
     }
 

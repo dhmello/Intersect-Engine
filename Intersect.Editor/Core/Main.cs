@@ -3,7 +3,9 @@ using Intersect.Editor.Forms;
 using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Maps;
+using Intersect.Framework.Core;
 using Intersect.Utilities;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Editor.Core;
 
@@ -154,10 +156,11 @@ public static partial class Main
                                 Application.DoEvents();
                             }
                         }
-                        catch (Exception ex)
+                        catch (Exception exception)
                         {
-                            Logging.Log.Error(
-                                ex, "JC's Solution for UpdateMaps collection was modified bug did not work!"
+                            Intersect.Core.ApplicationContext.Context.Value?.Logger.LogError(
+                                exception,
+                                "JC's Solution for UpdateMaps collection was modified bug did not work!"
                             );
                         }
 

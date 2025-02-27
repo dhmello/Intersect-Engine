@@ -1,11 +1,9 @@
 using System.ComponentModel.DataAnnotations.Schema;
-
 using Intersect.Enums;
 using Intersect.GameObjects.Maps;
 using Intersect.Models;
 using Intersect.Server.Utilities;
 using Intersect.Utilities;
-
 using Newtonsoft.Json;
 
 namespace Intersect.GameObjects;
@@ -156,9 +154,9 @@ public partial class ClassBase : DatabaseObject<ClassBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase AttackAnimation
+    public AnimationDescriptor AttackAnimation
     {
-        get => AnimationBase.Get(AttackAnimationId);
+        get => AnimationDescriptor.Get(AttackAnimationId);
         set => AttackAnimationId = value?.Id ?? Guid.Empty;
     }
 

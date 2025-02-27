@@ -1,5 +1,6 @@
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Gwen.Control;
+using Intersect.Client.Framework.Gwen.Control.EventArguments;
 
 namespace Intersect.Client.Framework.Gwen.ControlInternal;
 
@@ -9,12 +10,20 @@ namespace Intersect.Client.Framework.Gwen.ControlInternal;
 /// </summary>
 public partial class Text : Base
 {
+    public static readonly Color DefaultBoundsOutlineColor = Color.FromHex("bf4060", Color.Pink);
+    public static readonly Color DefaultMarginOutlineColor = Color.FromHex("1fad1f", Color.ForestGreen);
 
-    private GameFont? _font;
+    private IFont? _font;
 
     private float _scale = 1f;
 
     private string? _displayedText;
+    private string[] _lines = [];
+    private WrappingBehavior _wrappingBehavior;
+
+    private int _lastParentInnerWidth;
+
+    private bool _recalculateLines;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="Text" /> class.
@@ -23,11 +32,40 @@ public partial class Text : Base
     /// <param name="name">The name of the element.</param>
     public Text(Base parent, string? name = default) : base(parent, name)
     {
-        _font = Skin.DefaultFont;
-        _displayedText = String.Empty;
-        Color = Skin.Colors.Label.Default;
+        if (SafeSkin is { } skin)
+        {
+            InitializeFromSkin(this);
+            Color = skin.Colors.Label.Normal;
+        }
+        else
+        {
+            PreLayout.Enqueue(InitializeFromSkin, this);
+        }
+
         MouseInputEnabled = false;
         ColorOverride = Color.FromArgb(0, 255, 255, 255); // A==0, override disabled
+
+        BoundsOutlineColor = DefaultBoundsOutlineColor;
+        MarginOutlineColor = DefaultMarginOutlineColor;
+
+        _lastParentInnerWidth = SelectWidthFrom(parent);
+        parent.SizeChanged += ParentOnSizeChanged;
+    }
+
+    private static void InitializeFromSkin(Text @this)
+    {
+        @this.Color = @this.Skin.Colors.Label.Normal;
+    }
+
+    private void ParentOnSizeChanged(Base @base, ValueChangedEventArgs<Point> eventArgs)
+    {
+        var newSelectedWidth = SelectWidthFrom(@base);
+        if (_lastParentInnerWidth == newSelectedWidth)
+        {
+            return;
+        }
+
+        RecalculateLines(newSelectedWidth);
     }
 
     /// <summary>
@@ -36,19 +74,18 @@ public partial class Text : Base
     /// <remarks>
     ///     The font is not being disposed by this class.
     /// </remarks>
-    public GameFont? Font
+    public IFont? Font
     {
         get => _font;
-        set
-        {
-            if (value == _font)
-            {
-                return;
-            }
+        set => SetAndDoIfChanged(ref _font, value, Invalidate);
+    }
 
-            _font = value;
-            SizeToContents();
-        }
+    private int _fontSize = 10;
+
+    public int FontSize
+    {
+        get => _fontSize;
+        set => SetAndDoIfChanged(ref _fontSize, value, Invalidate);
     }
 
     /// <summary>
@@ -57,16 +94,65 @@ public partial class Text : Base
     public string? DisplayedText
     {
         get => _displayedText;
-        set
+        set => SetAndDoIfChanged(ref _displayedText, value, Invalidate, this);
+    }
+
+    public WrappingBehavior WrappingBehavior
+    {
+        get => _wrappingBehavior;
+        set => SetAndDoIfChanged(ref _wrappingBehavior, value, Invalidate);
+    }
+
+    public override void Invalidate()
+    {
+        base.Invalidate();
+
+        _recalculateLines = true;
+    }
+
+    private static int SelectWidthFrom(Base? parent) =>
+        parent == null ? 0 : Math.Max(0, Math.Max(parent.MaximumInnerWidth, parent.InnerWidth));
+
+    private void RecalculateLines(int parentInnerWidth = 0)
+    {
+        if (_lines.Length == 0 && string.IsNullOrEmpty(_displayedText))
         {
-            if (string.Equals(value, _displayedText, StringComparison.Ordinal))
+            return;
+        }
+
+        var parent = Parent;
+        if (parentInnerWidth < 1)
+        {
+            parentInnerWidth = SelectWidthFrom(parent);
+        }
+
+        // If the last calculation yielded one line and the new width is not smaller (or if it's less than one), skip
+        if (_lines.Length == 1 && (parentInnerWidth >= _lastParentInnerWidth || parentInnerWidth < 1))
+        {
+            // But only skip if we're not oversize
+            if (parentInnerWidth > Width)
             {
                 return;
             }
-
-            _displayedText = value;
-            SizeToContents();
         }
+
+        _lastParentInnerWidth = parentInnerWidth;
+
+        var wrappingBehavior = (parent as Label)?.WrappingBehavior ?? WrappingBehavior.NoWrap;
+        _lines = wrappingBehavior switch
+        {
+            WrappingBehavior.Wrapped => WrapText(
+                _displayedText,
+                parentInnerWidth,
+                Font,
+                FontSize,
+                Skin.Renderer
+            ),
+            WrappingBehavior.NoWrap => _displayedText == null ? [] : [_displayedText],
+            _ => throw new NotImplementedException($"{nameof(WrappingBehavior)} '{wrappingBehavior}' not implemented"),
+        };
+
+        SizeToContents(skipRecalculateLines: true);
     }
 
     /// <summary>
@@ -98,7 +184,7 @@ public partial class Text : Base
             return;
         }
 
-        var font = _font;
+        var font = _font ?? SafeSkin?.DefaultFont;
         if (font == default)
         {
             return;
@@ -116,7 +202,18 @@ public partial class Text : Base
             skin.Renderer.DrawColor = colorOverride;
         }
 
-        skin.Renderer.RenderText(font, Point.Empty, _displayedText, _scale);
+        Point cursor = default;
+        foreach (var line in _lines)
+        {
+            skin.Renderer.RenderText(font, _fontSize, cursor, line, _scale);
+
+            if (_lines.Length <= 1)
+            {
+                break;
+            }
+
+            cursor.Y += skin.Renderer.MeasureText(font: font, fontSize: _fontSize, text: line, scale: _scale).Y;
+        }
 
 #if DEBUG_TEXT_MEASURE
         {
@@ -145,9 +242,18 @@ public partial class Text : Base
     /// <param name="skin">Skin to use.</param>
     protected override void Layout(Skin.Base skin)
     {
+        if (_recalculateLines || _lines.Length < 1)
+        {
+            _lines = [];
+            RecalculateLines();
+            _recalculateLines = false;
+        }
+
         SizeToContents();
         base.Layout(skin);
     }
+
+    public override bool SizeToChildren(SizeToChildrenArgs args) => SizeToContents();
 
     /// <summary>
     ///     Handler invoked when control's scale changes.
@@ -171,17 +277,27 @@ public partial class Text : Base
     /// <summary>
     ///     Sizes the control to its contents.
     /// </summary>
-    private void SizeToContents()
+    private bool SizeToContents(bool skipRecalculateLines = false)
     {
         if (!HasSkin)
         {
-            return;
+            return false;
+        }
+
+        if (IsHidden)
+        {
+            return false;
         }
 
         var font = Font;
         if (font == default)
         {
-            return;
+            return false;
+        }
+
+        if (!skipRecalculateLines)
+        {
+            RecalculateLines();
         }
 
         Point newSize;
@@ -189,20 +305,34 @@ public partial class Text : Base
         if (string.IsNullOrEmpty(_displayedText))
         {
             const string verticalBar = "|";
-            newSize = Skin.Renderer.MeasureText(font, verticalBar, _scale) with { X = 0 };
+            newSize = Skin.Renderer.MeasureText(font, fontSize: _fontSize, verticalBar, _scale) with { X = 0 };
         }
         else
         {
-            newSize = Skin.Renderer.MeasureText(font, _displayedText, _scale);
+            newSize = default;
+            // ReSharper disable once LoopCanBeConvertedToQuery
+            foreach (var line in _lines)
+            {
+                var lineSize = Skin.Renderer.MeasureText(font, fontSize: _fontSize,line, _scale);
+                newSize = new Point(
+                    Math.Max(newSize.X, lineSize.X),
+                    newSize.Y + lineSize.Y
+                );
+            }
         }
+
+        newSize.X = Math.Clamp(newSize.X, MinimumSize.X, MaximumSize.X > 0 ? MaximumSize.X : int.MaxValue);
+        newSize.Y = Math.Clamp(newSize.Y, MinimumSize.Y, MaximumSize.Y > 0 ? MaximumSize.Y : int.MaxValue);
 
         if (Size == newSize)
         {
-            return;
+            return false;
         }
 
         Size = newSize;
-        InvalidateParent();
+        Invalidate();
+
+        return true;
     }
 
     /// <summary>
@@ -217,7 +347,7 @@ public partial class Text : Base
             return default;
         }
 
-        var font = _font;
+        var font = _font ?? SafeSkin?.DefaultFont;
         if (font == default)
         {
             return default;
@@ -235,7 +365,7 @@ public partial class Text : Base
         }
 
         var substring = displayedText[..index];
-        var substringSize = Skin.Renderer.MeasureText(font, substring) with
+        var substringSize = Skin.Renderer.MeasureText(font, fontSize: _fontSize, substring) with
         {
             Y = 0,
         };
@@ -256,7 +386,7 @@ public partial class Text : Base
             return -1;
         }
 
-        var closestDistance = MAX_COORD;
+        var closestDistance = int.MaxValue;
         var closestIndex = 0;
 
         for (var characterIndex = 0; characterIndex < displayedText.Length + 1; characterIndex++)
@@ -278,4 +408,82 @@ public partial class Text : Base
         return closestIndex;
     }
 
+    public static string[] WrapText(string? input, int width, IFont? font, int size, ITextHelper textHelper)
+    {
+        var sanitizedInput = input?.ReplaceLineEndings("\n");
+        var inputLines = (sanitizedInput ?? string.Empty).Split('\n', StringSplitOptions.TrimEntries);
+
+        if (string.IsNullOrWhiteSpace(sanitizedInput) || width < 1)
+        {
+            return inputLines;
+        }
+
+        if (font == null)
+        {
+            return inputLines;
+        }
+
+        List<string> lines = [];
+
+        foreach (var inputLine in inputLines)
+        {
+            if (inputLine.Length < 1)
+            {
+                lines.Add(inputLine);
+                continue;
+            }
+
+            float measured = textHelper.MeasureText(inputLine, font, size, 1).X;
+            if (measured <= width)
+            {
+                lines.Add(inputLine);
+                continue;
+            }
+
+            inputLine.Split(". ");
+
+            var lastSpace = 0;
+            var curPos = 0;
+            var curLen = 1;
+            var lastOk = 0;
+
+            string line;
+            while (curPos + curLen < inputLine.Length)
+            {
+                line = inputLine.Substring(curPos, curLen);
+                measured = textHelper.MeasureText(line, font, size, 1).X;
+                if (measured < width)
+                {
+                    lastOk = lastSpace;
+                    lastSpace = inputLine[curPos + curLen] switch
+                    {
+                        ' ' or '-' => curLen,
+                        _ => lastSpace,
+                    };
+                }
+                else
+                {
+                    if (lastOk == 0)
+                    {
+                        lastOk = curLen - 1;
+                    }
+
+                    line = inputLine.Substring(curPos, lastOk).Trim();
+                    lines.Add(line);
+
+                    curPos += lastOk;
+                    lastOk = 0;
+                    lastSpace = 0;
+                    curLen = 1;
+                }
+
+                curLen++;
+            }
+
+            var newLine = inputLine.Substring(curPos, inputLine.Length - curPos).Trim();
+            lines.Add(newLine);
+        }
+
+        return lines.ToArray();
+    }
 }

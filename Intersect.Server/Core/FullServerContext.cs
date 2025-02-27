@@ -1,16 +1,18 @@
 using System.Diagnostics;
+using System.Net;
+using System.Reflection;
 using System.Resources;
-using Intersect.Logging;
-using Intersect.Network;
+using Intersect.Core;
+using Intersect.Framework.Net;
 using Intersect.Plugins.Interfaces;
 using Intersect.Rsa;
 using Intersect.Server.Core.Services;
 using Intersect.Server.Localization;
 using Intersect.Server.Networking;
 using Intersect.Server.Networking.Helpers;
-using Intersect.Server.Networking.LiteNetLib;
 using Intersect.Server.Web;
 using Open.Nat;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Intersect.Server.Core;
 
@@ -23,12 +25,17 @@ internal class FullServerContext : ServerContext, IFullServerContext
     private const string AsymmetricKeyManifestResourceName = "Intersect.Server.network.handshake.bkey";
 
     internal FullServerContext(
+        Assembly entryAssembly,
         ServerCommandLineOptions startupOptions,
-        Logger logger,
+        ILogger logger,
         IPacketHelper packetHelper
-    ) : base(startupOptions, logger, packetHelper)
+    ) : base(entryAssembly, startupOptions, logger, packetHelper)
     {
-        packetHelper.HandlerRegistry.TryRegisterAvailableMethodHandlers(typeof(NetworkedPacketHandler), new NetworkedPacketHandler(), false);
+        packetHelper.HandlerRegistry.TryRegisterAvailableMethodHandlers(
+            typeof(NetworkedPacketHandler),
+            new NetworkedPacketHandler(),
+            false
+        );
         packetHelper.HandlerRegistry.TryRegisterAvailableTypeHandlers(typeof(FullServerContext).Assembly);
     }
 
@@ -70,7 +77,7 @@ internal class FullServerContext : ServerContext, IFullServerContext
             return;
         }
 
-        Log.Info("Shutting down the console thread..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+        ApplicationContext.Context.Value?.Logger.LogInformation("Shutting down the console thread..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
         if (!ThreadConsole.Join(1000))
         {
             try
@@ -79,7 +86,7 @@ internal class FullServerContext : ServerContext, IFullServerContext
             }
             catch (ThreadAbortException threadAbortException)
             {
-                Log.Error(threadAbortException, $"{nameof(ThreadConsole)} aborted.");
+                ApplicationContext.Context.Value?.Logger.LogError(threadAbortException, $"{nameof(ThreadConsole)} aborted.");
             }
         }
     }
@@ -89,7 +96,7 @@ internal class FullServerContext : ServerContext, IFullServerContext
         base.OnDisposing(stopwatch);
 
 #if WEBSOCKETS
-                Log.Info("Shutting down websockets..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
+                ApplicationContext.Context.Value?.Logger.LogInformation("Shutting down websockets..." + $" ({stopwatch.ElapsedMilliseconds}ms)");
                 WebSocketNetwork.Stop();
 #endif
     }
@@ -99,14 +106,12 @@ internal class FullServerContext : ServerContext, IFullServerContext
         base.InternalStartNetworking();
 
 #if WEBSOCKETS
-            WebSocketNetwork.Init(Options.ServerPort);
-            Log.Pretty.Info(Strings.Intro.websocketstarted.ToString(Options.ServerPort));
+            WebSocketNetwork.Init(Options.Instance.ServerPort);
+            ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Intro.websocketstarted.ToString(Options.Instance.ServerPort));
             Console.WriteLine();
 #endif
 
         CheckNetwork();
-
-        Console.WriteLine();
     }
 
         #region Networking
@@ -115,16 +120,16 @@ internal class FullServerContext : ServerContext, IFullServerContext
         {
             Console.WriteLine();
 
-            if (Options.OpenPortChecker && !StartupOptions.NoNetworkCheck)
+            if (Options.Instance.OpenPortChecker && !StartupOptions.NoNetworkCheck)
             {
                 if (CheckPort())
                 {
                     return;
                 }
 
-                if (Options.UPnP && !StartupOptions.NoNatPunchthrough)
+                if (Options.Instance.UPnP && !StartupOptions.NoNatPunchthrough)
                 {
-                    Log.Pretty.Info(Strings.Portchecking.PortNotOpenTryingUpnp.ToString(Options.ServerPort));
+                    ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Portchecking.PortNotOpenTryingUpnp.ToString(Options.Instance.ServerPort));
                     Console.WriteLine();
 
                     if (TryUPnP())
@@ -134,35 +139,35 @@ internal class FullServerContext : ServerContext, IFullServerContext
                             return;
                         }
 
-                        Log.Pretty.Warn(Strings.Portchecking.ProbablyFirewall.ToString(Options.ServerPort));
+                        ApplicationContext.Context.Value?.Logger.LogWarning(Strings.Portchecking.ProbablyFirewall.ToString(Options.Instance.ServerPort));
                     }
                     else
                     {
-                        Log.Pretty.Warn(Strings.Portchecking.RouterUpnpFailed);
+                        ApplicationContext.Context.Value?.Logger.LogWarning(Strings.Portchecking.RouterUpnpFailed);
                     }
                 }
                 else
                 {
-                    Log.Pretty.Warn(Strings.Portchecking.PortNotOpenUpnpDisabled.ToString(Options.ServerPort));
+                    ApplicationContext.Context.Value?.Logger.LogWarning(Strings.Portchecking.PortNotOpenUpnpDisabled.ToString(Options.Instance.ServerPort));
                 }
             }
-            else if (Options.UPnP)
+            else if (Options.Instance.UPnP)
             {
-                Log.Pretty.Info(Strings.Portchecking.TryingUpnp);
+                ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Portchecking.TryingUpnp);
                 Console.WriteLine();
 
                 if (TryUPnP())
                 {
-                    Log.Pretty.Info(Strings.Portchecking.UpnpSucceededPortCheckerDisabled);
+                    ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Portchecking.UpnpSucceededPortCheckerDisabled);
                 }
                 else
                 {
-                    Log.Pretty.Warn(Strings.Portchecking.RouterUpnpFailed);
+                    ApplicationContext.Context.Value?.Logger.LogWarning(Strings.Portchecking.RouterUpnpFailed);
                 }
             }
             else
             {
-                Log.Pretty.Warn(Strings.Portchecking.PortCheckerAndUpnpDisabled);
+                ApplicationContext.Context.Value?.Logger.LogWarning(Strings.Portchecking.PortCheckerAndUpnpDisabled);
             }
         }
 
@@ -170,9 +175,9 @@ internal class FullServerContext : ServerContext, IFullServerContext
         {
             UpnP.ConnectNatDevice().Wait(5000);
 #if WEBSOCKETS
-            UpnP.OpenServerPort(Options.ServerPort, Protocol.Tcp).Wait(5000);
+            UpnP.OpenServerPort(Options.Instance.ServerPort, Protocol.Tcp).Wait(5000);
 #endif
-            UpnP.OpenServerPort(Options.ServerPort, Protocol.Udp).Wait(5000);
+            UpnP.OpenServerPort(Options.Instance.ServerPort, Protocol.Udp).Wait(5000);
 
             if (UpnP.ForwardingSucceeded())
             {
@@ -185,25 +190,39 @@ internal class FullServerContext : ServerContext, IFullServerContext
 
         private bool CheckPort()
         {
-            if (!Options.OpenPortChecker || StartupOptions.NoNetworkCheck)
+            if (!Options.Instance.OpenPortChecker || StartupOptions.NoNetworkCheck)
             {
                 return false;
             }
 
-            var portCheckResult = PortChecker.CanYouSeeMe(Options.ServerPort, out var externalIp);
+            var portCheckResult = PortChecker.CanYouSeeMe(Options.Instance.ServerPort, out var externalIP);
 
             if (!Strings.Portchecking.PortCheckerResults.TryGetValue(portCheckResult, out var portCheckResultMessage))
             {
                 portCheckResultMessage = portCheckResult.ToString();
             }
 
-            Log.Pretty.Info(portCheckResultMessage.ToString(Strings.Portchecking.DocumentationUrl));
+            ApplicationContext.Context.Value?.Logger.LogInformation(portCheckResultMessage.ToString(Strings.Portchecking.DocumentationUrl));
 
-            if (!string.IsNullOrEmpty(externalIp))
+            if (!string.IsNullOrEmpty(externalIP))
             {
+                var hideIP = !(Options.Instance?.Logging.ShowSensitiveData ?? false);
+                string shownExternalIP = hideIP ? "********" : externalIP;
+                if (IPAddress.TryParse(externalIP, out var parsedExternalIP))
+                {
+                    var networkType = parsedExternalIP.GetNetworkType();
+                    if (networkType != NetworkTypes.Public)
+                    {
+                        shownExternalIP = externalIP;
+                    }
+
+                    shownExternalIP = $"{shownExternalIP} ({parsedExternalIP.AddressFamily}, {networkType})";
+                }
+
+                Console.WriteLine();
                 Console.WriteLine(Strings.Portchecking.ConnectionInfo);
-                Console.WriteLine(Strings.Portchecking.PublicIp, externalIp);
-                Console.WriteLine(Strings.Portchecking.PublicPort, Options.ServerPort);
+                Console.WriteLine(Strings.Portchecking.PublicIp, shownExternalIP);
+                Console.WriteLine(Strings.Portchecking.PublicPort, Options.Instance!.ServerPort);
             }
 
             if (portCheckResult == PortCheckResult.Inaccessible)

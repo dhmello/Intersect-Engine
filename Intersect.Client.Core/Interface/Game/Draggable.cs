@@ -16,7 +16,7 @@ partial class Draggable
 
     ImagePanel mPnl;
 
-    public Draggable(int x, int y, GameTexture tex, Color color)
+    public Draggable(int x, int y, IGameTexture tex, Color color)
     {
         mPnl = new ImagePanel(Interface.GameUi.GameCanvas, "Draggable");
         mPnl.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
@@ -47,7 +47,7 @@ partial class Draggable
             InputHandler.MousePosition.X - mPnl.Width / 2, InputHandler.MousePosition.Y - mPnl.Height / 2
         );
 
-        if (!Globals.InputManager.MouseButtonDown(MouseButtons.Left))
+        if (!Globals.InputManager.IsMouseButtonDown(MouseButton.Left))
         {
             return true;
         }

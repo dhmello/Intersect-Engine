@@ -3,16 +3,21 @@ using Intersect.Client.Core.Controls;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
+using Intersect.Client.Framework.Gwen;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.Framework.Gwen.Control.EventArguments;
+using Intersect.Client.Framework.Gwen.ControlInternal;
 using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Configuration;
+using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core;
 using Intersect.Localization;
 using Intersect.Utilities;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Client.Interface.Game.Chat;
 
@@ -38,7 +43,7 @@ public partial class Chatbox
 
     private Button _chatboxClearLogButton;
 
-    private readonly GameTexture _chatboxTexture;
+    private readonly IGameTexture _chatboxTexture;
 
     private Label mChatboxText;
 
@@ -96,7 +101,10 @@ public partial class Chatbox
 
         //Chatbox Window
         mChatboxWindow = new ImagePanel(gameCanvas, "ChatboxWindow");
-        mChatboxMessages = new ListBox(mChatboxWindow, "MessageList");
+        mChatboxMessages = new ListBox(mChatboxWindow, "MessageList")
+        {
+            Dock = Pos.Fill,
+        };
         mChatboxMessages.EnableScroll(false, true);
         mChatboxWindow.ShouldCacheToTexture = true;
 
@@ -124,8 +132,8 @@ public partial class Chatbox
         mChatboxInput.Text = GetDefaultInputText();
         mChatboxInput.Clicked += ChatboxInput_Clicked;
         mChatboxInput.IsTabable = false;
-        mChatboxInput.SetMaxLength(Options.MaxChatLength);
-        Interface.FocusElements.Add(mChatboxInput);
+        mChatboxInput.SetMaxLength(Options.Instance.Chat.MaxChatLength);
+        Interface.FocusComponents.Add(mChatboxInput);
 
         mChannelLabel = new Label(mChatboxWindow, "ChannelLabel");
         mChannelLabel.Text = Strings.Chatbox.Channel;
@@ -150,6 +158,7 @@ public partial class Chatbox
         mChatboxText = new Label(mChatboxWindow);
         mChatboxText.Name = "ChatboxText";
         mChatboxText.Font = mChatboxWindow.Parent.Skin.DefaultFont;
+        mChatboxText.FontSize = mChatboxWindow.Parent.Skin.DefaultFontSize;
 
         mChatboxSendButton = new Button(mChatboxWindow, "ChatboxSendButton");
         mChatboxSendButton.Text = Strings.Chatbox.Send;
@@ -182,7 +191,7 @@ public partial class Chatbox
         mContextMenu.IsHidden = true;
         mContextMenu.IconMarginDisabled = true;
         //TODO: Is this a memory leak?
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
         mPMContextItem = mContextMenu.AddItem(Strings.ChatContextMenu.PM);
         mPMContextItem.Clicked += MPMContextItem_Clicked;
         mFriendInviteContextItem = mContextMenu.AddItem(Strings.ChatContextMenu.FriendInvite);
@@ -192,6 +201,8 @@ public partial class Chatbox
         mGuildInviteContextItem = mContextMenu.AddItem(Strings.ChatContextMenu.GuildInvite);
         mGuildInviteContextItem.Clicked += MGuildInviteContextItem_Clicked;
         mContextMenu.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
+
+        mChatboxWindow.BeforeLayout += ChatboxWindowOnBeforeLayout;
     }
 
     public void OpenContextMenu(string name)
@@ -201,7 +212,7 @@ public partial class Chatbox
         mContextMenu.RemoveChild(mFriendInviteContextItem, false);
         mContextMenu.RemoveChild(mPartyInviteContextItem, false);
         mContextMenu.RemoveChild(mGuildInviteContextItem, false);
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
 
         // No point showing a menu for blank space.
         if (string.IsNullOrWhiteSpace(name))
@@ -241,25 +252,25 @@ public partial class Chatbox
         mContextMenu.Open(Framework.Gwen.Pos.None);
     }
 
-    private void MGuildInviteContextItem_Clicked(Base sender, ClickedEventArgs arguments)
+    private void MGuildInviteContextItem_Clicked(Base sender, MouseButtonState arguments)
     {
         var name = (string)sender.Parent.UserData;
         PacketSender.SendInviteGuild(name);
     }
 
-    private void MPartyInviteContextItem_Clicked(Base sender, ClickedEventArgs arguments)
+    private void MPartyInviteContextItem_Clicked(Base sender, MouseButtonState arguments)
     {
         var name = (string)sender.Parent.UserData;
         PacketSender.SendPartyInvite(name);
     }
 
-    private void MFriendInviteContextItem_Clicked(Base sender, ClickedEventArgs arguments)
+    private void MFriendInviteContextItem_Clicked(Base sender, MouseButtonState arguments)
     {
         var name = (string)sender.Parent.UserData;
         PacketSender.SendAddFriend(name);
     }
 
-    private void MPMContextItem_Clicked(Base sender, ClickedEventArgs arguments)
+    private void MPMContextItem_Clicked(Base sender, MouseButtonState arguments)
     {
         var name = (string)sender.Parent.UserData;
         SetChatboxText($"/pm {name} ");
@@ -294,7 +305,7 @@ public partial class Chatbox
     /// </summary>
     /// <param name="sender">The button that was clicked.</param>
     /// <param name="arguments">The arguments passed by the event.</param>
-    private void TabButtonClicked(Base sender, ClickedEventArgs arguments)
+    private void TabButtonClicked(Base sender, MouseButtonState arguments)
     {
         // Enable all buttons again!
         EnableChatTabs();
@@ -344,7 +355,7 @@ public partial class Chatbox
     }
 
     //Update
-    public void Update()
+    private void Update()
     {
         var vScrollBar = mChatboxMessages.GetVerticalScrollBar();
         var scrollAmount = vScrollBar.ScrollAmount;
@@ -352,33 +363,43 @@ public partial class Chatbox
         var scrollToBottom = vScrollBar.ScrollAmount == 1 || !scrollBarVisible;
 
         // Did the tab change recently? If so, we need to reset a few things to make it work...
-        if (mLastTab != mCurrentTab)
+        var currentTab = mCurrentTab;
+        if (mLastTab != currentTab)
         {
             mChatboxMessages.Clear();
-            mChatboxMessages.GetHorizontalScrollBar().SetScrollAmount(0);
+            mChatboxMessages.HorizontalScrollBar.ScrollAmount = 0;
+            mChatboxMessages.VerticalScrollBar.ScrollAmount = 1;
             mMessageIndex = 0;
             mReceivedMessage = true;
-            mLastTab = mCurrentTab;
+            mLastTab = currentTab;
         }
 
-        var msgs = ChatboxMsg.GetMessages(mCurrentTab);
-        for (var i = mMessageIndex; i < msgs.Count; i++)
+        var scrollPosition = mChatboxMessages.VerticalScroll;
+        var messages = ChatboxMsg.GetMessages(currentTab);
+        for (var i = mMessageIndex; i < messages.Count; i++)
         {
-            var msg = msgs[i];
-            var myText = Interface.WrapText(
-                msg.Message, mChatboxMessages.Width - vScrollBar.Width - 8,
-                mChatboxText.Font
-            );
+            var msg = messages[i];
+            string[] lines = [msg.Message];/*Text.WrapText(
+                msg.Message,
+                mChatboxMessages.Width - vScrollBar.Width - 8,
+                mChatboxText.Font,
+                Graphics.Renderer ?? throw new InvalidOperationException("No renderer")
+            );*/
 
-            foreach (var t in myText)
+            foreach (var line in lines)
             {
-                var rw = mChatboxMessages.AddRow(t.Trim());
-                rw.SetTextFont(mChatboxText.Font);
-                rw.SetTextColor(msg.Color);
-                rw.ShouldDrawBackground = false;
-                rw.UserData = msg.Target;
-                rw.Clicked += ChatboxRow_Clicked;
-                rw.RightClicked += ChatboxRow_RightClicked;
+                var row = mChatboxMessages.AddRow(line.Trim(), name: $"Message:{currentTab}#{mMessageIndex}", userData: msg.Target);
+                row.ShouldDrawBackground = false;
+                row.Padding = new Padding(2, 0);
+                row.Font = mChatboxText.Font;
+                row.FontSize = mChatboxWindow.Parent.Skin.DefaultFontSize;
+                row.SetTextColor(msg.Color);
+                if (row.GetCellContents(0) is Label label)
+                {
+                    label.WrappingBehavior = WrappingBehavior.Wrapped;
+                }
+                row.Clicked += ChatboxRow_Clicked;
+
                 mReceivedMessage = true;
 
                 while (mChatboxMessages.RowCount > ClientConfiguration.Instance.ChatLines)
@@ -390,40 +411,40 @@ public partial class Chatbox
             mMessageIndex++;
         }
 
-
+        // ReSharper disable once InvertIf
         if (mReceivedMessage)
         {
-            mChatboxMessages.InnerPanel.SizeToChildren(false, true);
-            mChatboxMessages.UpdateScrollBars();
-            if (!scrollToBottom)
+            // mChatboxMessages.SizeToContents();
+
+            if (scrollToBottom)
             {
-                vScrollBar.SetScrollAmount(scrollAmount);
+                mChatboxMessages.PostLayout.Enqueue(scroller => scroller.ScrollToBottom(), mChatboxMessages);
+                mChatboxMessages.RunOnMainThread(mChatboxMessages.ScrollToBottom);
             }
             else
             {
-                vScrollBar.SetScrollAmount(1);
+                mChatboxMessages.PostLayout.Enqueue(
+                    (scroller, position) =>
+                    {
+                        ApplicationContext.CurrentContext.Logger.LogTrace(
+                            "Scrolling chat ({ChatNode}) to {ScrollY}",
+                            scroller.CanonicalName,
+                            position
+                        );
+                        scroller.ScrollToY(position);
+                    },
+                    mChatboxMessages,
+                    scrollPosition
+                );
             }
+
             mReceivedMessage = false;
         }
     }
 
-    private void ChatboxRow_RightClicked(Base sender, ClickedEventArgs arguments)
+    private void ChatboxWindowOnBeforeLayout(Base sender, EventArgs arguments)
     {
-        var rw = (ListBoxRow)sender;
-        var target = (string)rw.UserData;
-
-        if (!string.IsNullOrWhiteSpace(target) && target != Globals.Me.Name)
-        {
-            if (ClientConfiguration.Instance.EnableContextMenus)
-            {
-                OpenContextMenu(target);
-            }
-            else
-            {
-                SetChatboxText($"/pm {target} ");
-            }
-
-        }
+        Update();
     }
 
     public void SetChatboxText(string msg)
@@ -434,10 +455,39 @@ public partial class Chatbox
         mChatboxInput.CursorPos = mChatboxInput.Text.Length;
     }
 
-    private void ChatboxRow_Clicked(Base sender, ClickedEventArgs arguments)
+    private void ChatboxRow_Clicked(Base sender, MouseButtonState arguments)
     {
-        var rw = (ListBoxRow)sender;
-        var target = (string)rw.UserData;
+        if (sender is not ListBoxRow row)
+        {
+            return;
+        }
+
+        if (row.UserData is not string target || string.IsNullOrWhiteSpace(target))
+        {
+            return;
+        }
+
+        switch (arguments.MouseButton)
+        {
+            case MouseButton.Left:
+                if (mGameUi.IsAdminWindowOpen)
+                {
+                    mGameUi.AdminWindowSelectName(target);
+                }
+                break;
+
+            case MouseButton.Right:
+                if (ClientConfiguration.Instance.EnableContextMenus)
+                {
+                    OpenContextMenu(target);
+                }
+                else
+                {
+                    SetChatboxText($"/pm {target} ");
+                }
+                break;
+        }
+
         if (!string.IsNullOrWhiteSpace(target))
         {
             if (mGameUi.IsAdminWindowOpen)
@@ -479,7 +529,7 @@ public partial class Chatbox
 
     //Input Handlers
     //Chatbox Window
-    void ChatboxInput_Clicked(Base sender, ClickedEventArgs arguments)
+    void ChatboxInput_Clicked(Base sender, MouseButtonState arguments)
     {
         if (mChatboxInput.Text == GetDefaultInputText())
         {
@@ -492,22 +542,22 @@ public partial class Chatbox
         TrySendMessage();
     }
 
-    void ChatboxSendBtn_Clicked(Base sender, ClickedEventArgs arguments)
+    void ChatboxSendBtn_Clicked(Base sender, MouseButtonState arguments)
     {
         TrySendMessage();
     }
 
-    void ChatboxClearLogBtn_Clicked(Base sender, ClickedEventArgs arguments)
+    void ChatboxClearLogBtn_Clicked(Base sender, MouseButtonState arguments)
     {
         ChatboxMsg.ClearMessages();
         mChatboxMessages.Clear();
-        mChatboxMessages.GetHorizontalScrollBar().SetScrollAmount(0);
+        mChatboxMessages.HorizontalScrollBar.SetScrollAmount(0);
         mMessageIndex = 0;
         mReceivedMessage = true;
         mLastTab = mCurrentTab;
     }
 
-    void ChatboxToggleLogBtn_Clicked(Base sender, ClickedEventArgs arguments)
+    void ChatboxToggleLogBtn_Clicked(Base sender, MouseButtonState arguments)
     {
         if (mChatboxWindow.Texture != null)
         {
@@ -557,12 +607,12 @@ public partial class Chatbox
         if (mLastChatTime > Timing.Global.MillisecondsUtc)
         {
             ChatboxMsg.AddMessage(new ChatboxMsg(Strings.Chatbox.TooFast, Color.Red, ChatMessageType.Error));
-            mLastChatTime = Timing.Global.MillisecondsUtc + Options.MinChatInterval;
+            mLastChatTime = Timing.Global.MillisecondsUtc + Options.Instance.Chat.MinIntervalBetweenChats;
 
             return;
         }
 
-        mLastChatTime = Timing.Global.MillisecondsUtc + Options.MinChatInterval;
+        mLastChatTime = Timing.Global.MillisecondsUtc + Options.Instance.Chat.MinIntervalBetweenChats;
 
         PacketSender.SendChatMsg(
             msg, byte.Parse(mChannelCombobox.SelectedItem.UserData.ToString())
@@ -571,33 +621,38 @@ public partial class Chatbox
         mChatboxInput.Text = GetDefaultInputText();
     }
 
-    string GetDefaultInputText()
+    private static string GetDefaultInputText()
     {
-        var key1 = Controls.ActiveControls.ControlMapping[Control.Enter].Bindings[0];
-        var key2 = Controls.ActiveControls.ControlMapping[Control.Enter].Bindings[1];
-        if (key1.Key == Keys.None && key2.Key != Keys.None)
+        if (!Controls.ActiveControls.TryGetMappingFor(Control.Enter, out var mapping))
+        {
+            return Strings.Chatbox.EnterChat;
+        }
+
+        var key1 = mapping.Bindings.FirstOrDefault();
+        var key2 = mapping.Bindings.Skip(1).FirstOrDefault();
+
+        if (key1?.Key is null or Keys.None)
+        {
+            if (key2?.Key is null or Keys.None)
+            {
+                return Strings.Chatbox.EnterChat;
+            }
+
+            return Strings.Chatbox.EnterChat1.ToString(
+                Strings.Keys.KeyDictionary[key2.Key.GetKeyId().ToLowerInvariant()]
+            );
+        }
+
+        if (key2?.Key is null or Keys.None)
         {
             return Strings.Chatbox.EnterChat1.ToString(
-                Strings.Keys.KeyDictionary[Enum.GetName(typeof(Keys), key2.Key).ToLower()]
+                Strings.Keys.KeyDictionary[key1.Key.GetKeyId().ToLowerInvariant()]
             );
         }
 
-        if (key1.Key != Keys.None && key2.Key == Keys.None)
-        {
-            return Strings.Chatbox.EnterChat1.ToString(
-                Strings.Keys.KeyDictionary[Enum.GetName(typeof(Keys), key1.Key).ToLower()]
-            );
-        }
-
-        if (key1.Key != Keys.None && key2.Key != Keys.None)
-        {
-            return Strings.Chatbox.EnterChat2.ToString(
-                Strings.Keys.KeyDictionary[Enum.GetName(typeof(Keys), key1.Key).ToLower()],
-                Strings.Keys.KeyDictionary[Enum.GetName(typeof(Keys), key2.Key).ToLower()]
-            );
-        }
-
-        return Strings.Chatbox.EnterChat;
+        return Strings.Chatbox.EnterChat2.ToString(
+            Strings.Keys.KeyDictionary[key1.Key.GetKeyId().ToLowerInvariant()],
+            Strings.Keys.KeyDictionary[key2.Key.GetKeyId().ToLowerInvariant()]
+        );
     }
-
 }

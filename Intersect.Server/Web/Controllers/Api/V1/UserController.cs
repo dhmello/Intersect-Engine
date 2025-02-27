@@ -1,7 +1,6 @@
 using System.Net;
 using Intersect.Enums;
 using Intersect.Framework.Core.GameObjects.Variables;
-using Intersect.GameObjects;
 using Intersect.Security;
 using Intersect.Server.Collections.Indexing;
 using Intersect.Server.Collections.Sorting;
@@ -146,7 +145,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
 
             if (!user.TryDelete())
             {
-                var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == user.Id);
+                var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == user.Id);
                 _ = client?.LogAndDisconnect(default, nameof(DeleteUser));
             }
 
@@ -493,7 +492,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
                 return NotFound($@"No user found for lookup key '{lookupKey}'.");
             }
 
-            if (!Options.Smtp.IsValid())
+            if (!Options.Instance.SmtpSettings.IsValid())
             {
                 return NotFound("Could not send password reset email, SMTP settings on the server are not configured!");
             }

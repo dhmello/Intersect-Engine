@@ -1,6 +1,4 @@
-﻿using System;
-
-using Intersect.Localization;
+﻿using Intersect.Localization;
 using Intersect.Server.Core.CommandParsing;
 using Intersect.Server.Core.CommandParsing.Arguments;
 using Intersect.Server.General;
@@ -27,7 +25,7 @@ namespace Intersect.Server.Core.Commands
                 return null;
             }
 
-            return Globals.Clients.Find(
+            return Client.Instances.Find(
                 client =>
                 {
                     var playerName = client?.Entity?.Name;

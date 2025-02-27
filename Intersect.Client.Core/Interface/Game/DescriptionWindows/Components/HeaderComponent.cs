@@ -35,9 +35,9 @@ public partial class HeaderComponent : ComponentBase
     /// <summary>
     /// Set the icon on this header.
     /// </summary>
-    /// <param name="texture">The <see cref="GameTexture"/> to use for display purposes.</param>
+    /// <param name="texture">The <see cref="IGameTexture"/> to use for display purposes.</param>
     /// <param name="color">The <see cref="Color"/> to use to display the texture.</param>
-    public void SetIcon(GameTexture texture, Color color)
+    public void SetIcon(IGameTexture texture, Color color)
     {
         mIcon.Texture = texture;
         mIcon.RenderColor = color;
@@ -53,7 +53,7 @@ public partial class HeaderComponent : ComponentBase
     public void SetTitle(string title, Color color)
     {
         mTitle.SetText(title);
-        mTitle.SetTextColor(color, Label.ControlState.Normal);
+        mTitle.SetTextColor(color, ComponentState.Normal);
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ public partial class HeaderComponent : ComponentBase
     public void SetSubtitle(string subtitle, Color color)
     {
         mSubtitle.SetText(subtitle);
-        mSubtitle.SetTextColor(color, Label.ControlState.Normal);
+        mSubtitle.SetTextColor(color, ComponentState.Normal);
     }
 
     /// <summary>
@@ -75,6 +75,6 @@ public partial class HeaderComponent : ComponentBase
     public void SetDescription(string description, Color color)
     {
         mDescription.SetText(description);
-        mDescription.SetTextColor(color, Label.ControlState.Normal);
+        mDescription.SetTextColor(color, ComponentState.Normal);
     }
 }

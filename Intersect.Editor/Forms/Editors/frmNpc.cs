@@ -1,7 +1,6 @@
+using System.ComponentModel;
 using System.Drawing.Imaging;
-
 using DarkUI.Forms;
-
 using Intersect.Editor.Content;
 using Intersect.Editor.Core;
 using Intersect.Editor.General;
@@ -15,17 +14,18 @@ using Graphics = System.Drawing.Graphics;
 
 namespace Intersect.Editor.Forms.Editors;
 
-
 public partial class FrmNpc : EditorForm
 {
 
-    private List<NpcBase> mChanged = new List<NpcBase>();
+    private List<NpcBase> mChanged = [];
 
     private string mCopiedItem;
 
     private NpcBase mEditorItem;
 
-    private List<string> mKnownFolders = new List<string>();
+    private List<string> mKnownFolders = [];
+
+    private BindingList<NotifiableDrop> _dropList = [];
 
     public FrmNpc()
     {
@@ -101,7 +101,7 @@ public partial class FrmNpc : EditorForm
         cmbDropItem.Items.AddRange(ItemBase.Names);
         cmbAttackAnimation.Items.Clear();
         cmbAttackAnimation.Items.Add(Strings.General.None);
-        cmbAttackAnimation.Items.AddRange(AnimationBase.Names);
+        cmbAttackAnimation.Items.AddRange(AnimationDescriptor.Names);
         cmbOnDeathEventKiller.Items.Clear();
         cmbOnDeathEventKiller.Items.Add(Strings.General.None);
         cmbOnDeathEventKiller.Items.AddRange(EventBase.Names);
@@ -114,11 +114,14 @@ public partial class FrmNpc : EditorForm
             cmbScalingStat.Items.Add(Globals.GetStatName(x));
         }
 
-        nudStr.Maximum = Options.MaxStatValue;
-        nudMag.Maximum = Options.MaxStatValue;
-        nudDef.Maximum = Options.MaxStatValue;
-        nudMR.Maximum = Options.MaxStatValue;
-        nudSpd.Maximum = Options.MaxStatValue;
+        lstDrops.DataSource = _dropList;
+        lstDrops.DisplayMember = nameof(NotifiableDrop.DisplayName);
+
+        nudStr.Maximum = Options.Instance.Player.MaxStat;
+        nudMag.Maximum = Options.Instance.Player.MaxStat;
+        nudDef.Maximum = Options.Instance.Player.MaxStat;
+        nudMR.Maximum = Options.Instance.Player.MaxStat;
+        nudSpd.Maximum = Options.Instance.Player.MaxStat;
         InitLocalization();
         UpdateEditor();
     }
@@ -213,7 +216,8 @@ public partial class FrmNpc : EditorForm
 
         grpDrops.Text = Strings.NpcEditor.drops;
         lblDropItem.Text = Strings.NpcEditor.dropitem;
-        lblDropAmount.Text = Strings.NpcEditor.dropamount;
+        lblDropMaxAmount.Text = Strings.NpcEditor.DropMaxAmount;
+        lblDropMinAmount.Text = Strings.NpcEditor.DropMinAmount;
         lblDropChance.Text = Strings.NpcEditor.dropchance;
         btnDropAdd.Text = Strings.NpcEditor.dropadd;
         btnDropRemove.Text = Strings.NpcEditor.dropremove;
@@ -311,7 +315,7 @@ public partial class FrmNpc : EditorForm
             nudScaling.Value = mEditorItem.Scaling;
             cmbDamageType.SelectedIndex = mEditorItem.DamageType;
             cmbScalingStat.SelectedIndex = mEditorItem.ScalingStat;
-            cmbAttackAnimation.SelectedIndex = AnimationBase.ListIndex(mEditorItem.AttackAnimationId) + 1;
+            cmbAttackAnimation.SelectedIndex = AnimationDescriptor.ListIndex(mEditorItem.AttackAnimationId) + 1;
             cmbAttackSpeedModifier.SelectedIndex = mEditorItem.AttackSpeedModifier;
             nudAttackSpeedValue.Value = mEditorItem.AttackSpeedValue;
 
@@ -428,40 +432,18 @@ public partial class FrmNpc : EditorForm
         picNpc.BackgroundImage = picSpriteBmp;
     }
 
-    private void UpdateDropValues(bool keepIndex = false)
+    private void UpdateDropValues()
     {
-        var index = lstDrops.SelectedIndex;
-        lstDrops.Items.Clear();
-
-        var drops = mEditorItem.Drops.ToArray();
-        foreach (var drop in drops)
+        _dropList.Clear();
+        foreach (var drop in mEditorItem.Drops)
         {
-            if (ItemBase.Get(drop.ItemId) == null)
+            _dropList.Add(new NotifiableDrop
             {
-                mEditorItem.Drops.Remove(drop);
-            }
-        }
-
-        for (var i = 0; i < mEditorItem.Drops.Count; i++)
-        {
-            if (mEditorItem.Drops[i].ItemId != Guid.Empty)
-            {
-                lstDrops.Items.Add(
-                    Strings.NpcEditor.dropdisplay.ToString(
-                        ItemBase.GetName(mEditorItem.Drops[i].ItemId), mEditorItem.Drops[i].Quantity,
-                        mEditorItem.Drops[i].Chance
-                    )
-                );
-            }
-            else
-            {
-                lstDrops.Items.Add(TextUtils.None);
-            }
-        }
-
-        if (keepIndex && index < lstDrops.Items.Count)
-        {
-            lstDrops.SelectedIndex = index;
+                ItemId = drop.ItemId,
+                MinQuantity = drop.MinQuantity,
+                MaxQuantity = drop.MaxQuantity,
+                Chance = drop.Chance
+            });
         }
     }
 
@@ -623,7 +605,7 @@ public partial class FrmNpc : EditorForm
     private void cmbAttackAnimation_SelectedIndexChanged(object sender, EventArgs e)
     {
         mEditorItem.AttackAnimation =
-            AnimationBase.Get(AnimationBase.IdFromList(cmbAttackAnimation.SelectedIndex - 1));
+            AnimationDescriptor.Get(AnimationDescriptor.IdFromList(cmbAttackAnimation.SelectedIndex - 1));
     }
 
     private void cmbDamageType_SelectedIndexChanged(object sender, EventArgs e)
@@ -726,71 +708,98 @@ public partial class FrmNpc : EditorForm
         mEditorItem.Experience = (int)nudExp.Value;
     }
 
-    private void cmbDropItem_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        if (lstDrops.SelectedIndex > -1 && lstDrops.SelectedIndex < mEditorItem.Drops.Count)
-        {
-            mEditorItem.Drops[lstDrops.SelectedIndex].ItemId = ItemBase.IdFromList(cmbDropItem.SelectedIndex - 1);
-        }
-
-        UpdateDropValues(true);
-    }
-
-    private void nudDropAmount_ValueChanged(object sender, EventArgs e)
-    {
-        // This should never be below 1. We shouldn't accept giving 0 items!
-        nudDropAmount.Value = Math.Max(1, nudDropAmount.Value);
-
-        if (lstDrops.SelectedIndex < lstDrops.Items.Count)
-        {
-            return;
-        }
-
-        mEditorItem.Drops[(int)lstDrops.SelectedIndex].Quantity = (int)nudDropAmount.Value;
-        UpdateDropValues(true);
-    }
-
     private void lstDrops_SelectedIndexChanged(object sender, EventArgs e)
     {
         if (lstDrops.SelectedIndex > -1)
         {
             cmbDropItem.SelectedIndex = ItemBase.ListIndex(mEditorItem.Drops[lstDrops.SelectedIndex].ItemId) + 1;
-            nudDropAmount.Value = mEditorItem.Drops[lstDrops.SelectedIndex].Quantity;
+            nudDropMaxAmount.Value = mEditorItem.Drops[lstDrops.SelectedIndex].MaxQuantity;
+            nudDropMinAmount.Value = mEditorItem.Drops[lstDrops.SelectedIndex].MinQuantity;
             nudDropChance.Value = (decimal)mEditorItem.Drops[lstDrops.SelectedIndex].Chance;
         }
     }
 
-    private void btnDropAdd_Click(object sender, EventArgs e)
+    private void cmbDropItem_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.Drops.Add(new Drop());
-        mEditorItem.Drops[mEditorItem.Drops.Count - 1].ItemId = ItemBase.IdFromList(cmbDropItem.SelectedIndex - 1);
-        mEditorItem.Drops[mEditorItem.Drops.Count - 1].Quantity = (int)nudDropAmount.Value;
-        mEditorItem.Drops[mEditorItem.Drops.Count - 1].Chance = (double)nudDropChance.Value;
-
-        UpdateDropValues();
-    }
-
-    private void btnDropRemove_Click(object sender, EventArgs e)
-    {
-        if (lstDrops.SelectedIndex > -1)
-        {
-            var i = lstDrops.SelectedIndex;
-            lstDrops.Items.RemoveAt(i);
-            mEditorItem.Drops.RemoveAt(i);
-        }
-
-        UpdateDropValues(true);
-    }
-
-    private void nudDropChance_ValueChanged(object sender, EventArgs e)
-    {
-        if (lstDrops.SelectedIndex < lstDrops.Items.Count)
+        int index = lstDrops.SelectedIndex;
+        if (index < 0 || index > lstDrops.Items.Count)
         {
             return;
         }
 
-        mEditorItem.Drops[(int)lstDrops.SelectedIndex].Chance = (double)nudDropChance.Value;
-        UpdateDropValues(true);
+        mEditorItem.Drops[index].ItemId = ItemBase.IdFromList(cmbDropItem.SelectedIndex - 1);
+        _dropList[index].ItemId = mEditorItem.Drops[index].ItemId;
+    }
+
+    private void nudDropMaxAmount_ValueChanged(object sender, EventArgs e)
+    {
+        int index = lstDrops.SelectedIndex;
+        if (index < 0 || index > lstDrops.Items.Count)
+        {
+            return;
+        }
+
+        mEditorItem.Drops[index].MaxQuantity = (int)nudDropMaxAmount.Value;
+        _dropList[index].MaxQuantity = mEditorItem.Drops[index].MaxQuantity;
+    }
+
+    private void nudDropMinAmount_ValueChanged(object sender, EventArgs e)
+    {
+        int index = lstDrops.SelectedIndex;
+        if (index < 0 || index > lstDrops.Items.Count)
+        {
+            return;
+        }
+
+        mEditorItem.Drops[index].MinQuantity = (int)nudDropMinAmount.Value;
+        _dropList[index].MinQuantity = mEditorItem.Drops[index].MinQuantity;
+    }
+
+    private void nudDropChance_ValueChanged(object sender, EventArgs e)
+    {
+        int index = lstDrops.SelectedIndex;
+        if (index < 0 || index > lstDrops.Items.Count)
+        {
+            return;
+        }
+
+        mEditorItem.Drops[index].Chance = (double)nudDropChance.Value;
+        _dropList[index].Chance = mEditorItem.Drops[index].Chance;
+    }
+
+    private void btnDropAdd_Click(object sender, EventArgs e)
+    {
+        var drop = new Drop()
+        {
+            ItemId = ItemBase.IdFromList(cmbDropItem.SelectedIndex - 1),
+            MaxQuantity = (int)nudDropMaxAmount.Value,
+            MinQuantity = (int)nudDropMinAmount.Value,
+            Chance = (double)nudDropChance.Value
+        };
+
+        mEditorItem.Drops.Add(drop);
+
+        _dropList.Add(new NotifiableDrop
+        {
+            ItemId = drop.ItemId,
+            MinQuantity = drop.MinQuantity,
+            MaxQuantity = drop.MaxQuantity,
+            Chance = drop.Chance
+        });
+
+        lstDrops.SelectedIndex = _dropList.Count - 1;
+    }
+
+    private void btnDropRemove_Click(object sender, EventArgs e)
+    {
+        if (lstDrops.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        var index = lstDrops.SelectedIndex;
+        mEditorItem.Drops.RemoveAt(index);
+        _dropList.RemoveAt(index);
     }
 
     private void chkIndividualLoot_CheckedChanged(object sender, EventArgs e)
@@ -938,8 +947,8 @@ public partial class FrmNpc : EditorForm
     private void nudResetRadius_ValueChanged(object sender, EventArgs e)
     {
         // So, the pathfinder on the server maintains a set max distance of whichever the largest value is, map height or width. Limit ourselves to this!
-        var maxPathFindingDistance = Math.Max(Options.MapWidth, Options.MapHeight);
-        var maxUserEnteredValue = Math.Max(Options.Npc.ResetRadius, nudResetRadius.Value);
+        var maxPathFindingDistance = Math.Max(Options.Instance.Map.MapWidth, Options.Instance.Map.MapHeight);
+        var maxUserEnteredValue = Math.Max(Options.Instance.Npc.ResetRadius, nudResetRadius.Value);
 
         // Use whatever is the lowest, either the maximum path find distance or the user entered value.
         nudResetRadius.Value = Math.Min(maxPathFindingDistance, maxUserEnteredValue);

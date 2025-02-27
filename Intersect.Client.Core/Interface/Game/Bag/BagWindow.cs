@@ -35,7 +35,7 @@ public partial class BagWindow
     {
         mBagWindow = new WindowControl(gameCanvas, Strings.Bags.Title, false, "BagWindow");
         mBagWindow.DisableResizing();
-        Interface.InputBlockingElements.Add(mBagWindow);
+        Interface.InputBlockingComponents.Add(mBagWindow);
 
         mItemContainer = new ScrollControl(mBagWindow, "ItemContainer");
         mItemContainer.EnableScroll(false, true);
@@ -49,7 +49,7 @@ public partial class BagWindow
         mContextMenu.IsHidden = true;
         mContextMenu.IconMarginDisabled = true;
         //TODO: Is this a memory leak?
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
         mWithdrawContextItem = mContextMenu.AddItem(Strings.BagContextMenu.Withdraw);
         mWithdrawContextItem.Clicked += MWithdrawContextItem_Clicked;
         mContextMenu.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
@@ -57,7 +57,7 @@ public partial class BagWindow
 
     public void OpenContextMenu(int slot)
     {
-        var item = ItemBase.Get(Globals.Bag[slot].ItemId);
+        var item = ItemBase.Get(Globals.BagSlots[slot].ItemId);
 
         // No point showing a menu for blank space.
         if (item == null)
@@ -74,12 +74,12 @@ public partial class BagWindow
         mContextMenu.Open(Framework.Gwen.Pos.None);
     }
 
-    private void MWithdrawContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MWithdrawContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         if (Globals.InBag)
         {
             var slot = (int) sender.Parent.UserData;
-            Globals.Me.TryRetreiveBagItem(slot, -1);
+            Globals.Me.TryRetrieveItemFromBag(slot, -1);
         }
     }
 
@@ -107,24 +107,24 @@ public partial class BagWindow
 
     public void Update()
     {
-        if (mBagWindow.IsHidden == true || Globals.Bag == null)
+        if (mBagWindow.IsHidden == true || Globals.BagSlots == null)
         {
             return;
         }
 
-        for (var i = 0; i < Globals.Bag.Length; i++)
+        for (var i = 0; i < Globals.BagSlots.Length; i++)
         {
-            if (Globals.Bag[i] != null && Globals.Bag[i].ItemId != Guid.Empty)
+            if (Globals.BagSlots[i] != null && Globals.BagSlots[i].ItemId != Guid.Empty)
             {
-                var item = ItemBase.Get(Globals.Bag[i].ItemId);
+                var item = ItemBase.Get(Globals.BagSlots[i].ItemId);
                 if (item != null)
                 {
                     Items[i].Pnl.IsHidden = false;
 
                     if (item.IsStackable)
                     {
-                        mValues[i].IsHidden = Globals.Bag[i].Quantity <= 1;
-                        mValues[i].Text = Strings.FormatQuantityAbbreviated(Globals.Bag[i].Quantity);
+                        mValues[i].IsHidden = Globals.BagSlots[i].Quantity <= 1;
+                        mValues[i].Text = Strings.FormatQuantityAbbreviated(Globals.BagSlots[i].Quantity);
                     }
                     else
                     {
@@ -150,7 +150,7 @@ public partial class BagWindow
 
     private void InitItemContainer()
     {
-        for (var i = 0; i < Globals.Bag.Length; i++)
+        for (var i = 0; i < Globals.BagSlots.Length; i++)
         {
             Items.Add(new BagItem(this, i));
             Items[i].Container = new ImagePanel(mItemContainer, "BagItem");
@@ -180,8 +180,8 @@ public partial class BagWindow
     {
         var rect = new FloatRect()
         {
-            X = mBagWindow.LocalPosToCanvas(new Point(0, 0)).X - sItemXPadding / 2,
-            Y = mBagWindow.LocalPosToCanvas(new Point(0, 0)).Y - sItemYPadding / 2,
+            X = mBagWindow.ToCanvas(new Point(0, 0)).X - sItemXPadding / 2,
+            Y = mBagWindow.ToCanvas(new Point(0, 0)).Y - sItemYPadding / 2,
             Width = mBagWindow.Width + sItemXPadding,
             Height = mBagWindow.Height + sItemYPadding
         };

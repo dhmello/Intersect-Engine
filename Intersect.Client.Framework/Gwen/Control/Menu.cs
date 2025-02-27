@@ -1,11 +1,9 @@
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Gwen.ControlInternal;
-
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.Control;
-
 
 /// <summary>
 ///     Popup menu.
@@ -15,17 +13,13 @@ public partial class Menu : ScrollControl
 
     private string mBackgroundTemplateFilename;
 
-    private GameTexture mBackgroundTemplateTex;
+    private IGameTexture mBackgroundTemplateTex;
 
     private bool mDeleteOnClose;
 
     private bool mDisableIconMargin;
 
-    private GameFont mItemFont;
-
     //Menu Item Stuff
-    private string mItemFontInfo;
-
     protected Color mItemHoverTextColor;
 
     protected Color mItemNormalTextColor;
@@ -34,17 +28,77 @@ public partial class Menu : ScrollControl
     ///     Initializes a new instance of the <see cref="Menu" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public Menu(Base parent, string name = default) : base(parent, name)
+    /// <param name="name"></param>
+    public Menu(Base parent, string? name = default) : base(parent, name)
     {
-        SetBounds(0, 0, 10, 10);
+        _scrollPanel.Padding = default;
+
+        Size = new Point(10, 10);
         Padding = Padding.Two;
         IconMarginDisabled = false;
 
-        AutoHideBars = true;
-        EnableScroll(false, true);
         DeleteOnClose = false;
-        Name = name;
     }
+
+    #region Font Handling
+
+    private IFont? _itemFont;
+
+    public IFont? ItemFont
+    {
+        get => _itemFont;
+        set => SetItemFont(value, value?.Name);
+    }
+
+    private string? _itemFontName;
+
+    public string? ItemFontName
+    {
+        get => _itemFontName;
+        set => SetItemFont(GameContentManager.Current.GetFont(value), value);
+    }
+
+    private int _itemFontSize;
+
+    public int ItemFontSize
+    {
+        get => _itemFontSize;
+        set
+        {
+            if (value == _itemFontSize)
+            {
+                return;
+            }
+
+            var oldValue = _itemFontSize;
+            _itemFontSize = value;
+            OnFontSizeChanged(this, value, oldValue);
+        }
+    }
+
+    private void SetItemFont(IFont? itemFont, string? itemFontName)
+    {
+        var oldValue = _itemFont;
+        _itemFont = itemFont;
+        _itemFontName = itemFontName;
+
+        if (itemFont != oldValue)
+        {
+            OnFontChanged(this, itemFont, oldValue);
+        }
+    }
+
+    protected virtual void OnFontChanged(Base sender, IFont? newFont, IFont? oldFont)
+    {
+        UpdateItemStyles();
+    }
+
+    protected virtual void OnFontSizeChanged(Base sender, int newSize, int oldSize)
+    {
+        UpdateItemStyles();
+    }
+
+    #endregion
 
     internal override bool IsMenuComponent => true;
 
@@ -67,6 +121,8 @@ public partial class Menu : ScrollControl
     ///     Determines whether the menu should open on mouse hover.
     /// </summary>
     protected virtual bool ShouldHoverOpenMenu => true;
+
+    public MenuItem[] MenuItems => Children.OfType<MenuItem>().ToArray();
 
     /// <summary>C:\Users\JC Snider\Desktop\AGD\Intersect-Engine\Intersect.Client.Framework\Gwen\Control\Button.cs
     ///     Renders the control using specified skin.
@@ -91,25 +147,42 @@ public partial class Menu : ScrollControl
     ///     Opens the menu.
     /// </summary>
     /// <param name="pos">Unused.</param>
-    public void Open(Pos pos)
+    public void Open(Pos pos) => RunOnMainThread(Open, this, pos);
+
+    private static void Open(Menu @this, Pos position)
     {
-        IsHidden = false;
-        BringToFront();
+        @this.IsVisibleInParent = true;
+        @this.BringToFront();
+
         var mouse = Input.InputHandler.MousePosition;
 
-        var x = mouse.X;
-        var y = mouse.Y;
-        if (x + Width > Canvas.Width)
+        // Subtract a few pixels to it's absolutely clear the mouse is on a menu item
+        var x = mouse.X - 4;
+        var y = mouse.Y - 4;
+
+        @this.OnPositioningBeforeOpen();
+
+        if (@this.Canvas is { } canvas)
         {
-            x -= Width;
+            var canvasSize = canvas.Size;
+            var size = @this.Size;
+            x = Math.Min(x, Math.Max(0, canvasSize.X - size.X));
+            y = Math.Min(y, Math.Max(0, canvasSize.Y - size.Y));
         }
 
-        if (y + Height > Canvas.Height)
-        {
-            y -= Height;
-        }
+        @this.SetPosition(x, y);
 
-        SetPosition(x, y);
+        @this.OnOpen();
+    }
+
+    protected virtual void OnPositioningBeforeOpen()
+    {
+
+    }
+
+    protected virtual void OnOpen()
+    {
+
     }
 
     /// <summary>
@@ -120,19 +193,25 @@ public partial class Menu : ScrollControl
     {
         var childrenHeight = Children.Sum(child => child != null ? child.Height : 0);
 
-        if (childrenHeight > InnerPanel.MaximumSize.Y)
+        if (InnerPanel.MaximumSize.Y > 0 && childrenHeight > InnerPanel.MaximumSize.Y)
         {
             InnerPanel.MaximumSize = new Point(InnerPanel.MaximumSize.X, childrenHeight);
         }
 
-        if (Y + childrenHeight > GetCanvas().Height)
+        var canvasHeight = Canvas?.Height ?? Y + childrenHeight;
+        if (Y + childrenHeight > canvasHeight)
         {
-            childrenHeight = GetCanvas().Height - Y;
+            childrenHeight = canvasHeight - Y;
         }
 
         SetSize(Width, childrenHeight);
 
         base.Layout(skin);
+    }
+
+    public override void Invalidate()
+    {
+        base.Invalidate();
     }
 
     /// <summary>
@@ -149,52 +228,46 @@ public partial class Menu : ScrollControl
     ///     Adds a new menu item.
     /// </summary>
     /// <param name="text">Item text.</param>
-    /// <param name="iconName">Icon texture.</param>
+    /// <param name="iconTexture"></param>
+    /// <param name="textureFilename"></param>
     /// <param name="accelerator">Accelerator for this item.</param>
+    /// <param name="font"></param>
     /// <returns>Newly created control.</returns>
     public virtual MenuItem AddItem(
         string text,
-        GameTexture iconTexture,
-        string textureFilename = "",
-        string accelerator = "",
-        GameFont font = null
+        IGameTexture? iconTexture,
+        string? textureFilename = default,
+        string? accelerator = default,
+        IFont? font = default
     )
     {
-        var item = new MenuItem(this);
-        item.Padding = Padding.Four;
-        item.SetText(text);
-        item.SetImage(iconTexture, textureFilename, Button.ControlState.Normal);
-        item.SetAccelerator(accelerator);
-        if (font != null)
+        var newMenuItem = new MenuItem(this)
         {
-            item.Font = font;
-        }
+            Font = font,
+            Text = text,
+            Padding = new Padding(8),
+        };
+        newMenuItem.SetStateTexture(iconTexture, textureFilename, ComponentState.Normal);
+        newMenuItem.SetAccelerator(accelerator);
 
-        OnAddItem(item);
+        OnAddItem(newMenuItem);
 
-        return item;
+        return newMenuItem;
     }
 
     /// <summary>
     ///     Add item handler.
     /// </summary>
-    /// <param name="item">Item added.</param>
-    protected virtual void OnAddItem(MenuItem item)
+    /// <param name="menuItem">Item added.</param>
+    protected virtual void OnAddItem(MenuItem menuItem)
     {
-        item.TextPadding = new Padding(IconMarginDisabled ? 0 : 24, 0, 16, 0);
-        item.Dock = Pos.Top;
-        item.SizeToContents();
-        item.Alignment = Pos.CenterV | Pos.Left;
-        item.HoverEnter += OnHoverItem;
+        menuItem.Padding = new Padding(IconMarginDisabled ? 8 : 32, 4, 8, 4);
+        menuItem.Dock = Pos.Top;
+        menuItem.SizeToContents();
+        menuItem.TextAlign = Pos.CenterV | Pos.Left;
+        menuItem.HoverEnter += OnHoverItem;
 
-        // Do this here - after Top Docking these values mean nothing in layout
-        var w = item.Width + 10 + 32;
-        if (w < Width)
-        {
-            w = Width;
-        }
-
-        SetSize(w, Height);
+        Width = Math.Max(Width, menuItem.Width + 10 + 32);
 
         UpdateItemStyles();
     }
@@ -204,16 +277,10 @@ public partial class Menu : ScrollControl
     /// </summary>
     public virtual void CloseAll()
     {
-        //System.Diagnostics.//debug.print("Menu.CloseAll: {0}", this);
-        Children.ForEach(
-            child =>
-            {
-                if (child is MenuItem)
-                {
-                    (child as MenuItem).CloseMenu();
-                }
-            }
-        );
+        foreach (var menuItem in Children.OfType<MenuItem>())
+        {
+            menuItem.CloseMenu();
+        }
     }
 
     /// <summary>
@@ -266,7 +333,11 @@ public partial class Menu : ScrollControl
     /// </summary>
     public virtual void Close()
     {
-        //System.Diagnostics.//debug.print("Menu.Close: {0}", this);
+        if (IsHidden)
+        {
+            return;
+        }
+
         IsHidden = true;
         if (DeleteOnClose)
         {
@@ -279,7 +350,6 @@ public partial class Menu : ScrollControl
     /// </summary>
     public override void CloseMenus()
     {
-        //System.Diagnostics.//debug.print("Menu.CloseMenus: {0}", this);
         base.CloseMenus();
         CloseAll();
         Close();
@@ -295,48 +365,58 @@ public partial class Menu : ScrollControl
         divider.Margin = new Margin(IconMarginDisabled ? 0 : 24, 0, 4, 0);
     }
 
-    public override bool SizeToChildren(bool width = true, bool height = true)
+    public override bool SizeToChildren(SizeToChildrenArgs args)
     {
-        base.SizeToChildren(width, height);
-        if (width)
+        var resized = base.SizeToChildren(args);
+
+        if (!args.X)
         {
-            var maxWidth = 0;
-            foreach (var child in Children)
+            return resized;
+        }
+
+        var maxWidth = 0;
+        foreach (var child in Children)
+        {
+            if (child.Width > maxWidth)
             {
-                if (child.Width > maxWidth)
-                {
-                    maxWidth = child.Width;
-                }
+                maxWidth = child.Width;
             }
-
-            this.SetSize(maxWidth, Height);
         }
 
-        return true;
+        return this.SetSize(maxWidth, Height);
     }
 
-    public override JObject GetJson(bool isRoot = default)
+    public override JObject? GetJson(bool isRoot = false, bool onlySerializeIfNotEmpty = false)
     {
-        var obj = base.GetJson(isRoot);
-        if (!(this is CheckBox))
+        var serializedProperties = base.GetJson(isRoot, onlySerializeIfNotEmpty);
+        if (serializedProperties is null)
         {
-            obj.Add("BackgroundTemplate", mBackgroundTemplateFilename);
-            obj.Add("ItemTextColor", Color.ToString(mItemNormalTextColor));
-            obj.Add("ItemHoveredTextColor", Color.ToString(mItemHoverTextColor));
-            obj.Add("ItemFont", mItemFontInfo);
+            return null;
         }
 
-        return base.FixJson(obj);
+        serializedProperties.Add("BackgroundTemplate", mBackgroundTemplateFilename);
+        serializedProperties.Add("ItemTextColor", Color.ToString(mItemNormalTextColor));
+        serializedProperties.Add("ItemHoveredTextColor", Color.ToString(mItemHoverTextColor));
+        serializedProperties.Add(nameof(ItemFontName), ItemFontName);
+        serializedProperties.Add(nameof(ItemFontSize), ItemFontSize);
+
+        return base.FixJson(serializedProperties);
     }
 
-    public override void LoadJson(JToken obj, bool isRoot = default)
+    public override void LoadJson(JToken token, bool isRoot = default)
     {
-        base.LoadJson(obj);
+        base.LoadJson(token, isRoot);
+
+        if (token is not JObject obj)
+        {
+            return;
+        }
+
         if (obj["BackgroundTemplate"] != null)
         {
             SetBackgroundTemplate(
                 GameContentManager.Current.GetTexture(
-                    Framework.Content.TextureType.Gui, (string)obj["BackgroundTemplate"]
+                    Content.TextureType.Gui, (string)obj["BackgroundTemplate"]
                 ), (string)obj["BackgroundTemplate"]
             );
         }
@@ -351,11 +431,46 @@ public partial class Menu : ScrollControl
             mItemHoverTextColor = Color.FromString((string)obj["ItemHoveredTextColor"]);
         }
 
-        if (obj["ItemFont"] != null && obj["ItemFont"].Type != JTokenType.Null)
+        string? itemFontName = null;
+        int? itemFontSize = null;
+
+        if (obj.TryGetValue(nameof(ItemFont), out var tokenItemFont) &&
+            tokenItemFont is JValue { Type: JTokenType.String } valueItemFont)
         {
-            var fontArr = ((string)obj["ItemFont"]).Split(',');
-            mItemFontInfo = (string)obj["ItemFont"];
-            mItemFont = GameContentManager.Current.GetFont(fontArr[0], int.Parse(fontArr[1]));
+            var stringItemFont = valueItemFont.Value<string>()?.Trim();
+            if (!string.IsNullOrWhiteSpace(stringItemFont))
+            {
+                var parts = stringItemFont.Split(',');
+                itemFontName = parts.FirstOrDefault();
+
+                if (parts.Length > 1 && int.TryParse(parts[1], out var size))
+                {
+                    itemFontSize = size;
+                }
+            }
+        }
+
+        if (obj.TryGetValue(nameof(ItemFontName), out var tokenItemFontName) &&
+            tokenItemFontName is JValue { Type: JTokenType.String } valueItemFontName)
+        {
+            itemFontName = valueItemFontName.Value<string>();
+        }
+
+        if (obj.TryGetValue(nameof(ItemFontSize), out var tokenItemFontSize) &&
+            tokenItemFontSize is JValue { Type: JTokenType.Integer } valueItemFontSize)
+        {
+            itemFontSize = valueItemFontSize.Value<int>();
+        }
+
+        if (itemFontSize.HasValue)
+        {
+            ItemFontSize = itemFontSize.Value;
+        }
+
+        itemFontName = itemFontName?.Trim();
+        if (!string.IsNullOrWhiteSpace(itemFontName))
+        {
+            ItemFontName = itemFontName;
         }
 
         UpdateItemStyles();
@@ -363,34 +478,33 @@ public partial class Menu : ScrollControl
 
     private void UpdateItemStyles()
     {
-        var menuItems = Children.Where(x => x is MenuItem).ToArray();
+        var menuItems = Children.OfType<MenuItem>().ToArray();
         foreach (var item in menuItems)
         {
-            var itm = (MenuItem)item;
-            if (mItemFont != null)
+            if (_itemFont != null)
             {
-                itm.Font = mItemFont;
+                item.Font = _itemFont;
             }
 
-            itm.SetTextColor(mItemNormalTextColor, Label.ControlState.Normal);
-            itm.SetTextColor(mItemHoverTextColor, Label.ControlState.Hovered);
+            item.FontSize = _itemFontSize;
+            item.SetTextColor(mItemNormalTextColor, ComponentState.Normal);
+            item.SetTextColor(mItemHoverTextColor, ComponentState.Hovered);
         }
     }
 
-    public GameTexture GetTemplate()
+    public IGameTexture GetTemplate()
     {
         return mBackgroundTemplateTex;
     }
 
-    public void SetBackgroundTemplate(GameTexture texture, string fileName)
+    public void SetBackgroundTemplate(IGameTexture texture, string fileName)
     {
         if (texture == null && !string.IsNullOrWhiteSpace(fileName))
         {
-            texture = GameContentManager.Current?.GetTexture(Framework.Content.TextureType.Gui, fileName);
+            texture = GameContentManager.Current?.GetTexture(Content.TextureType.Gui, fileName);
         }
 
         mBackgroundTemplateFilename = fileName;
         mBackgroundTemplateTex = texture;
     }
-
 }

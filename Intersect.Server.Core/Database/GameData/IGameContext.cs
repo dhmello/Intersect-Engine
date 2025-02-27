@@ -4,14 +4,13 @@ using Intersect.GameObjects.Crafting;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Maps.MapList;
 using Intersect.Server.Maps;
-
 using Microsoft.EntityFrameworkCore;
 
 namespace Intersect.Server.Database.GameData;
 
 public interface IGameContext : IDbContext
 {
-    DbSet<AnimationBase> Animations { get; set; }
+    DbSet<AnimationDescriptor> Animations { get; set; }
 
     DbSet<CraftBase> Crafts { get; set; }
 

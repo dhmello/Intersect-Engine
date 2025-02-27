@@ -16,7 +16,8 @@ public partial class CloseButton : Button
     /// </summary>
     /// <param name="parent">Parent control.</param>
     /// <param name="owner">Window that owns this button.</param>
-    public CloseButton(Base parent, WindowControl owner, string name = "") : base(parent, name)
+    /// <param name="name"></param>
+    public CloseButton(Base parent, WindowControl owner, string? name = null) : base(parent, name, disableText: true)
     {
         mWindow = owner;
     }
@@ -27,7 +28,7 @@ public partial class CloseButton : Button
     /// <param name="skin">Skin to use.</param>
     protected override void Render(Skin.Base skin)
     {
-        skin.DrawWindowCloseButton(this, IsDepressed && IsHovered, IsHovered && ShouldDrawHover, !mWindow.IsOnTop);
+        skin.DrawWindowCloseButton(this, IsActive && IsHovered, IsHovered && ShouldDrawHover, !mWindow.IsOnTop);
     }
 
 }

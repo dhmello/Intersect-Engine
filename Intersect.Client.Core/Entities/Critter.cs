@@ -4,6 +4,7 @@ using Intersect.Client.Framework.Maps;
 using Intersect.Client.General;
 using Intersect.Client.Maps;
 using Intersect.Enums;
+using Intersect.Framework.Core;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Maps;
 using Intersect.Utilities;
@@ -21,11 +22,10 @@ public partial class Critter : Entity
 
         //setup Sprite & Animation
         Sprite = att.Sprite;
-        var anim = AnimationBase.Get(att.AnimationId);
-        if (anim != null)
+
+        if (AnimationDescriptor.TryGet(att.AnimationId, out var animationDescriptor))
         {
-            var animInstance = new Animation(anim, true);
-            Animations.Add(animInstance);
+            TryAddAnimation(new Animation(animationDescriptor, true));
         }
 
         //Define Location
@@ -36,11 +36,11 @@ public partial class Critter : Entity
         //Determine Direction
         if (mAttribute.Direction == 0)
         {
-            Dir = Randomization.NextDirection();
+            DirectionFacing = Randomization.NextDirection();
         }
         else
         {
-            Dir = (Direction)(mAttribute.Direction - 1);
+            DirectionFacing = (Direction)(mAttribute.Direction - 1);
         }
 
         //Block Players?
@@ -59,7 +59,7 @@ public partial class Critter : Entity
                         MoveRandomly();
                         break;
                     case 1: //Turn?
-                        Dir = Randomization.NextDirection();
+                        DirectionFacing = Randomization.NextDirection();
                         break;
 
                 }
@@ -75,7 +75,7 @@ public partial class Critter : Entity
 
     private void MoveRandomly()
     {
-        MoveDir = Randomization.NextDirection();
+        DirectionMoving = Randomization.NextDirection();
         var tmpX = (sbyte)X;
         var tmpY = (sbyte)Y;
         IEntity? blockedBy = null;
@@ -88,7 +88,7 @@ public partial class Critter : Entity
         var deltaX = 0;
         var deltaY = 0;
 
-        switch (MoveDir)
+        switch (DirectionMoving)
         {
             case Direction.Up:
                 deltaX = 0;
@@ -147,13 +147,13 @@ public partial class Critter : Entity
                             );
             var playerOnTile = PlayerOnTile(MapId, newX, newY);
 
-            if (isBlocked && newX >= 0 && newX < Options.MapWidth && newY >= 0 && newY < Options.MapHeight &&
+            if (isBlocked && newX >= 0 && newX < Options.Instance.Map.MapWidth && newY >= 0 && newY < Options.Instance.Map.MapHeight &&
                 (!mAttribute.BlockPlayers || !playerOnTile))
             {
                 tmpX += (sbyte)deltaX;
                 tmpY += (sbyte)deltaY;
                 IsMoving = true;
-                Dir = MoveDir;
+                DirectionFacing = DirectionMoving;
 
                 if (deltaX == 0)
                 {
@@ -161,7 +161,7 @@ public partial class Critter : Entity
                 }
                 else
                 {
-                    OffsetX = deltaX > 0 ? -Options.TileWidth : Options.TileWidth;
+                    OffsetX = deltaX > 0 ? -Options.Instance.Map.TileWidth : Options.Instance.Map.TileWidth;
                 }
 
                 if (deltaY == 0)
@@ -170,7 +170,7 @@ public partial class Critter : Entity
                 }
                 else
                 {
-                    OffsetY = deltaY > 0 ? -Options.TileHeight : Options.TileHeight;
+                    OffsetY = deltaY > 0 ? -Options.Instance.Map.TileHeight : Options.Instance.Map.TileHeight;
                 }
             }
         }
@@ -181,9 +181,9 @@ public partial class Critter : Entity
             Y = (byte)tmpY;
             MoveTimer = Timing.Global.MillisecondsUtc + (long)GetMovementTime();
         }
-        else if (MoveDir != Dir)
+        else if (DirectionMoving != DirectionFacing)
         {
-            Dir = MoveDir;
+            DirectionFacing = DirectionMoving;
         }
     }
 
@@ -261,19 +261,19 @@ public partial class Critter : Entity
                         }
                         else if (y == gridY - 1)
                         {
-                            renderSet = Graphics.RenderingEntities[priority, Options.MapHeight + Y];
+                            renderSet = Graphics.RenderingEntities[priority, Options.Instance.Map.MapHeight + Y];
                         }
                         else if (y == gridY)
                         {
-                            renderSet = Graphics.RenderingEntities[priority, Options.MapHeight * 2 + Y];
+                            renderSet = Graphics.RenderingEntities[priority, Options.Instance.Map.MapHeight * 2 + Y];
                         }
                         else if (y == gridY + 1)
                         {
-                            renderSet = Graphics.RenderingEntities[priority, Options.MapHeight * 3 + Y];
+                            renderSet = Graphics.RenderingEntities[priority, Options.Instance.Map.MapHeight * 3 + Y];
                         }
                         else if (y == gridY + 2)
                         {
-                            renderSet = Graphics.RenderingEntities[priority, Options.MapHeight * 4 + Y];
+                            renderSet = Graphics.RenderingEntities[priority, Options.Instance.Map.MapHeight * 4 + Y];
                         }
 
                         _ = (renderSet?.Add(this));

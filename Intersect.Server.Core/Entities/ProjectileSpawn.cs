@@ -1,4 +1,5 @@
 using Intersect.Enums;
+using Intersect.Framework.Core;
 using Intersect.GameObjects;
 using Intersect.Server.Entities.Combat;
 using Intersect.Server.Entities.Events;
@@ -121,7 +122,7 @@ public partial class ProjectileSpawn
             }
             else if (targetEntity is Resource targetResource)
             {
-                if (targetResource.IsDead())
+                if (targetResource.IsDead)
                 {
                     if (!ProjectileBase.IgnoreExhaustedResources)
                     {

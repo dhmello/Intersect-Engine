@@ -3,6 +3,7 @@ using System;
 using Intersect.Server.Database.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -16,8 +17,10 @@ namespace Intersect.Server.Migrations.MySql.Logging
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "7.0.11")
+                .HasAnnotation("ProductVersion", "8.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
+
+            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
             modelBuilder.Entity("Intersect.Server.Database.Logging.Entities.ChatHistory", b =>
                 {
@@ -175,8 +178,8 @@ namespace Intersect.Server.Migrations.MySql.Logging
                         .HasColumnOrder(0)
                         .UseCollation("ascii_general_ci");
 
-                    b.Property<byte>("Level")
-                        .HasColumnType("tinyint unsigned");
+                    b.Property<int>("Level")
+                        .HasColumnType("int");
 
                     b.Property<string>("Method")
                         .HasColumnType("longtext");

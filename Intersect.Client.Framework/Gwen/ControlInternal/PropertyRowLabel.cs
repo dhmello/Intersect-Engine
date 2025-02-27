@@ -18,7 +18,7 @@ public partial class PropertyRowLabel : Label
     public PropertyRowLabel(PropertyRow parent) : base(parent)
     {
         AutoSizeToContents = false;
-        Alignment = Pos.Left | Pos.CenterV;
+        TextAlign = Pos.Left | Pos.CenterV;
         mPropertyRow = parent;
     }
 
@@ -27,7 +27,7 @@ public partial class PropertyRowLabel : Label
     /// </summary>
     public override void UpdateColors()
     {
-        if (IsDisabled)
+        if (IsDisabledByTree)
         {
             TextColor = Skin.Colors.Button.Disabled;
 

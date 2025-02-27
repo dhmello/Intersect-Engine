@@ -1,152 +1,363 @@
+using System.Diagnostics.CodeAnalysis;
 using Intersect.Client.Framework.GenericClasses;
+using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
+using Intersect.Core;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace Intersect.Client.Core.Controls;
 
-public partial class Controls
+public partial class Controls : IControlSet
 {
-
-    public readonly IDictionary<Control, ControlMap> ControlMapping;
-
-    public Controls(Controls? gameControls = null)
+    public static IControlSet ActiveControls
     {
-        ControlMapping = new Dictionary<Control, ControlMap>();
+        get => GameInput.Current.ControlSet;
+        set => GameInput.Current.ControlSet = value;
+    }
 
-        if (gameControls != null)
+    private readonly Dictionary<Control, ControlMapping> _mappings = [];
+
+    public Controls(IControlSet? other = null)
+    {
+        if (other != null)
         {
-            foreach (var mapping in gameControls.ControlMapping)
+            foreach (var (control, mapping) in other.Mappings)
             {
-                CreateControlMap(mapping.Key, mapping.Value);
+                this[control] = new ControlMapping(mapping);
             }
         }
         else
         {
             ResetDefaults();
-            foreach (Control control in Enum.GetValues(typeof(Control)))
+            TryLoad();
+        }
+    }
+
+    public ControlMapping? this[Control control]
+    {
+        get => _mappings.GetValueOrDefault(control);
+        set
+        {
+            if (value == null)
             {
-                MigrateControlBindings(control);
-
-                var name = Enum.GetName(typeof(Control), control);
-
-                if (!ControlMapping.TryGetValue(control, out var controlMapping))
-                {
-                    continue;
-                }
-
-                var bindings = controlMapping.Bindings;
-                for (var bindingIndex = 0; bindingIndex < bindings.Count; bindingIndex++)
-                {
-                    var preferenceKey = $"{name}_binding{bindingIndex}";
-                    var preference = Globals.Database.LoadPreference(preferenceKey);
-                    if (string.IsNullOrWhiteSpace(preference))
-                    {
-                        Globals.Database.SavePreference(preferenceKey, JsonConvert.SerializeObject(bindings[bindingIndex]));
-                    }
-                    else
-                    {
-                        var controlObj = JsonConvert.DeserializeObject<ControlValue>(preference);
-                        if (controlObj != null)
-                        {
-                            bindings[bindingIndex] = controlObj;
-                        }
-                    }
-                }
+                _ = _mappings.Remove(control);
+            }
+            else
+            {
+                _mappings[control] = value;
             }
         }
     }
 
-    public static Controls? ActiveControls { get; set; }
+    public IReadOnlyDictionary<Control, ControlMapping> Mappings => _mappings.AsReadOnly();
+
+    private bool TryGetDefaultMappingFor(Control control, [NotNullWhen(true)] out ControlMapping? defaultMapping)
+    {
+        foreach (var controlsProvider in GameInput.Current.ControlsProviders)
+        {
+            if (controlsProvider.TryGetDefaultMapping(control, out defaultMapping))
+            {
+                return true;
+            }
+        }
+
+        defaultMapping = null;
+        return false;
+    }
 
     public void ResetDefaults()
     {
-        CreateControlMap(Control.MoveUp, new ControlValue(Keys.None, Keys.Up), new ControlValue(Keys.None, Keys.W));
-        CreateControlMap(Control.MoveDown, new ControlValue(Keys.None, Keys.Down), new ControlValue(Keys.None, Keys.S));
-        CreateControlMap(Control.MoveLeft, new ControlValue(Keys.None, Keys.Left), new ControlValue(Keys.None, Keys.A));
-        CreateControlMap(Control.MoveRight, new ControlValue(Keys.None, Keys.Right), new ControlValue(Keys.None, Keys.D));
-        CreateControlMap(Control.AttackInteract, new ControlValue(Keys.None, Keys.E), new ControlValue(Keys.None, Keys.LButton));
-        CreateControlMap(Control.Block, new ControlValue(Keys.None, Keys.Q), new ControlValue(Keys.None, Keys.RButton));
-        CreateControlMap(Control.AutoTarget, new ControlValue(Keys.None, Keys.Tab), ControlValue.Default);
-        CreateControlMap(Control.PickUp, new ControlValue(Keys.None, Keys.Space), ControlValue.Default);
-        CreateControlMap(Control.Enter, new ControlValue(Keys.None, Keys.Enter), ControlValue.Default);
-        CreateControlMap(Control.Hotkey1, new ControlValue(Keys.None, Keys.D1), ControlValue.Default);
-        CreateControlMap(Control.Hotkey2, new ControlValue(Keys.None, Keys.D2), ControlValue.Default);
-        CreateControlMap(Control.Hotkey3, new ControlValue(Keys.None, Keys.D3), ControlValue.Default);
-        CreateControlMap(Control.Hotkey4, new ControlValue(Keys.None, Keys.D4), ControlValue.Default);
-        CreateControlMap(Control.Hotkey5, new ControlValue(Keys.None, Keys.D5), ControlValue.Default);
-        CreateControlMap(Control.Hotkey6, new ControlValue(Keys.None, Keys.D6), ControlValue.Default);
-        CreateControlMap(Control.Hotkey7, new ControlValue(Keys.None, Keys.D7), ControlValue.Default);
-        CreateControlMap(Control.Hotkey8, new ControlValue(Keys.None, Keys.D8), ControlValue.Default);
-        CreateControlMap(Control.Hotkey9, new ControlValue(Keys.None, Keys.D9), ControlValue.Default);
-        CreateControlMap(Control.Hotkey0, new ControlValue(Keys.None, Keys.D0), ControlValue.Default);
-        CreateControlMap(Control.Screenshot, new ControlValue(Keys.None, Keys.F12), ControlValue.Default);
-        CreateControlMap(Control.OpenMenu, new ControlValue(Keys.None, Keys.Escape), ControlValue.Default);
-        CreateControlMap(Control.OpenInventory, new ControlValue(Keys.None, Keys.I), ControlValue.Default);
-        CreateControlMap(Control.OpenQuests, new ControlValue(Keys.None, Keys.L), ControlValue.Default);
-        CreateControlMap(Control.OpenCharacterInfo, new ControlValue(Keys.None, Keys.C), ControlValue.Default);
-        CreateControlMap(Control.OpenParties, new ControlValue(Keys.None, Keys.P), ControlValue.Default);
-        CreateControlMap(Control.OpenSpells, new ControlValue(Keys.None, Keys.K), ControlValue.Default);
-        CreateControlMap(Control.OpenFriends, new ControlValue(Keys.None, Keys.F), ControlValue.Default);
-        CreateControlMap(Control.OpenGuild, new ControlValue(Keys.None, Keys.G), ControlValue.Default);
-        CreateControlMap(Control.OpenSettings, new ControlValue(Keys.None, Keys.O), ControlValue.Default);
-        CreateControlMap(Control.OpenDebugger, new ControlValue(Keys.None, Keys.F2), ControlValue.Default);
-        CreateControlMap(Control.OpenAdminPanel, new ControlValue(Keys.None, Keys.Insert), ControlValue.Default);
-        CreateControlMap(Control.ToggleGui, new ControlValue(Keys.None, Keys.F11), ControlValue.Default);
-        CreateControlMap(Control.TurnAround, new ControlValue(Keys.None, Keys.Control), ControlValue.Default);
-        CreateControlMap(Control.ToggleZoomIn, ControlValue.Default, ControlValue.Default);
-        CreateControlMap(Control.ToggleZoomOut, ControlValue.Default, ControlValue.Default);
-        CreateControlMap(Control.HoldToZoomIn, ControlValue.Default, ControlValue.Default);
-        CreateControlMap(Control.HoldToZoomOut, ControlValue.Default, ControlValue.Default);
-        CreateControlMap(Control.ToggleFullscreen, new ControlValue(Keys.Alt, Keys.Enter), ControlValue.Default);
+        _mappings.Clear();
+
+        foreach (var controlsProvider in GameInput.Current.ControlsProviders)
+        {
+            foreach (var control in controlsProvider.Controls)
+            {
+                if (controlsProvider.TryGetDefaultMapping(control, out var defaultMapping))
+                {
+                    TryAdd(control, defaultMapping);
+                }
+                else
+                {
+                    TryAdd(control, ControlBinding.Default, ControlBinding.Default);
+                }
+            }
+        }
     }
 
     private static void MigrateControlBindings(Control control)
     {
-        var name = Enum.GetName(typeof(Control), control);
-        if (Globals.Database.HasPreference($"{name}_key1value"))
+        var controlId = control.GetControlId();
+        if (Globals.Database.HasPreference($"{controlId}_key1value"))
         {
-            Globals.Database.SavePreference($"{name}_binding0", Globals.Database.LoadPreference($"{name}_key1value"));
-            Globals.Database.SavePreference($"{name}_binding1", Globals.Database.LoadPreference($"{name}_key2value"));
-            Globals.Database.DeletePreference($"{name}_key1value");
-            Globals.Database.DeletePreference($"{name}_key2value");
+            Globals.Database.SavePreference($"{controlId}_binding0", Globals.Database.LoadPreference($"{controlId}_key1value"));
+            Globals.Database.SavePreference($"{controlId}_binding1", Globals.Database.LoadPreference($"{controlId}_key2value"));
+            Globals.Database.DeletePreference($"{controlId}_key1value");
+            Globals.Database.DeletePreference($"{controlId}_key2value");
         }
-        else if (Globals.Database.HasPreference($"{name}_key1"))
+        else if (Globals.Database.HasPreference($"{controlId}_key1"))
         {
-            var key1 = JsonConvert.DeserializeObject<Keys>(Globals.Database.LoadPreference($"{name}_key1"));
-            var key2 = JsonConvert.DeserializeObject<Keys>(Globals.Database.LoadPreference($"{name}_key2"));
-            Globals.Database.SavePreference($"{name}_binding0", JsonConvert.SerializeObject(new ControlValue(Keys.None, key1)));
-            Globals.Database.SavePreference($"{name}_binding1", JsonConvert.SerializeObject(new ControlValue(Keys.None, key2)));
-            Globals.Database.DeletePreference($"{name}_key1");
-            Globals.Database.DeletePreference($"{name}_key2");
+            var key1 = JsonConvert.DeserializeObject<Keys>(Globals.Database.LoadPreference($"{controlId}_key1"));
+            var key2 = JsonConvert.DeserializeObject<Keys>(Globals.Database.LoadPreference($"{controlId}_key2"));
+            Globals.Database.SavePreference($"{controlId}_binding0", JsonConvert.SerializeObject(new ControlBinding(Keys.None, key1)));
+            Globals.Database.SavePreference($"{controlId}_binding1", JsonConvert.SerializeObject(new ControlBinding(Keys.None, key2)));
+            Globals.Database.DeletePreference($"{controlId}_key1");
+            Globals.Database.DeletePreference($"{controlId}_key2");
         }
     }
 
-    public void Save()
+    public void UpdateControl(Control control, int keyNum, Keys modifier, Keys key)
     {
-        foreach (Control control in Enum.GetValues(typeof(Control)))
+        if (!Mappings.TryGetValue(control, out var mapping))
         {
-            var name = Enum.GetName(typeof(Control), control);
-            var bindings = ControlMapping[control].Bindings;
-            for (var bindingIndex = 0; bindingIndex < bindings.Count; bindingIndex++)
+            return;
+        }
+
+        mapping.Bindings[keyNum].Modifier = modifier;
+        mapping.Bindings[keyNum].Key = key;
+    }
+
+    public void ReloadFromOptions(Options options)
+    {
+        _ = TryLoad();
+
+        if (options.Player is not { } playerOptions)
+        {
+            return;
+        }
+
+        for (var hotbarSlotIndex = 0; hotbarSlotIndex < playerOptions.HotbarSlotCount; ++hotbarSlotIndex)
+        {
+            Control hotbarSlotControl = Control.HotkeyOffset + hotbarSlotIndex + 1;
+            if (Mappings.TryGetValue(hotbarSlotControl, out var mapping))
             {
-                var preferenceKey = $"{name}_binding{bindingIndex}";
-                Globals.Database.SavePreference(preferenceKey, JsonConvert.SerializeObject(bindings[bindingIndex]));
+                continue;
+            }
+
+            MigrateControlBindings(hotbarSlotControl);
+
+            mapping = new ControlMapping(ControlBinding.Default, ControlBinding.Default);
+            _mappings[hotbarSlotControl] = mapping;
+        }
+    }
+
+    public bool TryAdd(Control control, params ControlBinding[] bindings) =>
+        bindings.Length >= 1 &&
+        _mappings.TryAdd(control, new ControlMapping(bindings.First(), bindings.Skip(1).ToArray()));
+
+    public bool TryAdd(Control control, ControlMapping mapping) => _mappings.TryAdd(control, mapping);
+
+    public bool TryGetMappingFor(Control control, [NotNullWhen(true)] out ControlMapping? mapping) =>
+        Mappings.TryGetValue(control, out mapping);
+
+    public bool TryLoad()
+    {
+        bool success = true;
+
+        try
+        {
+            var allControls = GameInput.Current.AllControls;
+            foreach (var control in allControls)
+            {
+                try
+                {
+                    MigrateControlBindings(control);
+                }
+                catch (Exception exception)
+                {
+                    ApplicationContext.Context.Value?.Logger.LogError(
+                        exception,
+                        "Error while migrating bindings for control {Control}",
+                        control.GetControlId()
+                    );
+                }
+
+                try
+                {
+                    if (!TryGetMappingFor(control, out var mapping))
+                    {
+                        if (!TryGetDefaultMappingFor(control, out var defaultMapping))
+                        {
+                            ApplicationContext.Context.Value?.Logger.LogDebug(
+                                "No existing or default mapping for {ControlId}",
+                                control.GetControlId()
+                            );
+                            defaultMapping = new ControlMapping(ControlBinding.Default, ControlBinding.Default);
+                        }
+
+                        if (TryAdd(control, defaultMapping))
+                        {
+                            mapping = defaultMapping;
+                        }
+                        else
+                        {
+                            ApplicationContext.Context.Value?.Logger.LogWarning(
+                                "Failed to add default mapping for {ControlId}",
+                                control.GetControlId()
+                            );
+                            continue;
+                        }
+                    }
+
+                    for (var bindingIndex = 0; bindingIndex < mapping.Bindings.Count; bindingIndex++)
+                    {
+                        if (TryLoadBindingFor(control, bindingIndex, out var binding))
+                        {
+                            mapping.Bindings[bindingIndex] = binding;
+                        }
+                        else
+                        {
+                            _ = TrySaveBindingFor(control, bindingIndex, mapping.Bindings[bindingIndex]);
+                        }
+                    }
+                }
+                catch (Exception exception)
+                {
+                    ApplicationContext.Context.Value?.Logger.LogError(
+                        exception,
+                        "Error while loading bindings for control {Control}",
+                        control.GetControlId()
+                    );
+
+                    success = false;
+                }
+            }
+
+            return success;
+        }
+        catch (Exception exception)
+        {
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error while getting controls");
+            return false;
+        }
+    }
+
+    private bool TryLoadBindingFor(Control control, int bindingIndex, [NotNullWhen(true)] out ControlBinding? binding)
+    {
+        try
+        {
+            var preferenceKey = GetPreferenceKeyFor(control, bindingIndex);
+            var preference = Globals.Database.LoadPreference(preferenceKey);
+            if (string.IsNullOrWhiteSpace(preference))
+            {
+                binding = null;
+                return false;
+            }
+
+            binding = JsonConvert.DeserializeObject<ControlBinding>(preference);
+            return binding != null;
+        }
+        catch (Exception exception)
+        {
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error while loading binding {BindingIndex} for control {Control}",
+                bindingIndex,
+                control.GetControlId()
+            );
+
+            binding = null;
+            return false;
+        }
+    }
+
+    public bool TryReload() => TryLoad();
+
+    public bool TrySave()
+    {
+        bool success = true;
+
+        foreach (var (control, mapping) in Mappings)
+        {
+            try
+            {
+                var bindings = mapping.Bindings.ToArray();
+                for (var bindingIndex = 0; bindingIndex < bindings.Length; bindingIndex++)
+                {
+                    success &= TrySaveBindingFor(control, bindingIndex, bindings[bindingIndex]);
+                }
+            }
+            catch (Exception exception)
+            {
+                ApplicationContext.Context.Value?.Logger.LogError(
+                    exception,
+                    "Error while saving bindings for control {Control}",
+                    control.GetControlId()
+                );
+
+                success = false;
             }
         }
+
+        return success;
     }
 
-    public static void Init()
+    private string GetPreferenceKeyFor(Control control, int bindingIndex)
     {
-        ActiveControls = new Controls();
+        var controlName = control.GetControlId();
+        var preferenceKey = $"{controlName}_binding{bindingIndex}";
+        return preferenceKey;
     }
 
-    public static bool KeyDown(Control control)
+    private bool TrySaveBindingFor(Control control, int bindingIndex, ControlBinding binding)
     {
-        if (ActiveControls?.ControlMapping.ContainsKey(control) ?? false)
+        try
         {
-            return ActiveControls.ControlMapping[control]?.KeyDown() ?? false;
+            var preferenceKey = GetPreferenceKeyFor(control, bindingIndex);
+            var serializedBinding = JsonConvert.SerializeObject(binding);
+            Globals.Database.SavePreference(preferenceKey, serializedBinding);
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error while saving binding {BindingIndex} for control {Control}",
+                bindingIndex,
+                control.GetControlId()
+            );
+
+            return false;
+        }
+    }
+
+    public static bool IsControlJustPressed(Control control) => IsControlJustPressed(control, out _, out _);
+
+    public static bool IsControlJustPressed(
+        Control control,
+        [NotNullWhen(true)] out ControlMapping? activeMapping,
+        [NotNullWhen(true)] out ControlBinding? activeBinding
+    )
+    {
+        if (ActiveControls.Mappings.TryGetValue(control, out var mapping) && mapping.IsActive(out activeBinding) && !activeBinding.WasDown())
+        {
+            activeMapping = mapping;
+            return true;
         }
 
+        activeMapping = null;
+        activeBinding = null;
+        return false;
+    }
+
+    public static bool IsControlPressed(Control control) => IsControlPressed(control, out _, out _);
+
+    public static bool IsControlPressed(
+        Control control,
+        [NotNullWhen(true)] out ControlMapping? activeMapping,
+        [NotNullWhen(true)] out ControlBinding? activeBinding
+    )
+    {
+        if (ActiveControls.Mappings.TryGetValue(control, out var mapping) && mapping.IsActive(out activeBinding))
+        {
+            activeMapping = mapping;
+            return true;
+        }
+
+        activeMapping = null;
+        activeBinding = null;
         return false;
     }
 
@@ -165,35 +376,12 @@ public partial class Controls
             return false;
         }
 
-        if (!(ActiveControls?.ControlMapping.ContainsKey(control) ?? false))
+        if (modifier == Keys.Alt && key is Keys.LMenu or Keys.RMenu)
         {
-            return false;
+            return ControlHasKey(control, Keys.None, key);
         }
 
-        var mapping = ActiveControls.ControlMapping[control];
-
-        return mapping?.Bindings.Any(binding => binding.Modifier == modifier && binding.Key == key) ?? false;
-    }
-
-    public void UpdateControl(Control control, int keyNum, Keys modifier, Keys key)
-    {
-        var mapping = ControlMapping[control];
-        if (mapping == null)
-        {
-            return;
-        }
-
-        mapping.Bindings[keyNum].Modifier = modifier;
-        mapping.Bindings[keyNum].Key = key;
-    }
-
-    private void CreateControlMap(Control control, ControlValue binding, params ControlValue[] alternateBindings)
-    {
-        ControlMapping[control] = new ControlMap(binding, alternateBindings);
-    }
-
-    private void CreateControlMap(Control control, ControlMap controlMap)
-    {
-        ControlMapping[control] = new ControlMap(controlMap);
+        return ActiveControls.Mappings.TryGetValue(control, out var mapping) &&
+               mapping.Bindings.Any(binding => binding.Modifier == modifier && binding.Key == key);
     }
 }

@@ -1,5 +1,7 @@
 using Intersect.Client.Framework.GenericClasses;
+using Intersect.Client.Framework.Gwen.Control.EventArguments;
 using Intersect.Client.Framework.Gwen.Input;
+using Intersect.Client.Framework.Input;
 
 namespace Intersect.Client.Framework.Gwen.Control;
 
@@ -19,7 +21,7 @@ public partial class MultilineTextBox : Label
 
     private bool mSelectAll;
 
-    private List<string> mTextLines = new List<string>();
+    private List<string> _textLines = [];
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="TextBox" /> class.
@@ -33,8 +35,8 @@ public partial class MultilineTextBox : Label
         MouseInputEnabled = true;
         KeyboardInputEnabled = true;
 
-        Alignment = Pos.Left | Pos.Top;
-        TextPadding = new Padding(4, 2, 4, 2);
+        Padding = new Padding(4, 2, 4, 2);
+        TextAlign = Pos.Left | Pos.Top;
 
         mCursorPos = new Point(0, 0);
         mCursorEnd = new Point(0, 0);
@@ -45,16 +47,15 @@ public partial class MultilineTextBox : Label
         IsTabable = false;
         AcceptTabs = true;
 
-        mScrollControl = new ScrollControl(this);
+        mScrollControl = new ScrollControl(this, name: nameof(_innerPanel));
         mScrollControl.Dock = Pos.Fill;
-        mScrollControl.EnableScroll(true, true);
-        mScrollControl.AutoHideBars = true;
+        mScrollControl.SetOverflow(OverflowBehavior.Auto, OverflowBehavior.Auto);
         mScrollControl.Margin = Margin.One;
-        mInnerPanel = mScrollControl;
-        _textElement.Parent = mInnerPanel;
-        mScrollControl.InnerPanel.BoundsChanged += new GwenEventHandler<EventArgs>(ScrollChanged);
+        _innerPanel = mScrollControl;
+        _textElement.Parent = _innerPanel;
+        mScrollControl.InnerPanel.BoundsChanged += ScrollChanged;
 
-        mTextLines.Add(String.Empty);
+        _textLines.Add(String.Empty);
 
         // [halfofastaple] TODO Figure out where these numbers come from. See if we can remove the magic numbers.
         //	This should be as simple as 'm_ScrollControl.AutoSizeToContents = true' or 'm_ScrollControl.NoBounds()'
@@ -114,20 +115,20 @@ public partial class MultilineTextBox : Label
     {
         get
         {
-            if (mTextLines == null || mTextLines.Count() == 0)
+            if (_textLines == null || _textLines.Count() == 0)
             {
                 return new Point(0, 0);
             }
 
             var y = mCursorPos.Y;
             y = Math.Max(y, 0);
-            y = Math.Min(y, mTextLines.Count() - 1);
+            y = Math.Min(y, _textLines.Count() - 1);
 
             var x = mCursorPos
                 .X; //X may be beyond the last character, but we will want to draw it at the end of line.
 
             x = Math.Max(x, 0);
-            x = Math.Min(x, mTextLines[y].Length);
+            x = Math.Min(x, _textLines[y].Length);
 
             return new Point(x, y);
         }
@@ -147,20 +148,20 @@ public partial class MultilineTextBox : Label
     {
         get
         {
-            if (mTextLines == null || mTextLines.Count() == 0)
+            if (_textLines == null || _textLines.Count() == 0)
             {
                 return new Point(0, 0);
             }
 
             var y = mCursorEnd.Y;
             y = Math.Max(y, 0);
-            y = Math.Min(y, mTextLines.Count() - 1);
+            y = Math.Min(y, _textLines.Count() - 1);
 
             var x = mCursorEnd
                 .X; //X may be beyond the last character, but we will want to draw it at the end of line.
 
             x = Math.Max(x, 0);
-            x = Math.Min(x, mTextLines[y].Length);
+            x = Math.Min(x, _textLines[y].Length);
 
             return new Point(x, y);
         }
@@ -180,7 +181,7 @@ public partial class MultilineTextBox : Label
     /// <summary>
     ///     Returns the number of lines that are in the Multiline Text Box.
     /// </summary>
-    public int TotalLines => mTextLines.Count;
+    public int TotalLines => _textLines.Count;
 
     /// <summary>
     ///     Gets and sets the text to display to the user. Each line is seperated by
@@ -188,21 +189,8 @@ public partial class MultilineTextBox : Label
     /// </summary>
     public override string Text
     {
-        get
-        {
-            var ret = string.Empty;
-            for (var i = 0; i < TotalLines; i++)
-            {
-                ret += mTextLines[i];
-                if (i != TotalLines - 1)
-                {
-                    ret += Environment.NewLine;
-                }
-            }
-
-            return ret;
-        }
-        set => base.Text = value;
+        get => string.Join(Environment.NewLine, _textLines);
+        set => SetText(value);
     }
 
     /// <summary>
@@ -212,19 +200,19 @@ public partial class MultilineTextBox : Label
 
     public string GetTextLine(int index)
     {
-        return mTextLines[index];
+        return _textLines[index];
     }
 
     public void SetTextLine(int index, string value)
     {
-        mTextLines[index] = value;
+        _textLines[index] = value;
     }
 
     /// <summary>
     ///     Refreshes the cursor location and selected area when the inner panel scrolls
     /// </summary>
     /// <param name="control">The inner panel the text is embedded in</param>
-    private void ScrollChanged(Base control, EventArgs args)
+    private void ScrollChanged(Base control, ValueChangedEventArgs<Rectangle> args)
     {
         RefreshCursorBounds();
     }
@@ -274,9 +262,9 @@ public partial class MultilineTextBox : Label
             EraseSelection();
         }
 
-        var str = mTextLines[mCursorPos.Y];
+        var str = _textLines[mCursorPos.Y];
         str = str.Insert(CursorPosition.X, text);
-        mTextLines[mCursorPos.Y] = str;
+        _textLines[mCursorPos.Y] = str;
 
         mCursorPos.X = CursorPosition.X + text.Length;
         mCursorEnd = mCursorPos;
@@ -327,7 +315,7 @@ public partial class MultilineTextBox : Label
             {
                 /* Start */
                 var pA = GetCharacterPosition(StartPoint);
-                var pB = GetCharacterPosition(new Point(mTextLines[StartPoint.Y].Length, StartPoint.Y));
+                var pB = GetCharacterPosition(new Point(_textLines[StartPoint.Y].Length, StartPoint.Y));
 
                 var selectionBounds = new Rectangle();
                 selectionBounds.X = Math.Min(pA.X, pB.X);
@@ -342,7 +330,7 @@ public partial class MultilineTextBox : Label
                 for (var i = 1; i < EndPoint.Y - StartPoint.Y; i++)
                 {
                     pA = GetCharacterPosition(new Point(0, StartPoint.Y + i));
-                    pB = GetCharacterPosition(new Point(mTextLines[StartPoint.Y + i].Length, StartPoint.Y + i));
+                    pB = GetCharacterPosition(new Point(_textLines[StartPoint.Y + i].Length, StartPoint.Y + i));
 
                     selectionBounds = new Rectangle();
                     selectionBounds.X = Math.Min(pA.X, pB.X);
@@ -455,19 +443,20 @@ public partial class MultilineTextBox : Label
     {
         //base.OnSelectAll(from);
         mCursorEnd = new Point(0, 0);
-        mCursorPos = new Point(mTextLines.Last().Length, mTextLines.Count());
+        mCursorPos = new Point(_textLines.Last().Length, _textLines.Count());
 
         RefreshCursorBounds();
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse double click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    protected override void OnMouseDoubleClickedLeft(int x, int y)
+    protected override void OnMouseDoubleClicked(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        //base.OnMouseDoubleClickedLeft(x, y);
+        base.OnMouseDoubleClicked(mouseButton, mousePosition, userAction);
+
+        if (mouseButton != MouseButton.Left)
+        {
+            return;
+        }
+
         OnSelectAll(this, EventArgs.Empty);
     }
 
@@ -486,12 +475,12 @@ public partial class MultilineTextBox : Label
         }
 
         //Split current string, putting the rhs on a new line
-        var currentLine = mTextLines[mCursorPos.Y];
+        var currentLine = _textLines[mCursorPos.Y];
         var lhs = currentLine.Substring(0, CursorPosition.X);
         var rhs = currentLine.Substring(CursorPosition.X);
 
-        mTextLines[mCursorPos.Y] = lhs;
-        mTextLines.Insert(mCursorPos.Y + 1, rhs);
+        _textLines[mCursorPos.Y] = lhs;
+        _textLines.Insert(mCursorPos.Y + 1, rhs);
 
         OnKeyDown(true);
         OnKeyHome(true);
@@ -536,20 +525,20 @@ public partial class MultilineTextBox : Label
             }
             else
             {
-                var lhs = mTextLines[mCursorPos.Y - 1];
-                var rhs = mTextLines[mCursorPos.Y];
-                mTextLines.RemoveAt(mCursorPos.Y);
+                var lhs = _textLines[mCursorPos.Y - 1];
+                var rhs = _textLines[mCursorPos.Y];
+                _textLines.RemoveAt(mCursorPos.Y);
                 OnKeyUp(true);
                 OnKeyEnd(true);
-                mTextLines[mCursorPos.Y] = lhs + rhs;
+                _textLines[mCursorPos.Y] = lhs + rhs;
             }
         }
         else
         {
-            var currentLine = mTextLines[mCursorPos.Y];
+            var currentLine = _textLines[mCursorPos.Y];
             var lhs = currentLine.Substring(0, CursorPosition.X - 1);
             var rhs = currentLine.Substring(CursorPosition.X);
-            mTextLines[mCursorPos.Y] = lhs + rhs;
+            _textLines[mCursorPos.Y] = lhs + rhs;
             OnKeyLeft(true);
         }
 
@@ -580,27 +569,27 @@ public partial class MultilineTextBox : Label
             return true;
         }
 
-        if (mCursorPos.X == mTextLines[mCursorPos.Y].Length)
+        if (mCursorPos.X == _textLines[mCursorPos.Y].Length)
         {
-            if (mCursorPos.Y == mTextLines.Count - 1)
+            if (mCursorPos.Y == _textLines.Count - 1)
             {
                 return true; //Nothing left to delete
             }
             else
             {
-                var lhs = mTextLines[mCursorPos.Y];
-                var rhs = mTextLines[mCursorPos.Y + 1];
-                mTextLines.RemoveAt(mCursorPos.Y + 1);
+                var lhs = _textLines[mCursorPos.Y];
+                var rhs = _textLines[mCursorPos.Y + 1];
+                _textLines.RemoveAt(mCursorPos.Y + 1);
                 OnKeyEnd(true);
-                mTextLines[mCursorPos.Y] = lhs + rhs;
+                _textLines[mCursorPos.Y] = lhs + rhs;
             }
         }
         else
         {
-            var currentLine = mTextLines[mCursorPos.Y];
+            var currentLine = _textLines[mCursorPos.Y];
             var lhs = currentLine.Substring(0, CursorPosition.X);
             var rhs = currentLine.Substring(CursorPosition.X + 1);
-            mTextLines[mCursorPos.Y] = lhs + rhs;
+            _textLines[mCursorPos.Y] = lhs + rhs;
         }
 
         Invalidate();
@@ -628,7 +617,7 @@ public partial class MultilineTextBox : Label
             mCursorPos.Y -= 1;
         }
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -658,7 +647,7 @@ public partial class MultilineTextBox : Label
             mCursorPos.Y += 1;
         }
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -685,7 +674,7 @@ public partial class MultilineTextBox : Label
 
         if (mCursorPos.X > 0)
         {
-            mCursorPos.X = Math.Min(mCursorPos.X - 1, mTextLines[mCursorPos.Y].Length);
+            mCursorPos.X = Math.Min(mCursorPos.X - 1, _textLines[mCursorPos.Y].Length);
         }
         else
         {
@@ -696,7 +685,7 @@ public partial class MultilineTextBox : Label
             }
         }
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -721,20 +710,20 @@ public partial class MultilineTextBox : Label
             return true;
         }
 
-        if (mCursorPos.X < mTextLines[mCursorPos.Y].Length)
+        if (mCursorPos.X < _textLines[mCursorPos.Y].Length)
         {
-            mCursorPos.X = Math.Min(mCursorPos.X + 1, mTextLines[mCursorPos.Y].Length);
+            mCursorPos.X = Math.Min(mCursorPos.X + 1, _textLines[mCursorPos.Y].Length);
         }
         else
         {
-            if (mCursorPos.Y < mTextLines.Count - 1)
+            if (mCursorPos.Y < _textLines.Count - 1)
             {
                 OnKeyDown(down);
                 OnKeyHome(down);
             }
         }
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -761,7 +750,7 @@ public partial class MultilineTextBox : Label
 
         mCursorPos.X = 0;
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -786,9 +775,9 @@ public partial class MultilineTextBox : Label
             return true;
         }
 
-        mCursorPos.X = mTextLines[mCursorPos.Y].Length;
+        mCursorPos.X = _textLines[mCursorPos.Y].Length;
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -841,19 +830,19 @@ public partial class MultilineTextBox : Label
             var start = StartPoint.X;
             var end = EndPoint.X;
 
-            str = mTextLines[mCursorPos.Y];
+            str = _textLines[mCursorPos.Y];
             str = str.Substring(start, end - start);
         }
         else
         {
             str = String.Empty;
-            str += mTextLines[StartPoint.Y].Substring(StartPoint.X); //Copy start
+            str += _textLines[StartPoint.Y].Substring(StartPoint.X); //Copy start
             for (var i = 1; i < EndPoint.Y - StartPoint.Y; i++)
             {
-                str += mTextLines[StartPoint.Y + i]; //Copy middle
+                str += _textLines[StartPoint.Y + i]; //Copy middle
             }
 
-            str += mTextLines[EndPoint.Y].Substring(0, EndPoint.X); //Copy end
+            str += _textLines[EndPoint.Y].Substring(0, EndPoint.X); //Copy end
         }
 
         return str;
@@ -894,32 +883,32 @@ public partial class MultilineTextBox : Label
             var start = StartPoint.X;
             var end = EndPoint.X;
 
-            mTextLines[StartPoint.Y] = mTextLines[StartPoint.Y].Remove(start, end - start);
+            _textLines[StartPoint.Y] = _textLines[StartPoint.Y].Remove(start, end - start);
         }
         else
         {
             /* Remove Start */
-            if (StartPoint.X < mTextLines[StartPoint.Y].Length)
+            if (StartPoint.X < _textLines[StartPoint.Y].Length)
             {
-                mTextLines[StartPoint.Y] = mTextLines[StartPoint.Y].Remove(StartPoint.X);
+                _textLines[StartPoint.Y] = _textLines[StartPoint.Y].Remove(StartPoint.X);
             }
 
             /* Remove Middle */
             for (var i = 1; i < EndPoint.Y - StartPoint.Y; i++)
             {
-                mTextLines.RemoveAt(StartPoint.Y + 1);
+                _textLines.RemoveAt(StartPoint.Y + 1);
             }
 
             /* Remove End */
-            if (EndPoint.X < mTextLines[StartPoint.Y + 1].Length)
+            if (EndPoint.X < _textLines[StartPoint.Y + 1].Length)
             {
-                mTextLines[StartPoint.Y] += mTextLines[StartPoint.Y + 1].Substring(EndPoint.X);
+                _textLines[StartPoint.Y] += _textLines[StartPoint.Y + 1].Substring(EndPoint.X);
             }
 
-            mTextLines.RemoveAt(StartPoint.Y + 1);
+            _textLines.RemoveAt(StartPoint.Y + 1);
         }
 
-        // Move the cursor to the start of the selection, 
+        // Move the cursor to the start of the selection,
         // since the end is probably outside of the string now.
         mCursorPos = StartPoint;
         mCursorEnd = StartPoint;
@@ -928,15 +917,10 @@ public partial class MultilineTextBox : Label
         RefreshCursorBounds();
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    /// <param name="down">If set to <c>true</c> mouse button is down.</param>
-    protected override void OnMouseClickedLeft(int x, int y, bool down, bool automated = false)
+    protected override void OnMouseDown(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        base.OnMouseClickedLeft(x, y, down);
+        base.OnMouseDown(mouseButton, mousePosition, userAction);
+
         if (mSelectAll)
         {
             OnSelectAll(this, EventArgs.Empty);
@@ -945,26 +929,37 @@ public partial class MultilineTextBox : Label
             return;
         }
 
-        var coords = GetClosestCharacter(x, y);
+        var closestCharacterCursorPosition = GetClosestCharacter(mousePosition);
+        CursorPosition = closestCharacterCursorPosition;
 
-        if (down)
+        if (!InputHandler.IsShiftDown)
         {
-            CursorPosition = coords;
-
-            if (!Input.InputHandler.IsShiftDown)
-            {
-                CursorEnd = coords;
-            }
-
-            InputHandler.MouseFocus = this;
+            CursorEnd = closestCharacterCursorPosition;
         }
-        else
+
+        InputHandler.MouseFocus = this;
+
+        Invalidate();
+        RefreshCursorBounds();
+    }
+
+    protected override void OnMouseUp(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        base.OnMouseUp(mouseButton, mousePosition, userAction);
+
+        if (mSelectAll)
         {
-            if (InputHandler.MouseFocus == this)
-            {
-                CursorPosition = coords;
-                InputHandler.MouseFocus = null;
-            }
+            OnSelectAll(this, EventArgs.Empty);
+
+            //m_SelectAll = false;
+            return;
+        }
+
+        var closestCharacterCursorPosition = GetClosestCharacter(mousePosition);
+        if (InputHandler.MouseFocus == this)
+        {
+            CursorPosition = closestCharacterCursorPosition;
+            InputHandler.MouseFocus = null;
         }
 
         Invalidate();
@@ -985,10 +980,10 @@ public partial class MultilineTextBox : Label
         var sub = String.Empty;
 
         /* Find the appropriate Y row (always pick whichever y the mouse currently is on) */
-        for (var y = 0; y < mTextLines.Count(); y++)
+        for (var y = 0; y < _textLines.Count(); y++)
         {
-            sub += mTextLines[y] + Environment.NewLine;
-            var cp = Skin.Renderer.MeasureText(Font, sub);
+            sub += _textLines[y] + Environment.NewLine;
+            var cp = Skin.Renderer.MeasureText(Font, fontSize: FontSize, sub);
 
             double yDist = Math.Abs(cp.Y - p.Y);
             if (yDist < distance)
@@ -1001,18 +996,18 @@ public partial class MultilineTextBox : Label
         /* Find the best X row, closest char */
         sub = String.Empty;
         distance = Double.MaxValue;
-        for (var x = 0; x <= mTextLines[best.Y].Count(); x++)
+        for (var x = 0; x <= _textLines[best.Y].Count(); x++)
         {
-            if (x < mTextLines[best.Y].Count())
+            if (x < _textLines[best.Y].Count())
             {
-                sub += mTextLines[best.Y][x];
+                sub += _textLines[best.Y][x];
             }
             else
             {
                 sub += " ";
             }
 
-            var cp = Skin.Renderer.MeasureText(Font, sub);
+            var cp = Skin.Renderer.MeasureText(Font, fontSize: FontSize, sub);
 
             double xDiff = Math.Abs(cp.X - p.X);
 
@@ -1066,15 +1061,15 @@ public partial class MultilineTextBox : Label
         var idealx = (int) (-caretPos + Width * 0.5f);
 
         // Don't show too much whitespace to the right
-        if (idealx + TextWidth < Width - TextPadding.Right - Padding.Right)
+        if (idealx + TextWidth < Width - Padding.Right)
         {
-            idealx = -TextWidth + (Width - TextPadding.Right - Padding.Right);
+            idealx = -TextWidth + (Width - Padding.Right);
         }
 
         // Or the left
-        if (idealx > TextPadding.Left + Padding.Left)
+        if (idealx > Padding.Left)
         {
-            idealx = TextPadding.Left + Padding.Left;
+            idealx = Padding.Left;
         }
 
         SetTextPosition(idealx, TextY);
@@ -1083,9 +1078,10 @@ public partial class MultilineTextBox : Label
     /// <summary>
     ///     Handler invoked when control children's bounds change.
     /// </summary>
-    /// <param name="oldChildBounds"></param>
     /// <param name="child"></param>
-    protected override void OnChildBoundsChanged(Rectangle oldChildBounds, Base child)
+    /// <param name="oldChildBounds"></param>
+    /// <param name="newChildBounds"></param>
+    protected override void OnChildBoundsChanged(Base child, Rectangle oldChildBounds, Rectangle newChildBounds)
     {
         if (mScrollControl != null)
         {
@@ -1098,12 +1094,12 @@ public partial class MultilineTextBox : Label
     /// </summary>
     /// <param name="text">Text to set.</param>
     /// <param name="doEvents">Determines whether to invoke "text changed" event.</param>
-    public override void SetText(string text, bool doEvents = true)
+    public override void SetText(string? text, bool doEvents = true)
     {
-        var easySplit = text.Replace("\r\n", "\n").Replace("\r", "\n");
-        var lines = easySplit.Split('\n');
+        var easySplit = text?.Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = easySplit?.Split('\n') ?? [];
 
-        mTextLines = new List<string>(lines);
+        _textLines = new List<string>(lines);
 
         Invalidate();
         RefreshCursorBounds();
@@ -1134,23 +1130,26 @@ public partial class MultilineTextBox : Label
 
     private Point GetCharacterPosition(Point cursorPosition)
     {
-        if (mTextLines.Count == 0)
+        if (_textLines.Count == 0)
         {
             return new Point(0, 0);
         }
 
-        var currLine = mTextLines[cursorPosition.Y]
-            .Substring(0, Math.Min(cursorPosition.X, mTextLines[cursorPosition.Y].Length));
+        var currLine = _textLines[cursorPosition.Y]
+            .Substring(0, Math.Min(cursorPosition.X, _textLines[cursorPosition.Y].Length));
 
         var sub = string.Empty;
         for (var i = 0; i < cursorPosition.Y; i++)
         {
-            sub += mTextLines[i] + "\n";
+            sub += _textLines[i] + "\n";
         }
 
-        var p = new Point(Skin.Renderer.MeasureText(Font, currLine).X, Skin.Renderer.MeasureText(Font, sub).Y);
+        var p = new Point(
+            Skin.Renderer.MeasureText(Font, fontSize: FontSize, currLine).X,
+            Skin.Renderer.MeasureText(Font, fontSize: FontSize, sub).Y
+        );
 
-        return new Point(p.X + _textElement.X, p.Y + _textElement.Y + TextPadding.Top);
+        return new Point(p.X + _textElement.X, p.Y + _textElement.Y + Padding.Top);
     }
 
     protected override bool OnMouseWheeled(int delta)

@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Diagnostics;
-
 using Intersect.Utilities;
-
 using Moq;
-
 using NUnit.Framework;
 
 namespace Intersect.Plugins.Manifests.Types

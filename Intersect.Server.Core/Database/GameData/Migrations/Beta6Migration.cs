@@ -1,14 +1,11 @@
 ﻿using System.IO.Compression;
-
 using Intersect.Enums;
 using Intersect.Framework.Core.Serialization;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Events.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-
 using MySqlConnector;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using MapAttribute = Intersect.GameObjects.Maps.MapAttribute;
@@ -649,10 +646,10 @@ public static partial class Beta6Migration
         var Layers = new LegacyTileArray[5];
         for (var i = 0; i < 5; i++)
         {
-            Layers[i].Tiles = new LegacyTile[Options.MapWidth, Options.MapHeight];
-            for (var x = 0; x < Options.MapWidth; x++)
+            Layers[i].Tiles = new LegacyTile[Options.Instance.Map.MapWidth, Options.Instance.Map.MapHeight];
+            for (var x = 0; x < Options.Instance.Map.MapWidth; x++)
             {
-                for (var y = 0; y < Options.MapHeight; y++)
+                for (var y = 0; y < Options.Instance.Map.MapHeight; y++)
                 {
                     Layers[i].Tiles[x, y].TilesetId = new Guid(
                         new Byte[16]

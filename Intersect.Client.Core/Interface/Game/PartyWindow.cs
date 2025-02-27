@@ -54,7 +54,7 @@ public partial class PartyWindow
         mLeader.Hide();
 
         mLeaderText = new Label(mPartyWindow, "LeaderText");
-        mLeaderText.SetTextColor(new Color(0, 0, 0, 0), Label.ControlState.Normal);
+        mLeaderText.SetTextColor(new Color(0, 0, 0, 0), ComponentState.Normal);
         mLeaderText.Text = Strings.Parties.Leader;
         mLeaderText.Hide();
 
@@ -69,7 +69,7 @@ public partial class PartyWindow
         mHpBarContainer.Clear();
         mHpBar.Clear();
 
-        for (var i = 0; i < Options.Party.MaximumMembers; i++)
+        for (var i = 0; i < Options.Instance.Party.MaximumMembers; i++)
         {
             //Labels
             mLblnames.Add(new Label(mPartyWindow, "MemberName" + i));
@@ -89,11 +89,11 @@ public partial class PartyWindow
             mHpBarContainer[i].Hide();
             mHpLabel.Add(new Label(mPartyWindow, "HealthLabel" + i));
             mHpLabel[i].Hide();
-            mHpLabel[i].SetTextColor(new Color(0, 0, 0, 0), Label.ControlState.Normal);
+            mHpLabel[i].SetTextColor(new Color(0, 0, 0, 0), ComponentState.Normal);
             mHpLabel[i].Text = Strings.Parties.Vital0;
             mHpValue.Add(new Label(mPartyWindow, "HealthValue" + i));
             mHpValue[i].Hide();
-            mHpValue[i].SetTextColor(new Color(0, 0, 0, 0), Label.ControlState.Normal);
+            mHpValue[i].SetTextColor(new Color(0, 0, 0, 0), ComponentState.Normal);
             if (i < Globals.Me.Party.Count)
             {
                 mHpBarContainer[i].Show();
@@ -107,11 +107,11 @@ public partial class PartyWindow
             mMpBarContainer[i].RenderColor = new Color(0, 0, 0, 0);
             mMpLabel.Add(new Label(mPartyWindow, "ManaLabel" + i));
             mMpLabel[i].Hide();
-            mMpLabel[i].SetTextColor(new Color(0, 0, 0, 0), Label.ControlState.Normal);
+            mMpLabel[i].SetTextColor(new Color(0, 0, 0, 0), ComponentState.Normal);
             mMpLabel[i].Text = Strings.Parties.Vital1;
             mMpValue.Add(new Label(mPartyWindow, "ManaValue" + i));
             mMpValue[i].Hide();
-            mMpValue[i].SetTextColor(new Color(0, 0, 0, 0), Label.ControlState.Normal);
+            mMpValue[i].SetTextColor(new Color(0, 0, 0, 0), ComponentState.Normal);
             mMpBar.Add(new ImagePanel(mMpBarContainer[i], "ManaBar" + i));
             mMpBar[i].RenderColor = new Color(0, 0, 0, 0);
 
@@ -168,7 +168,7 @@ public partial class PartyWindow
         mLeader.Hide();
         mLeaderText.Hide();
         mLeaveButton.Hide();
-        for (var i = 0; i < Options.Instance.PartyOpts.MaximumMembers; i++)
+        for (var i = 0; i < Options.Instance.Party.MaximumMembers; i++)
         {
             mHpBarContainer[i].Hide();
             mHpLabel[i].Hide();
@@ -189,7 +189,7 @@ public partial class PartyWindow
             mLeaderText.Show();
             mLeaveButton.Show();
 
-            for (var i = 0; i < Options.Instance.PartyOpts.MaximumMembers; i++)
+            for (var i = 0; i < Options.Instance.Party.MaximumMembers; i++)
             {
                 if (i < Globals.Me.Party.Count)
                 {
@@ -293,7 +293,7 @@ public partial class PartyWindow
         }
     }
 
-    private void PartyWindow_Clicked(Base sender, ClickedEventArgs arguments)
+    private void PartyWindow_Clicked(Base sender, MouseButtonState arguments)
     {
         var memberId = (Guid)((Label)sender).UserData;
 
@@ -319,7 +319,7 @@ public partial class PartyWindow
     }
 
     //Input Handlers
-    void kick_Clicked(Base sender, ClickedEventArgs arguments)
+    void kick_Clicked(Base sender, MouseButtonState arguments)
     {
         for (var i = 1; i < Globals.Me.Party.Count; i++)
         {
@@ -332,7 +332,7 @@ public partial class PartyWindow
         }
     }
 
-    void leave_Clicked(Base sender, ClickedEventArgs arguments)
+    void leave_Clicked(Base sender, MouseButtonState arguments)
     {
         if (Globals.Me.Party.Count > 0)
         {

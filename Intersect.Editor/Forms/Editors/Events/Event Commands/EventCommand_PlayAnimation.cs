@@ -41,8 +41,8 @@ public partial class EventCommandPlayAnimation : UserControl
         mCurrentMap = currentMap;
         InitLocalization();
         cmbAnimation.Items.Clear();
-        cmbAnimation.Items.AddRange(AnimationBase.Names);
-        cmbAnimation.SelectedIndex = AnimationBase.ListIndex(mMyCommand.AnimationId);
+        cmbAnimation.Items.AddRange(AnimationDescriptor.Names);
+        cmbAnimation.SelectedIndex = AnimationDescriptor.ListIndex(mMyCommand.AnimationId);
         if (mMyCommand.MapId != Guid.Empty)
         {
             cmbConditionType.SelectedIndex = 0;
@@ -54,8 +54,8 @@ public partial class EventCommandPlayAnimation : UserControl
 
         chkInstanceToPlayer.Checked = mMyCommand.InstanceToPlayer;
 
-        nudWarpX.Maximum = Options.MapWidth;
-        nudWarpY.Maximum = Options.MapHeight;
+        nudWarpX.Maximum = Options.Instance.Map.MapWidth;
+        nudWarpY.Maximum = Options.Instance.Map.MapHeight;
         UpdateFormElements();
         switch (cmbConditionType.SelectedIndex)
         {
@@ -211,7 +211,7 @@ public partial class EventCommandPlayAnimation : UserControl
 
     private void btnSave_Click(object sender, EventArgs e)
     {
-        mMyCommand.AnimationId = AnimationBase.IdFromList(cmbAnimation.SelectedIndex);
+        mMyCommand.AnimationId = AnimationDescriptor.IdFromList(cmbAnimation.SelectedIndex);
         switch (cmbConditionType.SelectedIndex)
         {
             case 0: //Tile Spawn

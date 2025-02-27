@@ -1,6 +1,11 @@
 using Intersect.Client.Framework.GenericClasses;
+using Intersect.Client.Framework.Graphics;
+using Intersect.Client.Framework.Gwen.Control.EventArguments;
+using Intersect.Client.Framework.Gwen.ControlInternal;
 using Intersect.Client.Framework.Gwen.Input;
-using Intersect.Logging;
+using Intersect.Client.Framework.Input;
+using Intersect.Core;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.Control;
@@ -11,9 +16,14 @@ namespace Intersect.Client.Framework.Gwen.Control;
 /// </summary>
 public partial class TextBox : Label
 {
+    public enum Sounds
+    {
+        AddText,
+        RemoveText,
+        Submit,
+    }
 
     //Sound Effects
-    private string mAddTextSound;
 
     protected Rectangle mCaretBounds;
 
@@ -25,19 +35,23 @@ public partial class TextBox : Label
 
     private int mMaxmimumLength = -1;
 
-    private string mRemoveTextSound;
 
     private bool mSelectAll;
 
     protected Rectangle mSelectionBounds;
 
-    private string mSubmitSound;
+    private string? _soundNameAddText;
+    private string? _soundNameRemoveText;
+    private string? _soundNameSubmit;
+
+    private readonly Text _placeholder;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="TextBox" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public TextBox(Base parent, string name = "") : base(parent, name)
+    /// <param name="name"></param>
+    public TextBox(Base parent, string? name = default) : base(parent: parent, name: name)
     {
         AutoSizeToContents = false;
         SetSize(200, 20);
@@ -45,8 +59,8 @@ public partial class TextBox : Label
         MouseInputEnabled = true;
         KeyboardInputEnabled = true;
 
-        Alignment = Pos.Left | Pos.CenterV;
-        TextPadding = new Padding(4, 2, 4, 2);
+        Padding = new Padding(4, 2, 4, 2);
+        TextAlign = Pos.Left | Pos.CenterV;
 
         mCursorPos = 0;
         mCursorEnd = 0;
@@ -65,6 +79,12 @@ public partial class TextBox : Label
         AddAccelerator("Ctrl+X", OnCut);
         AddAccelerator("Ctrl+V", OnPaste);
         AddAccelerator("Ctrl+A", OnSelectAll);
+
+        _placeholder = new Text(this)
+        {
+            ColorOverride = new Color(255, 143, 143, 143),
+            IsVisibleInTree = false,
+        };
     }
 
     protected override bool AccelOnlyFocus => true;
@@ -82,7 +102,7 @@ public partial class TextBox : Label
             mSelectAll = value;
             if (value)
             {
-                OnSelectAll(this, EventArgs.Empty);
+                SelectAll();
             }
         }
     }
@@ -125,17 +145,33 @@ public partial class TextBox : Label
         }
     }
 
+    public override IFont? Font
+    {
+        get => base.Font;
+        set
+        {
+            base.Font = value;
+            _placeholder.Font = Font;
+        }
+    }
+
     public int MaximumLength { get => mMaxmimumLength; set => mMaxmimumLength = value; }
+
+    public string? PlaceholderText
+    {
+        get => _placeholder.DisplayedText;
+        set => _placeholder.DisplayedText = value;
+    }
 
     /// <summary>
     ///     Invoked when the text has changed.
     /// </summary>
-    public event GwenEventHandler<EventArgs> TextChanged;
+    public event GwenEventHandler<TextBox, ValueChangedEventArgs<string>>? TextChanged;
 
     /// <summary>
     ///     Invoked when the submit key has been pressed.
     /// </summary>
-    public event GwenEventHandler<EventArgs> SubmitPressed;
+    public event GwenEventHandler<TextBox, EventArgs>? SubmitPressed;
 
     /// <summary>
     ///     Determines whether the control can insert text at a given cursor position.
@@ -174,10 +210,11 @@ public partial class TextBox : Label
             mCursorEnd = TextLength;
         }
 
-        if (TextChanged != null)
-        {
-            TextChanged.Invoke(this, EventArgs.Empty);
-        }
+        UpdatePlaceholder();
+
+        RefreshCursorBounds();
+
+        TextChanged?.Invoke(this, new ValueChangedEventArgs<string> { Value = Text ?? string.Empty });
     }
 
     /// <summary>
@@ -201,14 +238,32 @@ public partial class TextBox : Label
         return true;
     }
 
+    public void SetSound(Sounds sound, string? name)
+    {
+        switch (sound)
+        {
+            case Sounds.AddText:
+                _soundNameAddText = name;
+                break;
+            case Sounds.RemoveText:
+                _soundNameRemoveText = name;
+                break;
+            case Sounds.Submit:
+                _soundNameSubmit = name;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(sound), sound, null);
+        }
+    }
+
     /// <summary>
     ///     Inserts text at current cursor position, erasing selection if any.
     /// </summary>
     /// <param name="text">Text to insert.</param>
-    protected virtual void InsertText(string text)
+    protected void InsertText(string text, bool skipEvents = false)
     {
-        ReplaceSelection(text);
-        base.PlaySound(mAddTextSound);
+        ReplaceSelection(text, skipEvents: skipEvents);
+        base.PlaySound(_soundNameAddText);
     }
 
     private void ValidateCursor()
@@ -249,7 +304,9 @@ public partial class TextBox : Label
 
         if (time % 1.0f <= 0.5f)
         {
-            skin.Renderer.DrawColor = mNormalTextColor != null ? mNormalTextColor : TextColorOverride;
+            skin.Renderer.DrawColor = TextColorOverride is { A: > 0 } textColorOverride
+                ? textColorOverride
+                : TextColor ?? Color.White;
             skin.Renderer.DrawFilledRect(mCaretBounds);
         }
     }
@@ -283,6 +340,12 @@ public partial class TextBox : Label
     protected override void OnPaste(Base from, EventArgs args)
     {
         base.OnPaste(from, args);
+
+        if (IsDisabledByTree)
+        {
+            return;
+        }
+
         InsertText(Platform.Neutral.GetClipboardText());
     }
 
@@ -308,6 +371,12 @@ public partial class TextBox : Label
     /// <param name="from">Source control.</param>
     protected override void OnCut(Base from, EventArgs args)
     {
+        if (IsDisabledByTree)
+        {
+            OnCopy(from, args);
+            return;
+        }
+
         if (!HasSelection)
         {
             return;
@@ -319,28 +388,24 @@ public partial class TextBox : Label
         EraseSelection();
     }
 
-    /// <summary>
-    ///     Handler for Select All event.
-    /// </summary>
-    /// <param name="from">Source control.</param>
-    protected override void OnSelectAll(Base from, EventArgs args)
+    public void SelectAll() => OnSelectAll(this, EventArgs.Empty);
+
+    protected virtual void OnSelectAll(Base from, EventArgs args)
     {
-        //base.OnSelectAll(from);
         mCursorEnd = 0;
         mCursorPos = TextLength;
 
         RefreshCursorBounds();
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse double click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    protected override void OnMouseDoubleClickedLeft(int x, int y)
+    protected override void OnMouseDoubleClicked(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        //base.OnMouseDoubleClickedLeft(x, y);
-        OnSelectAll(this, EventArgs.Empty);
+        base.OnMouseDoubleClicked(mouseButton, mousePosition, userAction);
+
+        if (mouseButton == MouseButton.Left)
+        {
+            SelectAll();
+        }
     }
 
     /// <summary>
@@ -415,6 +480,7 @@ public partial class TextBox : Label
     protected override bool OnKeyDelete(bool down)
     {
         base.OnKeyDelete(down);
+
         if (!down)
         {
             return true;
@@ -457,7 +523,7 @@ public partial class TextBox : Label
             mCursorPos--;
         }
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -487,7 +553,7 @@ public partial class TextBox : Label
             mCursorPos++;
         }
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -514,7 +580,7 @@ public partial class TextBox : Label
 
         mCursorPos = 0;
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -536,7 +602,7 @@ public partial class TextBox : Label
         base.OnKeyEnd(down);
         mCursorPos = TextLength;
 
-        if (!Input.InputHandler.IsShiftDown)
+        if (!InputHandler.IsShiftDown)
         {
             mCursorEnd = mCursorPos;
         }
@@ -554,15 +620,13 @@ public partial class TextBox : Label
     {
         if (!HasSelection)
         {
-            return String.Empty;
+            return string.Empty;
         }
 
         var start = Math.Min(mCursorPos, mCursorEnd);
         var end = Math.Max(mCursorPos, mCursorEnd);
 
-        var str = Text;
-
-        return str.Substring(start, end - start);
+        return Text?.Substring(start, end - start) ?? string.Empty;
     }
 
     /// <summary>
@@ -570,25 +634,32 @@ public partial class TextBox : Label
     /// </summary>
     /// <param name="startPos">Starting cursor position.</param>
     /// <param name="length">Length in characters.</param>
-    public virtual void DeleteText(int startPos, int length, bool playSound = true) => ReplaceText(startPos, length, string.Empty, playSound);
+    public virtual void DeleteText(int startPos, int length, bool playSound = true, bool skipEvents = false) =>
+        ReplaceText(startPos, length, string.Empty, playSound, skipEvents: skipEvents);
 
-    public virtual void ReplaceText(int startPos, int length, string? replacement, bool playSound = true)
+    public virtual void ReplaceText(
+        int startPos,
+        int length,
+        string? replacement,
+        bool playSound = true,
+        bool skipEvents = false
+    )
     {
         try
         {
-            var text = Text;
+            var text = Text ?? string.Empty;
             if (startPos < 0)
             {
                 if (length > -startPos)
                 {
                     length += startPos;
-                    startPos = 0;
                 }
                 else
                 {
                     length = 0;
-                    startPos = 0;
                 }
+
+                startPos = 0;
 
                 mCursorPos = Math.Max(startPos, mCursorPos);
             }
@@ -600,7 +671,7 @@ public partial class TextBox : Label
 
             text = text.Insert(startPos, replacement ?? string.Empty);
 
-            SetText(text);
+            SetText(text, doEvents: !skipEvents);
 
             if (mCursorPos > startPos)
             {
@@ -611,28 +682,38 @@ public partial class TextBox : Label
 
             if (length > 0 && playSound)
             {
-                PlaySound(mRemoveTextSound);
+                PlaySound(_soundNameRemoveText);
             }
         }
         catch (Exception exception)
         {
-            LegacyLogging.Logger?.Warn(exception);
+            ApplicationContext.Context.Value?.Logger.LogWarning(
+                exception,
+                "Failed to replace {Length} characters in '{Text}' starting at {StartPosition} with '{ReplacementText}",
+                length,
+                Text,
+                startPos,
+                replacement
+            );
         }
     }
 
-    public virtual void ReplaceSelection(string replacement, bool playSound = true)
+    public virtual void ReplaceSelection(string? replacement, bool playSound = true, bool skipEvents = false)
     {
         ValidateCursor();
 
+        var text = Text ?? string.Empty;
+
         var start = Math.Min(mCursorPos, mCursorEnd);
 
-        if (Text.Length > 0 && start < 0)
+        var currentLength = text.Length;
+        if (currentLength > 0 && start < 0)
         {
             // Make sure that start is not more negative than the text length
-            start = Math.Max(-Text.Length, start);
+            start = Math.Max(-currentLength, start);
 
             // Treat the negative start as an offset from the end
-            start += Text.Length;
+            start += currentLength;
         }
 
         // Bound the end to no earlier than the start
@@ -642,7 +723,7 @@ public partial class TextBox : Label
         var deletionLength = end - start;
 
         // How long is the remaining text going to be after deletion?
-        var textLength = Text.Length - deletionLength;
+        var textLength = currentLength - deletionLength;
 
         // What is the string length limit (below 0 maximum length is "unlimited")
         var maximumLength = MaximumLength < 0 ? int.MaxValue : MaximumLength;
@@ -660,9 +741,9 @@ public partial class TextBox : Label
         replacementLength = Math.Min(replacementLength, maximumReplacementLength);
 
         // Get the replacement substring
-        var actualReplacement = replacement.Substring(0, replacementLength);
+        var actualReplacement = replacement?[..replacementLength];
 
-        ReplaceText(start, deletionLength, actualReplacement, playSound);
+        ReplaceText(start, deletionLength, actualReplacement, playSound, skipEvents: skipEvents);
 
         // Move the cursor, reset to 0 length cursor
         mCursorPos += replacementLength;
@@ -687,15 +768,15 @@ public partial class TextBox : Label
         mCursorEnd = start;
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    /// <param name="down">If set to <c>true</c> mouse button is down.</param>
-    protected override void OnMouseClickedLeft(int x, int y, bool down, bool automated = false)
+    protected override void OnMouseDown(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        base.OnMouseClickedLeft(x, y, down);
+        base.OnMouseDown(mouseButton, mousePosition, userAction);
+
+        if (mouseButton != MouseButton.Left)
+        {
+            return;
+        }
+
         if (mSelectAll)
         {
             OnSelectAll(this, EventArgs.Empty);
@@ -704,27 +785,35 @@ public partial class TextBox : Label
             return;
         }
 
-        var c = GetClosestCharacter(x, y).X;
+        var closestCharacterCursor = GetClosestCharacter(mousePosition).X;
+        CursorPos = closestCharacterCursor;
 
-        if (down)
+        if (!InputHandler.IsShiftDown)
         {
-            CursorPos = c;
-
-            if (!Input.InputHandler.IsShiftDown)
-            {
-                CursorEnd = c;
-            }
-
-            InputHandler.MouseFocus = this;
+            CursorEnd = closestCharacterCursor;
         }
-        else
+
+        InputHandler.MouseFocus = this;
+    }
+
+    protected override void OnMouseUp(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        base.OnMouseUp(mouseButton, mousePosition, userAction);
+
+        if (mouseButton != MouseButton.Left)
         {
-            if (InputHandler.MouseFocus == this)
-            {
-                CursorPos = c;
-                InputHandler.MouseFocus = null;
-            }
+            return;
         }
+
+        if (InputHandler.MouseFocus != this)
+        {
+            return;
+        }
+
+        var closestCharacterCursor = GetClosestCharacter(mousePosition).X;
+
+        CursorPos = closestCharacterCursor;
+        InputHandler.MouseFocus = null;
     }
 
     /// <summary>
@@ -764,15 +853,15 @@ public partial class TextBox : Label
         var idealx = (int)(-caretPos + Width * 0.5f);
 
         // Don't show too much whitespace to the right
-        if (idealx + TextWidth < Width - TextPadding.Right - Padding.Right)
+        if (idealx + TextWidth < Width - Padding.Right)
         {
-            idealx = -TextWidth + (Width - TextPadding.Right - Padding.Right);
+            idealx = -TextWidth + (Width - Padding.Right);
         }
 
         // Or the left
-        if (idealx > TextPadding.Left + Padding.Left)
+        if (idealx > Padding.Left)
         {
-            idealx = TextPadding.Left + Padding.Left;
+            idealx = Padding.Left;
         }
 
         SetTextPosition(idealx, TextY);
@@ -786,7 +875,41 @@ public partial class TextBox : Label
     {
         base.Layout(skin);
 
+        UpdatePlaceholder();
+
         RefreshCursorBounds();
+    }
+
+    private void UpdatePlaceholder()
+    {
+        _placeholder.IsVisibleInTree = string.IsNullOrEmpty(Text) && !string.IsNullOrWhiteSpace(PlaceholderText);
+        AlignTextElement(_placeholder);
+    }
+
+    // Textbox only uses Normal and Disabled
+    public override void UpdateColors()
+    {
+        var textColor = GetTextColor(ComponentState.Normal) ?? Skin.Colors.Label.Normal;
+        if (IsDisabledByTree)
+        {
+            textColor = GetTextColor(ComponentState.Disabled) ?? Skin.Colors.Label.Disabled;
+        }
+
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+        if (textColor == null)
+        {
+            ApplicationContext.CurrentContext.Logger.LogError(
+                "Text color for the current control state of '{ComponentName}' is somehow null IsDisabled={IsDisabled} IsActive={IsActive} IsHovered={IsHovered}",
+                ParentQualifiedName,
+                IsDisabled,
+                IsActive,
+                IsHovered
+            );
+
+            textColor = new Color(r: 255, g: 0, b: 255);
+        }
+
+        TextColor = textColor;
     }
 
     /// <summary>
@@ -794,11 +917,8 @@ public partial class TextBox : Label
     /// </summary>
     protected virtual void OnReturn()
     {
-        if (SubmitPressed != null)
-        {
-            SubmitPressed.Invoke(this, EventArgs.Empty);
-            base.PlaySound(mSubmitSound);
-        }
+        SubmitPressed?.Invoke(this, EventArgs.Empty);
+        base.PlaySound(_soundNameSubmit);
     }
 
     public void SetMaxLength(int val)
@@ -806,14 +926,19 @@ public partial class TextBox : Label
         MaximumLength = val;
     }
 
-    public override JObject GetJson(bool isRoot = default)
+    public override JObject? GetJson(bool isRoot = false, bool onlySerializeIfNotEmpty = false)
     {
-        var obj = base.GetJson(isRoot);
-        obj.Add("AddTextSound", mAddTextSound);
-        obj.Add("RemoveTextSound", mRemoveTextSound);
-        obj.Add("SubmitSound", mSubmitSound);
+        var serializedProperties = base.GetJson(isRoot, onlySerializeIfNotEmpty);
+        if (serializedProperties is null)
+        {
+            return null;
+        }
 
-        return base.FixJson(obj);
+        serializedProperties.Add("AddTextSound", _soundNameAddText);
+        serializedProperties.Add("RemoveTextSound", _soundNameRemoveText);
+        serializedProperties.Add("SubmitSound", _soundNameSubmit);
+
+        return base.FixJson(serializedProperties);
     }
 
     public override void LoadJson(JToken obj, bool isRoot = default)
@@ -821,17 +946,17 @@ public partial class TextBox : Label
         base.LoadJson(obj);
         if (obj["AddTextSound"] != null)
         {
-            mAddTextSound = (string)obj["AddTextSound"];
+            _soundNameAddText = (string)obj["AddTextSound"];
         }
 
         if (obj["RemoveTextSound"] != null)
         {
-            mRemoveTextSound = (string)obj["RemoveTextSound"];
+            _soundNameRemoveText = (string)obj["RemoveTextSound"];
         }
 
         if (obj["SubmitSound"] != null)
         {
-            mSubmitSound = (string)obj["SubmitSound"];
+            _soundNameSubmit = (string)obj["SubmitSound"];
         }
     }
 

@@ -1,5 +1,7 @@
+using Intersect.Client.Framework.Gwen;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.Interface.Debugging;
+using Intersect.Client.Localization;
 using Intersect.Reflection;
 
 namespace Intersect.Client.Interface;
@@ -7,6 +9,20 @@ namespace Intersect.Client.Interface;
 public abstract partial class MutableInterface : IMutableInterface
 {
     private static DebugWindow? _debugWindow;
+    private static DebugWindow? _debugWindow2;
+
+    public static void ReparentDebugWindow(Base parent)
+    {
+        if (_debugWindow is { } debugWindow)
+        {
+            debugWindow.Parent = parent;
+        }
+
+        if (_debugWindow2 is { } debugWindow2)
+        {
+            debugWindow2.Parent = parent;
+        }
+    }
 
     public static void DetachDebugWindow()
     {
@@ -14,33 +30,51 @@ public abstract partial class MutableInterface : IMutableInterface
         {
             _debugWindow.Parent = default;
         }
+
+        if (_debugWindow2 != null)
+        {
+            _debugWindow2.Parent = default;
+        }
     }
 
     internal static void DisposeDebugWindow()
     {
         _debugWindow?.Dispose();
+        _debugWindow2?.Dispose();
     }
 
-    private static void EnsureDebugWindowInitialized(Base parent)
+    private static DebugWindow EnsureDebugWindowInitialized(Base parent)
     {
-        if (_debugWindow == default)
-        {
-            _debugWindow = new DebugWindow(parent);
-        }
-
+        _debugWindow ??= new DebugWindow(parent);
         _debugWindow.Parent = parent;
+
+#if DEBUG
+        if (_debugWindow2 is null)
+        {
+            _debugWindow2 = new DebugWindow(parent)
+            {
+                Alignment = [Alignments.Top, Alignments.Right],
+                Title = Strings.Debug.TitleX.ToString(2),
+            };
+            _debugWindow2.PostLayout.Enqueue(window => window.Alignment = [], _debugWindow2);
+        }
+        _debugWindow2.Parent = parent;
+#endif
+
+        return _debugWindow;
     }
 
     protected internal MutableInterface(Base root)
     {
         Root = root;
-        EnsureDebugWindowInitialized(root);
     }
 
     internal Base Root { get; }
 
+    public int NodeCount => Root.NodeCount;
+
     /// <inheritdoc />
-    public List<Base> Children => Root.Children ?? [];
+    public IReadOnlyList<Base> Children => Root.Children ?? [];
 
     /// <inheritdoc />
     public TElement Create<TElement>(params object[] parameters) where TElement : Base
@@ -93,9 +127,16 @@ public abstract partial class MutableInterface : IMutableInterface
         Root.RemoveChild(element, dispose);
     }
 
-    public static bool ToggleDebug()
+    public bool ToggleDebug()
     {
-        _debugWindow?.ToggleHidden();
-        return _debugWindow?.IsVisible ?? false;
+        var debugWindow = EnsureDebugWindowInitialized(Root);
+        debugWindow.ToggleHidden();
+
+        if (_debugWindow2 is { } dw2)
+        {
+            dw2.IsVisibleInTree = debugWindow.IsVisibleInTree;
+        }
+
+        return debugWindow.IsVisibleInTree;
     }
 }

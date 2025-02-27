@@ -17,8 +17,8 @@ public partial class CategoryHeaderButton : Button
     {
         ShouldDrawBackground = false;
         IsToggle = true;
-        Alignment = Pos.Center;
-        TextPadding = new Padding(3, 0, 3, 0);
+        TextAlign = Pos.Center;
+        Padding = new Padding(3, 0, 3, 0);
     }
 
     /// <summary>
@@ -26,7 +26,7 @@ public partial class CategoryHeaderButton : Button
     /// </summary>
     public override void UpdateColors()
     {
-        if (IsDepressed || ToggleState)
+        if (IsActive || ToggleState)
         {
             TextColor = Skin.Colors.Category.HeaderClosed;
         }

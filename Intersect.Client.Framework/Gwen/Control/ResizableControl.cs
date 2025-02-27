@@ -1,5 +1,5 @@
+using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Gwen.ControlInternal;
-
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.Control;
@@ -14,6 +14,7 @@ public partial class ResizableControl : Base
     private readonly Resizer[] mResizer;
 
     private bool mClampMovement;
+    private bool _resizable;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ResizableControl" /> class.
@@ -22,6 +23,8 @@ public partial class ResizableControl : Base
     /// <param name="name">name of this control</param>
     public ResizableControl(Base? parent, string? name) : base(parent, name)
     {
+        _resizable = true;
+
         mResizer = new Resizer[10];
         MinimumSize = new Point(5, 5);
         mClampMovement = false;
@@ -89,12 +92,17 @@ public partial class ResizableControl : Base
     /// </summary>
     public event GwenEventHandler<EventArgs> Resized;
 
-    public override JObject GetJson(bool isRoot = default)
+    public override JObject? GetJson(bool isRoot = false, bool onlySerializeIfNotEmpty = false)
     {
-        var obj = base.GetJson(isRoot);
-        obj.Add("ClampMovement", ClampMovement);
+        var serializedProperties = base.GetJson(isRoot, onlySerializeIfNotEmpty);
+        if (serializedProperties is null)
+        {
+            return null;
+        }
 
-        return base.FixJson(obj);
+        serializedProperties.Add("ClampMovement", ClampMovement);
+
+        return base.FixJson(serializedProperties);
     }
 
     public override void LoadJson(JToken obj, bool isRoot = default)
@@ -123,6 +131,28 @@ public partial class ResizableControl : Base
         return mResizer[i];
     }
 
+    public bool IsResizable
+    {
+        get => _resizable;
+        set
+        {
+            if (value == _resizable)
+            {
+                return;
+            }
+
+            _resizable = value;
+            if (value)
+            {
+                EnableResizing();
+            }
+            else
+            {
+                DisableResizing();
+            }
+        }
+    }
+
     /// <summary>
     ///     Disables resizing.
     /// </summary>
@@ -137,7 +167,6 @@ public partial class ResizableControl : Base
 
             mResizer[i].MouseInputEnabled = false;
             mResizer[i].IsHidden = true;
-            Padding = new Padding(mResizer[i].Width, mResizer[i].Width, mResizer[i].Width, mResizer[i].Width);
         }
     }
 
@@ -228,5 +257,4 @@ public partial class ResizableControl : Base
 
         return changed;
     }
-
 }

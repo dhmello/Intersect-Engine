@@ -6,25 +6,26 @@ using Intersect.Client.Framework.Gwen.Control.EventArguments;
 using Intersect.Client.General;
 using Intersect.Client.Interface.Shared;
 using Intersect.Client.Localization;
+using Intersect.Framework.Core;
 using Intersect.Utilities;
 
 namespace Intersect.Client.Interface.Game;
 
 public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
 {
-    private readonly SettingsWindow _settingsWindow;
+    private readonly Func<SettingsWindow> _settingsWindowProvider;
     private readonly MenuItem _settings;
     private readonly MenuItem _character;
     private readonly MenuItem _logout;
     private readonly MenuItem _exit;
 
-    public SimplifiedEscapeMenu(Canvas gameCanvas) : base(gameCanvas, nameof(SimplifiedEscapeMenu))
+    public SimplifiedEscapeMenu(Canvas gameCanvas, Func<SettingsWindow> settingsWindowProvider) : base(gameCanvas, nameof(SimplifiedEscapeMenu))
     {
         IsHidden = true;
         IconMarginDisabled = true;
-        _settingsWindow = new SettingsWindow(gameCanvas, null, null);
+        _settingsWindowProvider = settingsWindowProvider;
 
-        Children.Clear();
+        ClearChildren();
 
         _settings = AddItem(Strings.EscapeMenu.Settings);
         _character = AddItem(Strings.EscapeMenu.CharacterSelect);
@@ -41,7 +42,8 @@ public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
 
     public void ToggleHidden(Button? target)
     {
-        if (!_settingsWindow.IsHidden || target == null)
+        var settingsWindow = _settingsWindowProvider();
+        if (!settingsWindow.IsHidden || target == null)
         {
             return;
         }
@@ -49,8 +51,8 @@ public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
         if (this.IsHidden)
         {
             // Position the context menu within the game canvas if near borders.
-            var menuPosX = target.LocalPosToCanvas(new Point(0, 0)).X;
-            var menuPosY = target.LocalPosToCanvas(new Point(0, 0)).Y;
+            var menuPosX = target.ToCanvas(new Point(0, 0)).X;
+            var menuPosY = target.ToCanvas(new Point(0, 0)).Y;
             var newX = menuPosX;
             var newY = menuPosY + target.Height + 6;
 
@@ -74,16 +76,11 @@ public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    private void LogoutToCharacterSelectSelectClicked(Base sender, ClickedEventArgs arguments)
+    private void LogoutToCharacterSelectSelectClicked(Base sender, MouseButtonState arguments)
     {
         if (Globals.Me?.CombatTimer > Timing.Global.Milliseconds)
         {
-            _ = new InputBox(
-                title: Strings.Combat.WarningTitle,
-                prompt: Strings.Combat.WarningCharacterSelect,
-                inputType: InputBox.InputType.YesNo,
-                onSuccess: LogoutToCharacterSelect
-            );
+            ShowCombatWarning();
         }
         else
         {
@@ -91,16 +88,11 @@ public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    private void LogoutToMainToMainMenuClicked(Base sender, ClickedEventArgs arguments)
+    private void LogoutToMainToMainMenuClicked(Base sender, MouseButtonState arguments)
     {
         if (Globals.Me?.CombatTimer > Timing.Global.Milliseconds)
         {
-            _ = new InputBox(
-                title: Strings.Combat.WarningTitle,
-                prompt: Strings.Combat.WarningLogout,
-                inputType: InputBox.InputType.YesNo,
-                onSuccess: LogoutToMainMenu
-            );
+            ShowCombatWarning();
         }
         else
         {
@@ -108,16 +100,11 @@ public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    private void ExitToDesktopToDesktopClicked(Base sender, ClickedEventArgs arguments)
+    private void ExitToDesktopToDesktopClicked(Base sender, MouseButtonState arguments)
     {
         if (Globals.Me?.CombatTimer > Timing.Global.Milliseconds)
         {
-            _ = new InputBox(
-                title: Strings.Combat.WarningTitle,
-                prompt: Strings.Combat.WarningExitDesktop,
-                inputType: InputBox.InputType.YesNo,
-                onSuccess: ExitToDesktop
-            );
+            ShowCombatWarning();
         }
         else
         {
@@ -125,14 +112,26 @@ public sealed partial class SimplifiedEscapeMenu : Framework.Gwen.Control.Menu
         }
     }
 
+    private static void ShowCombatWarning()
+    {
+        AlertWindow.Open(
+            Strings.Combat.WarningCharacterSelect,
+            Strings.Combat.WarningTitle,
+            AlertType.Warning,
+            handleSubmit: LogoutToCharacterSelect,
+            inputType: InputType.YesNo
+        );
+    }
+
     private void OpenSettingsWindow(object? sender, EventArgs? e)
     {
-        if (!_settingsWindow.IsHidden)
+        var settingsWindow = _settingsWindowProvider();
+        if (settingsWindow.IsVisibleInTree)
         {
             return;
         }
 
-        _settingsWindow.Show();
+        settingsWindow.Show();
     }
 
     private static void LogoutToCharacterSelect(object? sender, EventArgs? e)

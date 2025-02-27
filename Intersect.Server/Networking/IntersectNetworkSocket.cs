@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Intersect.Logging;
 using Intersect.Network;
 using Intersect.Network.Packets.Reflectable;
 using Intersect.Server.Classes.General;
@@ -26,18 +25,18 @@ namespace Intersect.Server.Classes.Networking
         {
             base.CreateClient();
             _connection.UserData = base._myClient;
-            lock (Globals.ClientLock)
+            lock (Client.GlobalLock)
             {
-                Globals.ClientLookup.Add(_connection.Guid, base._myClient);
+                Client.LookupByConnectionId.Add(_connection.Guid, base._myClient);
             }
         }
 
         public override void OnClientRemoved()
         {
             base.OnClientRemoved();
-            lock (Globals.ClientLock)
+            lock (Client.GlobalLock)
             {
-                Globals.ClientLookup.Remove(_connection.Guid);
+                Client.LookupByConnectionId.Remove(_connection.Guid);
             }
         }
 
@@ -49,7 +48,7 @@ namespace Intersect.Server.Classes.Networking
             }
             catch (Exception ex)
             {
-                Log.Trace(ex);
+                ApplicationContext.Context.Value?.Logger.LogTrace(ex);
                 HandleDisconnect();
             }
         }

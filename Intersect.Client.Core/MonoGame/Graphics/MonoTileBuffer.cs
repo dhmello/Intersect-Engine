@@ -1,6 +1,7 @@
 ﻿using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
-using Intersect.Logging;
+using Intersect.Core;
+using Microsoft.Extensions.Logging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -8,38 +9,37 @@ namespace Intersect.Client.Classes.MonoGame.Graphics;
 
 public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
 {
-    private readonly Dictionary<int, int> _tileVertexOffset = [];
+    public readonly Dictionary<AddedTile, int> _addedTileCount = [];
     private readonly List<short> _indices = [];
+    private readonly Dictionary<int, int> _tileVertexOffset = [];
     private readonly List<VertexPositionTexture> _vertices = [];
-    private int _vertexCount;
-
-    private IndexBuffer? _indexBuffer;
-    private VertexBuffer? _vertexBuffer;
 
     private bool _dirty;
     private bool _disposed;
 
-    internal GameTexture? _texture;
+    private IndexBuffer? _indexBuffer;
     private Texture2D? _platformTexture;
+
+    internal IGameTexture? _texture;
+    private VertexBuffer? _vertexBuffer;
+    private int _vertexCount;
 
     public override bool Supported => true;
 
-    public record struct AddedTile(GameTexture Texture, int SrcX, int SrcY, int SrcW, int SrcH);
-
-    public readonly Dictionary<AddedTile, int> _addedTileCount = [];
-
-    public override bool TryAddTile(GameTexture texture, int x, int y, int srcX, int srcY, int srcW, int srcH)
+    public override bool TryAddTile(IGameTexture texture, int x, int y, int srcX, int srcY, int srcW, int srcH)
     {
         if (_vertexBuffer != null)
         {
-            Log.Error("Unable to add tile to null vertex buffer");
+            ApplicationContext.Context.Value?.Logger.LogError("Unable to add tile to null vertex buffer");
             return false;
         }
 
         var platformTexture = (texture == _texture ? _platformTexture : default) ?? texture.GetTexture<Texture2D>();
         if (platformTexture == null)
         {
-            Log.Error("Unable to add tile to vertex buffer because the platform texture is null");
+            ApplicationContext.Context.Value?.Logger.LogError(
+                "Unable to add tile to vertex buffer because the platform texture is null"
+            );
             return false;
         }
 
@@ -50,7 +50,7 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
         }
         else if (_platformTexture != platformTexture)
         {
-            Log.Error("Mismatched platform texture");
+            ApplicationContext.Context.Value?.Logger.LogError("Mismatched platform texture");
             return false;
         }
 
@@ -65,11 +65,11 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
 
         var rotated = false;
 
-        var texturePackFrame = texture.GetTexturePackFrame();
+        var texturePackFrame = texture.AtlasReference;
         if (texturePackFrame != null)
         {
-            var frameBounds = texturePackFrame.Rect;
-            if (texturePackFrame.Rotated)
+            var frameBounds = texturePackFrame.Bounds;
+            if (texturePackFrame.IsRotated)
             {
                 rotated = true;
                 (srcX, srcY) = (frameBounds.Right - srcY - srcH, frameBounds.Top + srcX);
@@ -90,7 +90,7 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
         var bottom = (srcY + srcH) * textureSizeY;
         var top = srcY * textureSizeY;
 
-        _tileVertexOffset.Add(x << 16 | y, _vertexCount);
+        _tileVertexOffset.Add((x << 16) | y, _vertexCount);
 
         if (rotated)
         {
@@ -107,37 +107,41 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
             _vertices.Add(new VertexPositionTexture(new Vector3(x + srcW, y, 0), new Vector2(right, top)));
         }
 
-        _indices.Add((short) _vertexCount);
-        _indices.Add((short) (_vertexCount + 1));
-        _indices.Add((short) (_vertexCount + 2));
+        _indices.Add((short)_vertexCount);
+        _indices.Add((short)(_vertexCount + 1));
+        _indices.Add((short)(_vertexCount + 2));
 
-        _indices.Add((short) (_vertexCount + 2));
-        _indices.Add((short) (_vertexCount + 1));
-        _indices.Add((short) (_vertexCount + 3));
+        _indices.Add((short)(_vertexCount + 2));
+        _indices.Add((short)(_vertexCount + 1));
+        _indices.Add((short)(_vertexCount + 3));
 
         _vertexCount += 4;
 
         return true;
     }
 
-    public override bool TryUpdateTile(GameTexture texture, int x, int y, int srcX, int srcY, int srcW, int srcH)
+    public override bool TryUpdateTile(IGameTexture texture, int x, int y, int srcX, int srcY, int srcW, int srcH)
     {
         if (_vertexBuffer == default)
         {
-            Log.Error("Unable to update tile on null vertex buffer");
+            ApplicationContext.Context.Value?.Logger.LogError("Unable to update tile on null vertex buffer");
             return false;
         }
 
-        if (!_tileVertexOffset.TryGetValue(x << 16 | y, out var vertexIndex))
+        if (!_tileVertexOffset.TryGetValue((x << 16) | y, out var vertexIndex))
         {
-            Log.Error("Unable to update tile that has not been added to the vertex buffer before");
+            ApplicationContext.Context.Value?.Logger.LogError(
+                "Unable to update tile that has not been added to the vertex buffer before"
+            );
             return false;
         }
 
         var platformTexture = (texture == _texture ? _platformTexture : default) ?? texture.GetTexture<Texture2D>();
         if (platformTexture == null)
         {
-            Log.Error("Unable to add tile to vertex buffer because the platform texture is null");
+            ApplicationContext.Context.Value?.Logger.LogError(
+                "Unable to add tile to vertex buffer because the platform texture is null"
+            );
             return false;
         }
 
@@ -148,22 +152,22 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
         }
         else if (_platformTexture != platformTexture)
         {
-            Log.Error("Mismatched platform texture");
+            ApplicationContext.Context.Value?.Logger.LogError("Mismatched platform texture");
             return false;
         }
 
         var rotated = false;
 
-        var texturePackFrame = texture.GetTexturePackFrame();
+        var texturePackFrame = texture.AtlasReference;
         if (texturePackFrame != null)
         {
-            if (texturePackFrame.Rotated)
+            if (texturePackFrame.IsRotated)
             {
                 rotated = true;
 
                 var z = srcX;
-                srcX = texturePackFrame.Rect.Right - srcY - srcH;
-                srcY = texturePackFrame.Rect.Top + z;
+                srcX = texturePackFrame.Bounds.Right - srcY - srcH;
+                srcY = texturePackFrame.Bounds.Top + z;
 
                 z = srcW;
                 srcW = srcH;
@@ -171,8 +175,8 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
             }
             else
             {
-                srcX += texturePackFrame.Rect.X;
-                srcY += texturePackFrame.Rect.Y;
+                srcX += texturePackFrame.Bounds.X;
+                srcY += texturePackFrame.Bounds.Y;
             }
         }
 
@@ -289,4 +293,6 @@ public partial class MonoTileBuffer(GraphicsDevice device) : GameTileBuffer
         TileBufferCount--;
         _disposed = true;
     }
+
+    public record struct AddedTile(IGameTexture Texture, int SrcX, int SrcY, int SrcW, int SrcH);
 }

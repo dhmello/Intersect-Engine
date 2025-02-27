@@ -17,7 +17,7 @@ public partial class MapItemIcon
 
     public ImagePanel Container;
 
-    public MapItemInstance MyItem;
+    public MapItemInstance? MyItem;
 
     public Guid MapId;
 
@@ -42,9 +42,9 @@ public partial class MapItemIcon
         Pnl.Clicked += pnl_Clicked;
     }
 
-    void pnl_Clicked(Base sender, ClickedEventArgs arguments)
+    void pnl_Clicked(Base sender, MouseButtonState arguments)
     {
-        if (MyItem == null || TileIndex < 0 || TileIndex >= Options.MapWidth * Options.MapHeight)
+        if (MyItem == null || TileIndex < 0 || TileIndex >= Options.Instance.Map.MapWidth * Options.Instance.Map.MapHeight)
         {
             return;
         }
@@ -73,7 +73,7 @@ public partial class MapItemIcon
             return;
         }
 
-        if (Globals.InputManager.MouseButtonDown(MouseButtons.Left))
+        if (Globals.InputManager.IsMouseButtonDown(MouseButton.Left))
         {
             return;
         }
@@ -93,8 +93,8 @@ public partial class MapItemIcon
     {
         var rect = new FloatRect()
         {
-            X = Pnl.LocalPosToCanvas(new Point(0, 0)).X,
-            Y = Pnl.LocalPosToCanvas(new Point(0, 0)).Y,
+            X = Pnl.ToCanvas(new Point(0, 0)).X,
+            Y = Pnl.ToCanvas(new Point(0, 0)).Y,
             Width = Pnl.Width,
             Height = Pnl.Height
         };

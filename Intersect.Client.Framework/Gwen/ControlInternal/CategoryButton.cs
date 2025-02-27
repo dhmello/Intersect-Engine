@@ -17,10 +17,10 @@ public partial class CategoryButton : Button
     /// <param name="parent">Parent control.</param>
     public CategoryButton(Base parent) : base(parent)
     {
-        Alignment = Pos.Left | Pos.CenterV;
+        TextAlign = Pos.Left | Pos.CenterV;
         mAlt = false;
         IsToggle = true;
-        TextPadding = new Padding(3, 0, 3, 0);
+        Padding = new Padding(3, 0, 3, 0);
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ public partial class CategoryButton : Button
     {
         if (mAlt)
         {
-            if (IsDepressed || ToggleState)
+            if (IsActive || ToggleState)
             {
                 Skin.Renderer.DrawColor = skin.Colors.Category.LineAlt.ButtonSelected;
             }
@@ -46,7 +46,7 @@ public partial class CategoryButton : Button
         }
         else
         {
-            if (IsDepressed || ToggleState)
+            if (IsActive || ToggleState)
             {
                 Skin.Renderer.DrawColor = skin.Colors.Category.Line.ButtonSelected;
             }
@@ -70,7 +70,7 @@ public partial class CategoryButton : Button
     {
         if (mAlt)
         {
-            if (IsDepressed || ToggleState)
+            if (IsActive || ToggleState)
             {
                 TextColor = Skin.Colors.Category.LineAlt.TextSelected;
 
@@ -89,7 +89,7 @@ public partial class CategoryButton : Button
             return;
         }
 
-        if (IsDepressed || ToggleState)
+        if (IsActive || ToggleState)
         {
             TextColor = Skin.Colors.Category.Line.TextSelected;
 

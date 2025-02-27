@@ -6,6 +6,7 @@ using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
 using Intersect.Client.Interface.Game.DescriptionWindows;
 using Intersect.Configuration;
+using Intersect.Framework.Core;
 using Intersect.GameObjects;
 using Intersect.Utilities;
 
@@ -59,7 +60,6 @@ public partial class SpellItem
         Pnl = new ImagePanel(Container, "SpellIcon");
         Pnl.HoverEnter += pnl_HoverEnter;
         Pnl.HoverLeave += pnl_HoverLeave;
-        Pnl.RightClicked += pnl_RightClicked;
         Pnl.Clicked += pnl_Clicked;
         Pnl.DoubleClicked += Pnl_DoubleClicked;
         mCooldownLabel = new Label(Pnl, "SpellCooldownLabel");
@@ -67,26 +67,31 @@ public partial class SpellItem
         mCooldownLabel.TextColor = new Color(0, 255, 255, 255);
     }
 
-    private void Pnl_DoubleClicked(Base sender, ClickedEventArgs arguments)
+    private void Pnl_DoubleClicked(Base sender, MouseButtonState arguments)
     {
         Globals.Me.TryUseSpell(mYindex);
     }
 
-    void pnl_Clicked(Base sender, ClickedEventArgs arguments)
+    void pnl_Clicked(Base sender, MouseButtonState arguments)
     {
-        mClickTime = Timing.Global.MillisecondsUtc + 500;
-    }
+        switch (arguments.MouseButton)
+        {
+            case MouseButton.Left:
+                mClickTime = Timing.Global.MillisecondsUtc + 500;
+                break;
 
-    void pnl_RightClicked(Base sender, ClickedEventArgs arguments)
-    {
-        if (ClientConfiguration.Instance.EnableContextMenus)
-        {
-            mSpellWindow.OpenContextMenu(mYindex);
+            case MouseButton.Right:
+                if (ClientConfiguration.Instance.EnableContextMenus)
+                {
+                    mSpellWindow.OpenContextMenu(mYindex);
+                }
+                else
+                {
+                    Globals.Me?.TryForgetSpell(mYindex);
+                }
+                break;
         }
-        else
-        {
-            Globals.Me.TryForgetSpell(mYindex);
-        }
+
     }
 
     void pnl_HoverLeave(Base sender, EventArgs arguments)
@@ -110,7 +115,7 @@ public partial class SpellItem
 
         mMouseOver = true;
         mCanDrag = true;
-        if (Globals.InputManager.MouseButtonDown(MouseButtons.Left))
+        if (Globals.InputManager.IsMouseButtonDown(MouseButton.Left))
         {
             mCanDrag = false;
 
@@ -130,8 +135,8 @@ public partial class SpellItem
     {
         var rect = new FloatRect()
         {
-            X = Pnl.LocalPosToCanvas(new Point(0, 0)).X,
-            Y = Pnl.LocalPosToCanvas(new Point(0, 0)).Y,
+            X = Pnl.ToCanvas(new Point(0, 0)).X,
+            Y = Pnl.ToCanvas(new Point(0, 0)).Y,
             Width = Pnl.Width,
             Height = Pnl.Height
         };
@@ -201,7 +206,7 @@ public partial class SpellItem
         {
             if (mMouseOver)
             {
-                if (!Globals.InputManager.MouseButtonDown(MouseButtons.Left))
+                if (!Globals.InputManager.IsMouseButtonDown(MouseButton.Left))
                 {
                     mCanDrag = true;
                     mMouseX = -1;
@@ -217,23 +222,23 @@ public partial class SpellItem
                     {
                         if (mMouseX == -1 || mMouseY == -1)
                         {
-                            mMouseX = InputHandler.MousePosition.X - Pnl.LocalPosToCanvas(new Point(0, 0)).X;
-                            mMouseY = InputHandler.MousePosition.Y - Pnl.LocalPosToCanvas(new Point(0, 0)).Y;
+                            mMouseX = InputHandler.MousePosition.X - Pnl.ToCanvas(new Point(0, 0)).X;
+                            mMouseY = InputHandler.MousePosition.Y - Pnl.ToCanvas(new Point(0, 0)).Y;
                         }
                         else
                         {
                             var xdiff = mMouseX -
-                                        (InputHandler.MousePosition.X - Pnl.LocalPosToCanvas(new Point(0, 0)).X);
+                                        (InputHandler.MousePosition.X - Pnl.ToCanvas(new Point(0, 0)).X);
 
                             var ydiff = mMouseY -
-                                        (InputHandler.MousePosition.Y - Pnl.LocalPosToCanvas(new Point(0, 0)).Y);
+                                        (InputHandler.MousePosition.Y - Pnl.ToCanvas(new Point(0, 0)).Y);
 
                             if (Math.Sqrt(Math.Pow(xdiff, 2) + Math.Pow(ydiff, 2)) > 5)
                             {
                                 IsDragging = true;
                                 mDragIcon = new Draggable(
-                                    Pnl.LocalPosToCanvas(new Point(0, 0)).X + mMouseX,
-                                    Pnl.LocalPosToCanvas(new Point(0, 0)).X + mMouseY, Pnl.Texture, Pnl.RenderColor
+                                    Pnl.ToCanvas(new Point(0, 0)).X + mMouseX,
+                                    Pnl.ToCanvas(new Point(0, 0)).X + mMouseY, Pnl.Texture, Pnl.RenderColor
                                 );
 
                                 mTexLoaded = string.Empty;
@@ -263,7 +268,7 @@ public partial class SpellItem
                 //Check spell first.
                 if (mSpellWindow.RenderBounds().IntersectsWith(dragRect))
                 {
-                    for (var i = 0; i < Options.Instance.PlayerOpts.MaxSpells; i++)
+                    for (var i = 0; i < Options.Instance.Player.MaxSpells; i++)
                     {
                         if (i < mSpellWindow.Items.Count &&
                             mSpellWindow.Items[i].RenderBounds().IntersectsWith(dragRect))
@@ -291,7 +296,7 @@ public partial class SpellItem
                 }
                 else if (Interface.GameUi.Hotbar.RenderBounds().IntersectsWith(dragRect))
                 {
-                    for (var i = 0; i < Options.Instance.PlayerOpts.HotbarSlotCount; i++)
+                    for (var i = 0; i < Options.Instance.Player.HotbarSlotCount; i++)
                     {
                         if (Interface.GameUi.Hotbar.Items[i].RenderBounds().IntersectsWith(dragRect))
                         {

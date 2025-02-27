@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
-
 using DarkUI.Controls;
 using DarkUI.Forms;
 using Intersect.Compression;
@@ -24,7 +23,6 @@ using Intersect.Updater;
 using Intersect.Utilities;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
 using WeifenLuo.WinFormsUI.Docking;
 
 namespace Intersect.Editor.Forms;
@@ -394,27 +392,27 @@ public partial class FrmMain : Form
 
                 Core.Graphics.CurrentView.X -= xDiff;
                 Core.Graphics.CurrentView.Y -= yDiff;
-                if (Core.Graphics.CurrentView.X > Options.MapWidth * Options.TileWidth)
+                if (Core.Graphics.CurrentView.X > Options.Instance.Map.MapWidth * Options.Instance.Map.TileWidth)
                 {
-                    Core.Graphics.CurrentView.X = Options.MapWidth * Options.TileWidth;
+                    Core.Graphics.CurrentView.X = Options.Instance.Map.MapWidth * Options.Instance.Map.TileWidth;
                 }
 
-                if (Core.Graphics.CurrentView.Y > Options.MapHeight * Options.TileHeight)
+                if (Core.Graphics.CurrentView.Y > Options.Instance.Map.MapHeight * Options.Instance.Map.TileHeight)
                 {
-                    Core.Graphics.CurrentView.Y = Options.MapHeight * Options.TileHeight;
+                    Core.Graphics.CurrentView.Y = Options.Instance.Map.MapHeight * Options.Instance.Map.TileHeight;
                 }
 
                 if (Core.Graphics.CurrentView.X - Globals.MapEditorWindow.picMap.Width <
-                    -Options.TileWidth * Options.MapWidth * 2)
+                    -Options.Instance.Map.TileWidth * Options.Instance.Map.MapWidth * 2)
                 {
-                    Core.Graphics.CurrentView.X = -Options.TileWidth * Options.MapWidth * 2 +
+                    Core.Graphics.CurrentView.X = -Options.Instance.Map.TileWidth * Options.Instance.Map.MapWidth * 2 +
                                                   Globals.MapEditorWindow.picMap.Width;
                 }
 
                 if (Core.Graphics.CurrentView.Y - Globals.MapEditorWindow.picMap.Height <
-                    -Options.TileHeight * Options.MapHeight * 2)
+                    -Options.Instance.Map.TileHeight * Options.Instance.Map.MapHeight * 2)
                 {
-                    Core.Graphics.CurrentView.Y = -Options.TileHeight * Options.MapHeight * 2 +
+                    Core.Graphics.CurrentView.Y = -Options.Instance.Map.TileHeight * Options.Instance.Map.MapHeight * 2 +
                                                   Globals.MapEditorWindow.picMap.Height;
                 }
             }
@@ -440,7 +438,7 @@ public partial class FrmMain : Form
         UpdateRunState();
 
         //Init layer visibility buttons
-        foreach (var layer in Options.Instance.MapOpts.Layers.All)
+        foreach (var layer in Options.Instance.Map.Layers.All)
         {
             Strings.Tiles.maplayers.TryGetValue(layer.ToLower(), out LocalizedString layerName);
             if (layerName == null) layerName = layer;
@@ -589,7 +587,7 @@ public partial class FrmMain : Form
         }
 
         //Process the Fill/Erase Buttons, these should display for all valid map layers as well as Attributes.
-        if (Options.Instance.MapOpts.Layers.All.Contains(Globals.CurrentLayer) || Globals.CurrentLayer == LayerOptions.Attributes)
+        if (Options.Instance.Map.Layers.All.Contains(Globals.CurrentLayer) || Globals.CurrentLayer == LayerOptions.Attributes)
         {
             toolStripBtnFill.Enabled = true;
             fillToolStripMenuItem.Enabled = true;
@@ -1127,7 +1125,7 @@ public partial class FrmMain : Form
     //Edit
     private void fillToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        if (Options.Instance.MapOpts.Layers.All.Contains(Globals.CurrentLayer))
+        if (Options.Instance.Map.Layers.All.Contains(Globals.CurrentLayer))
         {
             Globals.MapEditorWindow.FillLayer();
         }
@@ -1135,7 +1133,7 @@ public partial class FrmMain : Form
 
     private void eraseLayerToolStripMenuItem_Click(object sender, EventArgs e)
     {
-        if (Options.Instance.MapOpts.Layers.All.Contains(Globals.CurrentLayer))
+        if (Options.Instance.Map.Layers.All.Contains(Globals.CurrentLayer))
         {
             Globals.MapEditorWindow.EraseLayer();
         }
@@ -2090,11 +2088,12 @@ public partial class FrmMain : Form
             var excludeExtensions = new string[] { ".dll", ".xml", ".config", ".php" };
             var excludeDirectories = new string[] { "logs", "screenshots" };
 
-            var resourcesDirectory = Path.Combine(sourceDirectory, "resources");
-            var packsDirectory = Path.Combine(resourcesDirectory, "packs");
-            if (Directory.Exists(packsDirectory))
+            const string resourcesDirectoryName = "resources";
+            var pathToResourcesDirectory = Path.Combine(sourceDirectory, resourcesDirectoryName);
+            var pathToPacksDirectory = Path.Combine(pathToResourcesDirectory, "packs");
+            if (Directory.Exists(pathToPacksDirectory))
             {
-                var packs = Directory.GetFiles(packsDirectory, "*.meta");
+                var packs = Directory.GetFiles(pathToPacksDirectory, "*.meta");
                 editorExcludeFiles.AddRange(packs);
                 foreach (var pack in packs)
                 {
@@ -2106,32 +2105,42 @@ public partial class FrmMain : Form
                     }
                 }
 
-                var soundIndex = Path.Combine(packsDirectory, "sound.index");
+                var soundIndex = Path.Combine(pathToPacksDirectory, "sound.index");
                 if (File.Exists(soundIndex))
                 {
                     editorExcludeFiles.Add(soundIndex);
-                    using (var soundPacker = new AssetPacker(soundIndex, packsDirectory))
+                    using (var soundPacker = new AssetPacker(soundIndex, pathToPacksDirectory))
                     {
                         editorExcludeFiles.AddRange(soundPacker.CachedPackages.Select(cachedPackage => Path.Combine(soundPacker.PackageLocation, cachedPackage)));
                         foreach (var sound in soundPacker.FileList)
                         {
                             // Add as lowercase as our update generator checks for lowercases!
-                            clientExcludeFiles.Add(Path.Combine(resourcesDirectory, "sounds", sound.ToLower(CultureInfo.CurrentCulture)).Replace('\\', '/'));
+                            var relativeSoundPath = Path.Combine(
+                                resourcesDirectoryName,
+                                "sounds",
+                                sound.ToLower(CultureInfo.CurrentCulture)
+                            ).Replace('\\', '/');
+                            clientExcludeFiles.Add(relativeSoundPath);
                         }
                     }
                 }
 
-                var musicIndex = Path.Combine(packsDirectory, "music.index");
+                var musicIndex = Path.Combine(pathToPacksDirectory, "music.index");
                 if (File.Exists(musicIndex))
                 {
                     editorExcludeFiles.Add(musicIndex);
-                    using (var musicPacker = new AssetPacker(musicIndex, packsDirectory))
+                    using (var musicPacker = new AssetPacker(musicIndex, pathToPacksDirectory))
                     {
                         editorExcludeFiles.AddRange(musicPacker.CachedPackages.Select(cachedPackage => Path.Combine(musicPacker.PackageLocation, cachedPackage)));
                         foreach (var music in musicPacker.FileList)
                         {
                             // Add as lowercase as our update generator checks for lowercases!
-                            clientExcludeFiles.Add(Path.Combine(resourcesDirectory, "music", music.ToLower(CultureInfo.CurrentCulture)).Replace('\\', '/'));
+                            var relativeMusicPath = Path.Combine(
+                                resourcesDirectoryName,
+                                "music",
+                                music.ToLower(CultureInfo.CurrentCulture)
+                            ).Replace('\\', '/');
+                            clientExcludeFiles.Add(relativeMusicPath);
                         }
                     }
                 }
@@ -2200,10 +2209,10 @@ public partial class FrmMain : Form
             filesProcessed++;
 
             var percentage = (float) (filesProcessed / (float) (fileCount + 1));
-            var outofeighty = (int)(percentage * 80f);
+            var outOfEighty = (int)(percentage * 80f); // Use a fake partial percentage
 
             Globals.UpdateCreationProgressForm.SetProgress(
-                Strings.UpdatePacking.Calculating, outofeighty + 10, false
+                Strings.UpdatePacking.Calculating, Math.Min(80, outOfEighty) + 10, false
             );
 
             Application.DoEvents();

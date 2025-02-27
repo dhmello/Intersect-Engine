@@ -15,10 +15,10 @@ public partial class TreeNodeLabel : Button
     /// <param name="parent">Parent control.</param>
     public TreeNodeLabel(Base parent) : base(parent)
     {
-        Alignment = Pos.Left | Pos.CenterV;
+        TextAlign = Pos.Left | Pos.CenterV;
         ShouldDrawBackground = false;
         Height = 16;
-        TextPadding = new Padding(3, 0, 3, 0);
+        Padding = new Padding(3, 0, 3, 0);
     }
 
     /// <summary>
@@ -26,14 +26,14 @@ public partial class TreeNodeLabel : Button
     /// </summary>
     public override void UpdateColors()
     {
-        if (IsDisabled)
+        if (IsDisabledByTree)
         {
             TextColor = Skin.Colors.Button.Disabled;
 
             return;
         }
 
-        if (IsDepressed || ToggleState)
+        if (IsActive || ToggleState)
         {
             TextColor = Skin.Colors.Tree.Selected;
 

@@ -14,10 +14,10 @@ namespace Intersect.Client.Framework.Gwen.Skin;
 public class Intersect2021 : TexturedBase
 {
     /// <summary>
-    ///     Initializes a new instance of the <see cref="TexturedBase" /> class.
+    ///     Initializes a new instance of the <see cref="Intersect2021" /> class.
     /// </summary>
     /// <param name="renderer">Renderer to use.</param>
-    /// <param name="textureName">Name of the skin texture map.</param>
+    /// <param name="contentManager"></param>
     public Intersect2021(Renderer.Base renderer, GameContentManager contentManager) : base(renderer, contentManager, "intersect-2021.png")
     {
     }
@@ -36,43 +36,49 @@ public class Intersect2021 : TexturedBase
     {
         base.InitializeTextures();
 
-        mTextures.Window.Normal = new Bordered(mTexture, 0, 24, 16, 16, new Margin(4, 4, 4, 4));
-        mTextures.Window.ActiveTitleBar = new Bordered(mTexture, 0, 0, 16, 24, new Margin(4, 4, 4, 4));
-        mTextures.Window.Inactive = new Bordered(mTexture, 16, 24, 16, 16, new Margin(4, 4, 4, 4));
-        mTextures.Window.InactiveTitleBar = new Bordered(mTexture, 16, 0, 16, 24, new Margin(4, 4, 4, 4));
+        mTextures.Window.Normal = new Bordered(_texture, 0, 24, 16, 16, new Margin(4, 4, 4, 4));
+        mTextures.Window.ActiveTitleBar = new Bordered(_texture, 0, 0, 16, 24, new Margin(4, 4, 4, 4));
+        mTextures.Window.Inactive = new Bordered(_texture, 16, 24, 16, 16, new Margin(4, 4, 4, 4));
+        mTextures.Window.InactiveTitleBar = new Bordered(_texture, 16, 0, 16, 24, new Margin(4, 4, 4, 4));
 
-        mTextures.Window.Close = new Single(mTexture, 60, 0, 24, 24);
-        mTextures.Window.CloseDown = new Single(mTexture, 60, 24, 24, 24);
-        mTextures.Window.CloseDisabled = new Single(mTexture, 60, 48, 24, 24);
-        mTextures.Window.CloseHover = new Single(mTexture, 60, 72, 24, 24);
+        mTextures.Window.CloseButton.Normal = new FivePatch(_texture, 60, 0, 24, 24, Margin.Two, Margin.One);
+        mTextures.Window.CloseButton.Active = new FivePatch(_texture, 60, 24, 24, 24, Margin.Two, Margin.One);
+        mTextures.Window.CloseButton.Disabled = new FivePatch(_texture, 60, 48, 24, 24, Margin.Two, Margin.One);
+        mTextures.Window.CloseButton.Hovered = new FivePatch(_texture, 60, 72, 24, 24, Margin.Two, Margin.One);
 
-        mTextures.Panel.Normal = new Bordered(mTexture, 32, 0, 16, 16, Margin.Four);
-        mTextures.Panel.Highlight = new Bordered(mTexture, 32, 16, 16, 16, Margin.Four);
-        mTextures.Panel.Bright = new Bordered(mTexture, 32, 32, 16, 16, Margin.Four);
-        mTextures.Panel.Dark = new Bordered(mTexture, 32, 48, 16, 16, Margin.Four);
+        mTextures.Panel.Control = new Bordered(_texture, 32, 0, 16, 16, Margin.Four);
+        mTextures.Panel.Normal = new Bordered(_texture, 32, 0, 16, 16, Margin.Four);
+        mTextures.Panel.Highlight = new Bordered(_texture, 32, 16, 16, 16, Margin.Four);
+        mTextures.Panel.Bright = new Bordered(_texture, 32, 32, 16, 16, Margin.Four);
+        mTextures.Panel.Dark = new Bordered(_texture, 32, 48, 16, 16, Margin.Four);
 
-        mTextures.Input.Button.Normal = new Bordered(mTexture, 48, 0, 12, 12, Margin.Four);
-        mTextures.Input.Button.Disabled = new Bordered(mTexture, 48, 24, 12, 12, Margin.Four);
-        mTextures.Input.Button.Hovered = new Bordered(mTexture, 48, 12, 12, 12, Margin.Four);
-        mTextures.Input.Button.Pressed = new Bordered(mTexture, 48, 36, 12, 12, Margin.Four);
+        mTextures.Input.Button.Normal = new Bordered(_texture, 48, 0, 12, 12, Margin.Four);
+        mTextures.Input.Button.Disabled = new Bordered(_texture, 48, 24, 12, 12, Margin.Four);
+        mTextures.Input.Button.Hovered = new Bordered(_texture, 48, 12, 12, 12, Margin.Four);
+        mTextures.Input.Button.Active = new Bordered(_texture, 48, 36, 12, 12, Margin.Four);
 
-        mTextures.CheckBox.Default.Box = new Single(mTexture, 84, 0, 22, 22);
-        mTextures.CheckBox.Default.Fill = new Single(mTexture, 106, 0, 22, 22);
-        mTextures.CheckBox.Active.Box = new Single(mTexture, 84, 22, 22, 22);
-        mTextures.CheckBox.Active.Fill = new Single(mTexture, 106, 22, 22, 22);
-        mTextures.CheckBox.Hovered.Box = new Single(mTexture, 84, 44, 22, 22);
-        mTextures.CheckBox.Hovered.Fill = new Single(mTexture, 106, 44, 22, 22);
-        mTextures.CheckBox.Disabled.Box = new Single(mTexture, 84, 66, 22, 22);
-        mTextures.CheckBox.Disabled.Fill = new Single(mTexture, 106, 66, 22, 22);
+        mTextures.Input.ComboBox.Normal = new Bordered(_texture, 385, 336, 126, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Hover = new Bordered(_texture, 385, 336 + 32, 126, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Down = new Bordered(_texture, 385, 336 + 64, 126, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Disabled = new Bordered(_texture, 385, 336 + 96, 126, 31, new Margin(8, 8, 32, 8));
 
-        mTextures.RadioButton.Default.Box = new Single(mTexture, 128, 0, 22, 22);
-        mTextures.RadioButton.Default.Fill = new Single(mTexture, 150, 0, 22, 22);
-        mTextures.RadioButton.Active.Box = new Single(mTexture, 128, 22, 22, 22);
-        mTextures.RadioButton.Active.Fill = new Single(mTexture, 150, 22, 22, 22);
-        mTextures.RadioButton.Hovered.Box = new Single(mTexture, 128, 44, 22, 22);
-        mTextures.RadioButton.Hovered.Fill = new Single(mTexture, 150, 44, 22, 22);
-        mTextures.RadioButton.Disabled.Box = new Single(mTexture, 128, 66, 22, 22);
-        mTextures.RadioButton.Disabled.Fill = new Single(mTexture, 150, 66, 22, 22);
+        mTextures.CheckBox.Default.Box = new Single(_texture, 84, 0, 22, 22);
+        mTextures.CheckBox.Default.Fill = new Single(_texture, 106, 0, 22, 22);
+        mTextures.CheckBox.Active.Box = new Single(_texture, 84, 22, 22, 22);
+        mTextures.CheckBox.Active.Fill = new Single(_texture, 106, 22, 22, 22);
+        mTextures.CheckBox.Hovered.Box = new Single(_texture, 84, 44, 22, 22);
+        mTextures.CheckBox.Hovered.Fill = new Single(_texture, 106, 44, 22, 22);
+        mTextures.CheckBox.Disabled.Box = new Single(_texture, 84, 66, 22, 22);
+        mTextures.CheckBox.Disabled.Fill = new Single(_texture, 106, 66, 22, 22);
+
+        mTextures.RadioButton.Default.Box = new Single(_texture, 128, 0, 22, 22);
+        mTextures.RadioButton.Default.Fill = new Single(_texture, 150, 0, 22, 22);
+        mTextures.RadioButton.Active.Box = new Single(_texture, 128, 22, 22, 22);
+        mTextures.RadioButton.Active.Fill = new Single(_texture, 150, 22, 22, 22);
+        mTextures.RadioButton.Hovered.Box = new Single(_texture, 128, 44, 22, 22);
+        mTextures.RadioButton.Hovered.Fill = new Single(_texture, 150, 44, 22, 22);
+        mTextures.RadioButton.Disabled.Box = new Single(_texture, 128, 66, 22, 22);
+        mTextures.RadioButton.Disabled.Fill = new Single(_texture, 150, 66, 22, 22);
 
     }
 
@@ -82,7 +88,7 @@ public class Intersect2021 : TexturedBase
 
     public override void DrawCheckBox(Control.Base control, bool selected, bool hovered, bool depressed)
     {
-        if (!(control is CheckBox checkBox))
+        if (!(control is Checkbox checkBox))
         {
             return;
         }
@@ -158,7 +164,7 @@ public class Intersect2021 : TexturedBase
             return;
         }
 
-        GameTexture? renderTexture = null;
+        IGameTexture? renderTexture = null;
         if (windowControl.TryGetTexture(WindowControl.ControlState.Active, out var activeTexture))
         {
             renderTexture = activeTexture;
@@ -192,12 +198,12 @@ public class Intersect2021 : TexturedBase
 
         Rectangle frameBounds = windowControl.RenderBounds;
 
-        var shouldDrawTitlebarBackground = titleBar != default && windowControl.TitleBar.ShouldDrawBackground;
+        var shouldDrawTitlebarBackground = titleBar != default && windowControl.Titlebar.ShouldDrawBackground;
         if (shouldDrawTitlebarBackground)
         {
             frameBounds = new Rectangle(
                 0,
-                windowControl.TitleBar.Bottom,
+                windowControl.Titlebar.Bottom,
                 control.RenderBounds.Width,
                 control.RenderBounds.Height
             );
@@ -210,7 +216,7 @@ public class Intersect2021 : TexturedBase
 
         if (shouldDrawTitlebarBackground)
         {
-            titleBar.Draw(Renderer, windowControl.TitleBar.Bounds, windowControl.RenderColor);
+            titleBar.Draw(Renderer, windowControl.Titlebar.Bounds, windowControl.RenderColor);
         }
     }
 

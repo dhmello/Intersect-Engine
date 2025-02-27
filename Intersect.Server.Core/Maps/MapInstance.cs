@@ -1,9 +1,10 @@
 using System.Collections.Concurrent;
+using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Maps;
-using Intersect.Logging;
 using Intersect.Network.Packets.Server;
 using Intersect.Server.Database;
 using Intersect.Server.Entities.Events;
@@ -15,11 +16,12 @@ using Intersect.Server.Core.MapInstancing;
 using Intersect.Server.Framework.Items;
 using Intersect.Server.Framework.Maps;
 using Intersect.Server.Plugins.Helpers;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Server.Maps;
 
 /// <summary>
-/// A <see cref="MapInstance"/> exists to process map updates, but on a "layered" system, where a single map can be processing 
+/// A <see cref="MapInstance"/> exists to process map updates, but on a "layered" system, where a single map can be processing
 /// differently for each instance that exists upon it.
 /// <remarks>
 /// <para>
@@ -37,7 +39,7 @@ namespace Intersect.Server.Maps;
 /// <list type="number">
 /// <item>
 /// Warps to a new map, or their <see cref="Entity.MapInstanceId"/> has otherwise changed.
-/// </item> 
+/// </item>
 /// <item>
 /// Walks across a map boundary and fetches new maps from <see cref="MapController.GetSurroundingMaps(bool)"/>.
 /// </item>
@@ -85,7 +87,7 @@ public partial class MapInstance : IMapInstance
     /// <summary>
     /// An ID referring to which instance this processer belongs to.
     /// <remarks>
-    /// Entities/Items/Etc with that share an <see cref="Entity.MapInstanceId"/> with <see cref="MapInstance.MapInstanceId"/> 
+    /// Entities/Items/Etc with that share an <see cref="Entity.MapInstanceId"/> with <see cref="MapInstance.MapInstanceId"/>
     /// will be processed and fed packets by that processer.
     /// </remarks>
     /// </summary>
@@ -115,7 +117,7 @@ public partial class MapInstance : IMapInstance
 
     // Items
     public ConcurrentDictionary<Guid, MapItemSpawn> ItemRespawns = new ConcurrentDictionary<Guid, MapItemSpawn>();
-    public ConcurrentDictionary<Guid, MapItem>[] TileItems { get; } = new ConcurrentDictionary<Guid, MapItem>[Options.Instance.MapOpts.MapWidth * Options.Instance.MapOpts.MapHeight];
+    public ConcurrentDictionary<Guid, MapItem>[] TileItems { get; } = new ConcurrentDictionary<Guid, MapItem>[Options.Instance.Map.MapWidth * Options.Instance.Map.MapHeight];
     public ConcurrentDictionary<Guid, MapItem> AllMapItems { get; } = new ConcurrentDictionary<Guid, MapItem>();
 
     // Resources
@@ -143,7 +145,7 @@ public partial class MapInstance : IMapInstance
     // Animations & Text
     private MapActionMessages mActionMessages = new MapActionMessages();
     private MapAnimations mMapAnimations = new MapAnimations();
-    
+
     public MapInstance(MapController map, Guid mapInstanceId, Player creator)
     {
         mMapController = map;
@@ -177,7 +179,7 @@ public partial class MapInstance : IMapInstance
 
     public bool ShouldBeActive()
     {
-        return (mIsProcessing || LastRequestedUpdateTime <= mLastUpdateTime + Options.Map.TimeUntilMapCleanup);
+        return (mIsProcessing || LastRequestedUpdateTime <= mLastUpdateTime + Options.Instance.Map.TimeUntilMapCleanup);
     }
 
     public void RemoveLayerFromController()
@@ -282,21 +284,43 @@ public partial class MapInstance : IMapInstance
     /// <summary>
     /// Adds an entity to the MapInstance so that the instance knows to process them.
     /// </summary>
-    /// <param name="en">The entity to add.</param>
-    public void AddEntity(Entity en)
+    /// <param name="entity">The entity to add.</param>
+    public void AddEntity(Entity? entity)
     {
-        if (en != null && !en.IsDead() && en.MapInstanceId == MapInstanceId)
+        if (entity == null)
         {
-            if (!mEntities.ContainsKey(en.Id))
+            return;
+        }
+
+        if (entity is not Player && entity.IsDead)
+        {
+            return;
+        }
+
+        if (entity.MapInstanceId != MapInstanceId)
+        {
+            return;
+        }
+
+        if (!mEntities.TryAdd(entity.Id, entity))
+        {
+            return;
+        }
+
+        if (entity is Player player)
+        {
+            if (!mPlayers.TryAdd(player.Id, player))
             {
-                mEntities.TryAdd(en.Id, en);
-                if (en is Player plyr)
-                {
-                    mPlayers.TryAdd(plyr.Id, plyr);
-                }
-                mCachedEntities = mEntities.Values.ToArray();
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "Failed to add player {PlayerId} to map instance {MapInstanceId} of map {MapDescriptorId}",
+                    player.Id,
+                    MapInstanceId,
+                    mMapController.Id
+                );
             }
         }
+
+        mCachedEntities = mEntities.Values.ToArray();
     }
 
     /// <summary>
@@ -470,8 +494,8 @@ public partial class MapInstance : IMapInstance
         {
             for (var n = 0; n < 100; n++)
             {
-                x = (byte)Randomization.Next(0, Options.MapWidth);
-                y = (byte)Randomization.Next(0, Options.MapHeight);
+                x = (byte)Randomization.Next(0, Options.Instance.Map.MapWidth);
+                y = (byte)Randomization.Next(0, Options.Instance.Map.MapHeight);
                 if (mMapController.Attributes[x, y] == null || mMapController.Attributes[x, y].Type == (int)MapAttributeType.Walkable)
                 {
                     break;
@@ -529,10 +553,10 @@ public partial class MapInstance : IMapInstance
                 lock (npcSpawn.Value.Entity.EntityLock)
                 {
                     var npc = npcSpawn.Value.Entity as Npc;
-                    if (!npc.Dead)
+                    if (!npc.IsDead)
                     {
                         // If we keep track of reset radiuses, just reset it to that value.
-                        if (Options.Npc.AllowResetRadius)
+                        if (Options.Instance.Npc.AllowResetRadius)
                         {
                             npc.Reset();
                         }
@@ -714,7 +738,7 @@ public partial class MapInstance : IMapInstance
         }
 
         TileItems[item.TileIndex]?.TryAdd(item.UniqueId, item);
-        
+
         MapHelper.Instance.InvokeItemAdded(source, item);
     }
 
@@ -741,7 +765,7 @@ public partial class MapInstance : IMapInstance
     {
         if (item == null)
         {
-            Log.Warn($"Tried to spawn {amount} of a null item at ({x}, {y}) in map {Id}.");
+            ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to spawn {amount} of a null item at ({x}, {y}) in map {Id}.");
 
             return;
         }
@@ -749,7 +773,7 @@ public partial class MapInstance : IMapInstance
         var itemDescriptor = ItemBase.Get(item.ItemId);
         if (itemDescriptor == null)
         {
-            Log.Warn($"No item found for {item.ItemId}.");
+            ApplicationContext.Context.Value?.Logger.LogWarning($"No item found for {item.ItemId}.");
 
             return;
         }
@@ -757,11 +781,11 @@ public partial class MapInstance : IMapInstance
         // if we can stack this item or the user configured to drop items consolidated, simply spawn a single stack of it.
         // Does not count for Equipment and bags, these are ALWAYS their own separate item spawn. We don't want to lose data on that!
         if ((itemDescriptor.ItemType != ItemType.Equipment && itemDescriptor.ItemType != ItemType.Bag) &&
-            (itemDescriptor.Stackable || Options.Loot.ConsolidateMapDrops))
+            (itemDescriptor.Stackable || Options.Instance.Loot.ConsolidateMapDrops))
         {
             // Does this item already exist on this tile? If so, get its value so we can simply consolidate the stack.
             var existingCount = 0;
-            var existingItems = FindItemsAt(y * Options.MapWidth + x);
+            var existingItems = FindItemsAt(y * Options.Instance.Map.MapWidth + x);
             var toRemove = new List<MapItem>();
             foreach (var exItem in existingItems)
             {
@@ -775,13 +799,13 @@ public partial class MapInstance : IMapInstance
 
             var mapItem = new MapItem(item.ItemId, amount + existingCount, x, y, item.BagId, item.Bag)
             {
-                DespawnTime = Timing.Global.Milliseconds + (itemDescriptor.DespawnTime <= 0 ? Options.Loot.ItemDespawnTime : itemDescriptor.DespawnTime),
+                DespawnTime = Timing.Global.Milliseconds + (itemDescriptor.DespawnTime <= 0 ? Options.Instance.Loot.ItemDespawnTime : itemDescriptor.DespawnTime),
                 Owner = owner,
-                OwnershipTime = Timing.Global.Milliseconds + Options.Loot.ItemOwnershipTime,
-                VisibleToAll = Options.Loot.ShowUnownedItems || owner == Guid.Empty
+                OwnershipTime = Timing.Global.Milliseconds + Options.Instance.Loot.ItemOwnershipTime,
+                VisibleToAll = Options.Instance.Loot.ShowUnownedItems || owner == Guid.Empty
             };
 
-            if (mapItem.TileIndex > Options.MapHeight * Options.MapWidth || mapItem.TileIndex < 0)
+            if (mapItem.TileIndex > Options.Instance.Map.MapHeight * Options.Instance.Map.MapWidth || mapItem.TileIndex < 0)
             {
                 return;
             }
@@ -810,10 +834,10 @@ public partial class MapInstance : IMapInstance
             {
                 var mapItem = new MapItem(item.ItemId, amount, x, y, item.BagId, item.Bag)
                 {
-                    DespawnTime = Timing.Global.Milliseconds + Options.Loot.ItemDespawnTime,
+                    DespawnTime = Timing.Global.Milliseconds + Options.Instance.Loot.ItemDespawnTime,
                     Owner = owner,
-                    OwnershipTime = Timing.Global.Milliseconds + Options.Loot.ItemOwnershipTime,
-                    VisibleToAll = Options.Loot.ShowUnownedItems || owner == Guid.Empty
+                    OwnershipTime = Timing.Global.Milliseconds + Options.Instance.Loot.ItemOwnershipTime,
+                    VisibleToAll = Options.Instance.Loot.ShowUnownedItems || owner == Guid.Empty
                 };
 
                 // If this is a piece of equipment, set up the stat buffs for it.
@@ -822,7 +846,7 @@ public partial class MapInstance : IMapInstance
                     mapItem.SetupStatBuffs(item);
                 }
 
-                if (mapItem.TileIndex > Options.MapHeight * Options.MapWidth || mapItem.TileIndex < 0)
+                if (mapItem.TileIndex > Options.Instance.Map.MapHeight * Options.Instance.Map.MapWidth || mapItem.TileIndex < 0)
                 {
                     return;
                 }
@@ -854,7 +878,7 @@ public partial class MapInstance : IMapInstance
     /// <returns>Returns a <see cref="ICollection"/> of <see cref="MapItem"/></returns>
     public ICollection<MapItem> FindItemsAt(int tileIndex)
     {
-        if (tileIndex < 0 || tileIndex >= Options.MapWidth * Options.MapHeight || TileItems[tileIndex] == null)
+        if (tileIndex < 0 || tileIndex >= Options.Instance.Map.MapWidth * Options.Instance.Map.MapHeight || TileItems[tileIndex] == null)
         {
             return Array.Empty<MapItem>();
         }
@@ -879,7 +903,7 @@ public partial class MapInstance : IMapInstance
                     {
                         AttributeSpawnX = item.X,
                         AttributeSpawnY = item.Y,
-                        RespawnTime = Timing.Global.Milliseconds + (item.AttributeRespawnTime <= 0 ? Options.Map.ItemAttributeRespawnTime : item.AttributeRespawnTime)
+                        RespawnTime = Timing.Global.Milliseconds + (item.AttributeRespawnTime <= 0 ? Options.Instance.Map.ItemAttributeRespawnTime : item.AttributeRespawnTime)
                     };
                     ItemRespawns.TryAdd(spawn.Id, spawn);
                 }
@@ -933,10 +957,10 @@ public partial class MapInstance : IMapInstance
             var mapItemSource = new MapItemSource
             {
                 Id = MapInstanceId,
-                MapInstanceReference = new WeakReference<IMapInstance>(this), 
+                MapInstanceReference = new WeakReference<IMapInstance>(this),
                 DescriptorId = mMapController.Id,
             };
-            
+
             AddItem(mapItemSource, mapItem);
             PacketSender.SendMapItemUpdate(mMapController.Id, MapInstanceId, mapItem, false);
         }
@@ -948,9 +972,9 @@ public partial class MapInstance : IMapInstance
     private void SpawnAttributeItems()
     {
         ResourceSpawns.Clear();
-        for (byte x = 0; x < Options.MapWidth; x++)
+        for (byte x = 0; x < Options.Instance.Map.MapWidth; x++)
         {
-            for (byte y = 0; y < Options.MapHeight; y++)
+            for (byte y = 0; y < Options.Instance.Map.MapHeight; y++)
             {
                 if (mMapController.Attributes[x, y] != null)
                 {
@@ -1189,9 +1213,9 @@ public partial class MapInstance : IMapInstance
     {
         var blocks = new List<BytePoint>();
         var npcBlocks = new List<BytePoint>();
-        for (byte x = 0; x < Options.MapWidth; x++)
+        for (byte x = 0; x < Options.Instance.Map.MapWidth; x++)
         {
-            for (byte y = 0; y < Options.MapHeight; y++)
+            for (byte y = 0; y < Options.Instance.Map.MapHeight; y++)
             {
                 if (mMapController.Attributes[x, y] != null)
                 {
@@ -1237,7 +1261,7 @@ public partial class MapInstance : IMapInstance
         foreach (var en in mEntities)
         {
             //Let's see if and how long this map has been inactive, if longer than X seconds, regenerate everything on the map
-            if (timeMs > mLastUpdateTime + Options.Map.TimeUntilMapCleanup)
+            if (timeMs > mLastUpdateTime + Options.Instance.Map.TimeUntilMapCleanup)
             {
                 //Regen Everything & Forget Targets
                 if (en.Value is Resource || en.Value is Npc)
@@ -1308,7 +1332,7 @@ public partial class MapInstance : IMapInstance
         for (var i = 0; i < spawns.Count; i++)
         {
             var spawn = spawns[i];
-            if (!NpcSpawnInstances.TryGetValue(spawn, out var spawnInstance) || spawnInstance?.Entity?.Base == default || !spawnInstance.Entity.Dead)
+            if (!NpcSpawnInstances.TryGetValue(spawn, out var spawnInstance) || spawnInstance?.Entity?.Base == default || !spawnInstance.Entity.IsDead)
             {
                 continue;
             }
@@ -1329,7 +1353,7 @@ public partial class MapInstance : IMapInstance
     {
         foreach (var spawn in ResourceSpawns)
         {
-            if (!ResourceSpawnInstances.TryGetValue(spawn.Value, out var spawnInstance) || spawnInstance?.Entity?.Base == default || !spawnInstance.Entity.Dead)
+            if (!ResourceSpawnInstances.TryGetValue(spawn.Value, out var spawnInstance) || spawnInstance?.Entity?.Descriptor == default || !spawnInstance.Entity.IsDead)
             {
                 continue;
             }
@@ -1337,14 +1361,14 @@ public partial class MapInstance : IMapInstance
             var now = Timing.Global.Milliseconds;
             if (spawnInstance.RespawnTime < 0)
             {
-                spawnInstance.RespawnTime = now + (spawnInstance.Entity.Base?.SpawnDuration ?? 0);
+                spawnInstance.RespawnTime = now + (spawnInstance.Entity.Descriptor?.SpawnDuration ?? 0);
             }
             else if (spawnInstance.RespawnTime < now)
             {
                 // Check to see if this resource can be respawned, if there's an Npc or Player on it we shouldn't let it respawn yet..
                 // Unless of course the resource is walkable regardless.
                 var canSpawn = false;
-                if (spawnInstance.Entity.Base.WalkableBefore)
+                if (spawnInstance.Entity.Descriptor.WalkableBefore)
                 {
                     canSpawn = true;
                 }
@@ -1453,7 +1477,7 @@ public partial class MapInstance : IMapInstance
         var nearbyPlayers = new HashSet<Player>();
 
         // Get all players in surrounding and current maps
-        foreach (var mapInstance in MapController.GetSurroundingMapInstances(mMapController.Id, MapInstanceId, true)) 
+        foreach (var mapInstance in MapController.GetSurroundingMapInstances(mMapController.Id, MapInstanceId, true))
         {
             foreach (var plyr in mapInstance.GetPlayers())
             {

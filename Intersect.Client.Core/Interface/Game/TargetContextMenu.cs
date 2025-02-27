@@ -1,44 +1,50 @@
 using Intersect.Client.Core;
 using Intersect.Client.Entities;
+using Intersect.Client.Framework.Entities;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.Gwen;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.Framework.Gwen.Control.EventArguments;
+using Intersect.Client.Framework.Gwen.ControlInternal;
 using Intersect.Client.Framework.Gwen.Input;
 using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Enums;
-using Intersect.Utilities;
+using Intersect.Framework.Core;
 
 namespace Intersect.Client.Interface.Game;
 
 /// <summary>
 /// The GUI class for the Target Context Menu that pop up on-screen during gameplay.
 /// </summary>
-public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
+public sealed partial class TargetContextMenu : ContextMenu
 {
     private readonly MenuItem _targetNameMenuItem;
+    private readonly MenuDivider _nameDivider;
     private readonly MenuItem _tradeMenuItem;
     private readonly MenuItem _partyMenuItem;
     private readonly MenuItem _friendMenuItem;
     private readonly MenuItem _guildMenuItem;
     private readonly MenuItem _privateMessageMenuItem;
     private readonly Player? _me;
-    private Entity? _entity;
+    private IEntity? _entity;
 
     public TargetContextMenu(Canvas gameCanvas) : base(gameCanvas, nameof(TargetContextMenu))
     {
         IsHidden = true;
         IconMarginDisabled = true;
-        Children.Clear();
+        ClearChildren();
 
         _me = Globals.Me;
 
         _targetNameMenuItem = AddItem(string.Empty);
-        _targetNameMenuItem.MouseInputEnabled = false;
-        AddDivider();
+        _nameDivider = new MenuDivider(this)
+        {
+            Dock = Pos.Top,
+            MinimumSize = new Point(0, 1),
+        };
 
         _tradeMenuItem = AddItem(Strings.EntityContextMenu.Trade);
         _tradeMenuItem.Clicked += tradeRequest_Clicked;
@@ -56,6 +62,7 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         _privateMessageMenuItem.Clicked += privateMessageRequest_Clicked;
 
         LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer?.GetResolutionString());
+        BuildContextMenu();
     }
 
     public void ToggleHidden(object? target)
@@ -73,8 +80,8 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         {
             case Button button:
                 _entity = _me.TargetBox?.MyEntity;
-                posX = button.LocalPosToCanvas(Point.Empty).X;
-                posY = button.LocalPosToCanvas(Point.Empty).Y;
+                posX = button.ToCanvas(Point.Empty).X;
+                posY = button.ToCanvas(Point.Empty).Y;
                 newX = posX;
                 newY = posY + button.Height;
                 break;
@@ -117,46 +124,50 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
             }
         }
 
-
         if (IsHidden)
         {
-            TryShowTargetButton(shouldShowTargetNameMenuItem);
-            TryShowGuildButton();
+            BuildContextMenu(shouldShowTargetNameMenuItem);
             SizeToChildren();
             Open(Pos.None);
             SetPosition(newX, newY);
         }
-        else if (!Globals.InputManager.MouseButtonDown(MouseButtons.Right))
+        else if (!Globals.InputManager.IsMouseButtonDown(MouseButton.Right))
         {
             Close();
         }
     }
 
-    private void TryShowTargetButton(bool shouldShow)
+    private void BuildContextMenu(bool shouldShowTargetName = false)
     {
-        _targetNameMenuItem.SetText(shouldShow ? _entity.Name : string.Empty);
+        ClearChildren();
 
-        if (shouldShow)
+        if (shouldShowTargetName)
         {
-            var indexOf = Children.IndexOf(_targetNameMenuItem);
-
-            if (indexOf > 0)
-            {
-                Children.RemoveAt(indexOf);
-            }
-
-            if (indexOf != 0)
-            {
-                Children.Insert(0, _targetNameMenuItem);
-            }
+            AddChild(_targetNameMenuItem);
+            _targetNameMenuItem.SetText(_entity?.Name ?? string.Empty);
+            _targetNameMenuItem.MouseInputEnabled = false;
+            AddChild(_nameDivider);
         }
-        else
+
+        AddChild(_tradeMenuItem);
+        AddChild(_partyMenuItem);
+        AddChild(_friendMenuItem);
+
+        if (_entity is Player player)
         {
-            Children.Remove(_targetNameMenuItem);
+            if (player != _me && string.IsNullOrWhiteSpace(player.Guild) && (_me?.GuildRank?.Permissions?.Invite ?? false))
+            {
+                AddChild(_guildMenuItem);
+            }
+
+            if (player != _me)
+            {
+                AddChild(_privateMessageMenuItem);
+            }
         }
     }
 
-    void invite_Clicked(Base sender, ClickedEventArgs arguments)
+    void invite_Clicked(Base sender, MouseButtonState arguments)
     {
         if (_me == null || _entity is not Player || _entity == _me)
         {
@@ -173,7 +184,7 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    void tradeRequest_Clicked(Base sender, ClickedEventArgs arguments)
+    void tradeRequest_Clicked(Base sender, MouseButtonState arguments)
     {
         if (_me == null || _entity is not Player || _entity == _me)
         {
@@ -190,7 +201,7 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    void friendRequest_Clicked(Base sender, ClickedEventArgs arguments)
+    void friendRequest_Clicked(Base sender, MouseButtonState arguments)
     {
         if (_me == null || _entity is not Player || _entity == _me)
         {
@@ -207,7 +218,7 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    void guildRequest_Clicked(Base sender, ClickedEventArgs arguments)
+    void guildRequest_Clicked(Base sender, MouseButtonState arguments)
     {
         if (_me == null || _entity is not Player plyr || _entity == _me)
         {
@@ -236,7 +247,7 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         }
     }
 
-    void privateMessageRequest_Clicked(Base sender, ClickedEventArgs arguments)
+    void privateMessageRequest_Clicked(Base sender, MouseButtonState arguments)
     {
         if (_me == null || _entity is not Player || _entity == _me)
         {
@@ -244,32 +255,5 @@ public sealed partial class TargetContextMenu : Framework.Gwen.Control.Menu
         }
 
         Interface.GameUi.SetChatboxText($"/pm {_entity.Name} ");
-    }
-
-    void TryShowGuildButton()
-    {
-        var shouldShow = false;
-        if (_entity is Player plyr && _entity != _me && string.IsNullOrWhiteSpace(plyr.Guild))
-        {
-            if (_me?.GuildRank?.Permissions?.Invite ?? false)
-            {
-                shouldShow = true;
-            }
-        }
-
-        if (shouldShow)
-        {
-            if (!Children.Contains(_guildMenuItem))
-            {
-                Children.Add(_guildMenuItem);
-            }
-        }
-        else
-        {
-            if (Children.Contains(_guildMenuItem))
-            {
-                Children.Remove(_guildMenuItem);
-            }
-        }
     }
 }

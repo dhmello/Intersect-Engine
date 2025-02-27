@@ -1,19 +1,12 @@
-﻿using Intersect.Logging;
+﻿
 using Intersect.Plugins.Manifests;
-
 using Moq;
-
 using NUnit.Framework;
-
 using Semver;
-
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
-
 using Intersect.Plugins.Interfaces;
 using Intersect.Plugins.Manifests.Types;
+using Serilog;
 
 namespace Intersect.Plugins.Loaders
 {

@@ -1,6 +1,5 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
-
 using Intersect.Client.Core;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.Gwen.Control;
@@ -8,6 +7,7 @@ using Intersect.Client.Framework.Gwen.Control.EventArguments;
 using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
 using Intersect.Client.Interface.Game.Chat;
+using Intersect.Client.Interface.Shared;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Utilities;
@@ -126,7 +126,7 @@ public partial class ResetPasswordWindow
     //The username or email of the acc we are resetting the pass for
     public string Target { set; get; } = string.Empty;
 
-    private void Textbox_Clicked(Base sender, ClickedEventArgs arguments)
+    private void Textbox_Clicked(Base sender, MouseButtonState arguments)
     {
         Globals.InputManager.OpenKeyboard(
             KeyboardType.Normal, mCodeInputTextbox.Text, false, false, false
@@ -157,7 +157,7 @@ public partial class ResetPasswordWindow
         mPasswordTextbox2.Text = string.Empty;
     }
 
-    void BackBtn_Clicked(Base sender, ClickedEventArgs arguments)
+    void BackBtn_Clicked(Base sender, MouseButtonState arguments)
     {
         Hide();
         Interface.MenuUi.MainMenu.NotifyOpenLogin();
@@ -168,7 +168,7 @@ public partial class ResetPasswordWindow
         TrySendCode();
     }
 
-    void SubmitBtn_Clicked(Base sender, ClickedEventArgs arguments)
+    void SubmitBtn_Clicked(Base sender, MouseButtonState arguments)
     {
         TrySendCode();
     }
@@ -192,25 +192,25 @@ public partial class ResetPasswordWindow
 
         if (!Networking.Network.IsConnected)
         {
-            Interface.ShowError(Strings.Errors.NotConnected);
+            Interface.ShowAlert(Strings.Errors.NotConnected, alertType: AlertType.Error);
             return;
         }
 
         if (string.IsNullOrEmpty(mCodeInputTextbox?.Text))
         {
-            Interface.ShowError(Strings.ResetPass.InputCode);
+            Interface.ShowAlert(Strings.ResetPass.InputCode, alertType: AlertType.Error);
             return;
         }
 
         if (mPasswordTextbox.Text != mPasswordTextbox2.Text)
         {
-            Interface.ShowError(Strings.Registration.PasswordMismatch);
+            Interface.ShowAlert(Strings.Registration.PasswordMismatch, alertType: AlertType.Error);
             return;
         }
 
         if (!FieldChecking.IsValidPassword(mPasswordTextbox.Text, Strings.Regex.Password))
         {
-            Interface.ShowError(Strings.Errors.PasswordInvalid);
+            Interface.ShowAlert(Strings.Errors.PasswordInvalid, alertType: AlertType.Error);
             return;
         }
 

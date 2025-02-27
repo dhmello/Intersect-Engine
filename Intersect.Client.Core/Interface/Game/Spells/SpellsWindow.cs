@@ -51,7 +51,7 @@ public partial class SpellsWindow
         mContextMenu.IsHidden = true;
         mContextMenu.IconMarginDisabled = true;
         //TODO: Is this a memory leak?
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
         mUseSpellContextItem = mContextMenu.AddItem(Strings.SpellContextMenu.Cast);
         mUseSpellContextItem.Clicked += MUseSpellContextItem_Clicked;
         mForgetSpellContextItem = mContextMenu.AddItem(Strings.SpellContextMenu.Forget);
@@ -64,7 +64,7 @@ public partial class SpellsWindow
         // Clear out the old options.
         mContextMenu.RemoveChild(mUseSpellContextItem, false);
         mContextMenu.RemoveChild(mForgetSpellContextItem, false);
-        mContextMenu.Children.Clear();
+        mContextMenu.ClearChildren();
 
         var spell = SpellBase.Get(Globals.Me.Spells[slot].Id);
 
@@ -92,13 +92,13 @@ public partial class SpellsWindow
         mContextMenu.Open(Framework.Gwen.Pos.None);
     }
 
-    private void MForgetSpellContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MForgetSpellContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         var slot = (int)sender.Parent.UserData;
         Globals.Me.TryForgetSpell(slot);
     }
 
-    private void MUseSpellContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.ClickedEventArgs arguments)
+    private void MUseSpellContextItem_Clicked(Base sender, Framework.Gwen.Control.EventArguments.MouseButtonState arguments)
     {
         var slot = (int)sender.Parent.UserData;
         Globals.Me.TryUseSpell(slot);
@@ -120,7 +120,7 @@ public partial class SpellsWindow
 
         X = mSpellWindow.X;
         Y = mSpellWindow.Y;
-        for (var i = 0; i < Options.Instance.PlayerOpts.MaxSpells; i++)
+        for (var i = 0; i < Options.Instance.Player.MaxSpells; i++)
         {
             var spell = SpellBase.Get(Globals.Me.Spells[i].Id);
             Items[i].Pnl.IsHidden = spell == null || Items[i].IsDragging;
@@ -133,7 +133,7 @@ public partial class SpellsWindow
 
     private void InitItemContainer()
     {
-        for (var i = 0; i < Options.Instance.PlayerOpts.MaxSpells; i++)
+        for (var i = 0; i < Options.Instance.Player.MaxSpells; i++)
         {
             Items.Add(new SpellItem(this, i));
             Items[i].Container = new ImagePanel(mItemContainer, "Spell");
@@ -177,9 +177,9 @@ public partial class SpellsWindow
     {
         var rect = new FloatRect()
         {
-            X = mSpellWindow.LocalPosToCanvas(new Point(0, 0)).X -
+            X = mSpellWindow.ToCanvas(new Point(0, 0)).X -
                 (Items[0].Container.Padding.Left + Items[0].Container.Padding.Right) / 2,
-            Y = mSpellWindow.LocalPosToCanvas(new Point(0, 0)).Y -
+            Y = mSpellWindow.ToCanvas(new Point(0, 0)).Y -
                 (Items[0].Container.Padding.Top + Items[0].Container.Padding.Bottom) / 2,
             Width = mSpellWindow.Width + Items[0].Container.Padding.Left + Items[0].Container.Padding.Right,
             Height = mSpellWindow.Height + Items[0].Container.Padding.Top + Items[0].Container.Padding.Bottom

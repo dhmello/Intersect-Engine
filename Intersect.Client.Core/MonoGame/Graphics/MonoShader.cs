@@ -1,24 +1,22 @@
 ﻿using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
 using Intersect.IO.Files;
-
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
+using Vector2 = System.Numerics.Vector2;
 
 namespace Intersect.Client.MonoGame.Graphics;
 
-
 public partial class MonoShader : GameShader
 {
+    private readonly Dictionary<string, Color> Colors = new();
 
-    private Effect mShader;
+    private readonly Dictionary<string, float> Floats = new();
 
-    private bool mValuesChanged = false;
+    private readonly Effect mShader;
 
-    private Dictionary<string, Color> Colors = new Dictionary<string, Color>();
-
-    private Dictionary<string, float> Floats = new Dictionary<string, float>();
+    private bool mValuesChanged;
 
     public MonoShader(string shaderName, ContentManager contentManager) : base(shaderName)
     {
@@ -68,7 +66,7 @@ public partial class MonoShader : GameShader
         }
     }
 
-    public override void SetVector2(string key, Pointf val)
+    public override void SetVector2(string key, Vector2 val)
     {
         //throw new NotImplementedException();
     }
@@ -99,5 +97,4 @@ public partial class MonoShader : GameShader
     {
         return mShader;
     }
-
 }

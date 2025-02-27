@@ -1,5 +1,4 @@
 ﻿using Intersect.Client.Utilities;
-
 using NUnit.Framework;
 
 namespace Intersect.Tests.Client
@@ -13,7 +12,7 @@ namespace Intersect.Tests.Client
         public void TestStub()
         {
             // Needed so NUnit doesn't return -2
-            Assert.AreEqual(0, MathHelper.Lerp(0, 0, 0));
+            Assert.That(0, Is.EqualTo(MathHelper.Lerp(0, 0, 0)));
         }
 
     }

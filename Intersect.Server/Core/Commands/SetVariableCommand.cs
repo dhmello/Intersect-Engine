@@ -3,12 +3,10 @@ using Intersect.Server.Core.CommandParsing.Arguments;
 using Intersect.Server.Localization;
 using Intersect.Server.Database;
 using Intersect.Enums;
-using System;
 using Intersect.Server.Database.GameData;
 using Intersect.Server.Entities;
 using System.Globalization;
 using Intersect.Framework.Core.GameObjects.Variables;
-using Intersect.GameObjects;
 
 namespace Intersect.Server.Core.Commands
 {
@@ -67,11 +65,11 @@ namespace Intersect.Server.Core.Commands
                     break;
 
                 case VariableDataType.Integer:
-                    variable.Value.Integer = int.Parse(rawServerVariableValue, NumberStyles.Integer, CultureInfo.CurrentCulture);
+                    variable.Value.Integer = int.Parse(rawServerVariableValue, NumberStyles.Integer, CultureInfo.CurrentUICulture);
                     break;
 
                 case VariableDataType.Number:
-                    variable.Value.Number = double.Parse(rawServerVariableValue, NumberStyles.Float, CultureInfo.CurrentCulture);
+                    variable.Value.Number = double.Parse(rawServerVariableValue, NumberStyles.Float, CultureInfo.CurrentUICulture);
                     break;
 
                 case VariableDataType.String:

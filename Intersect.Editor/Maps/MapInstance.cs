@@ -8,7 +8,6 @@ using Intersect.GameObjects;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Maps;
 using Newtonsoft.Json;
-
 using Graphics = Intersect.Editor.Core.Graphics;
 
 namespace Intersect.Editor.Maps;
@@ -91,11 +90,11 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
         lock (MapLock)
         {
             Layers = JsonConvert.DeserializeObject<Dictionary<string, Tile[,]>>(LZ4.UnPickleString(packet), mJsonSerializerSettings);
-            foreach (var layer in Options.Instance.MapOpts.Layers.All)
+            foreach (var layer in Options.Instance.Map.Layers.All)
             {
                 if (!Layers.ContainsKey(layer))
                 {
-                    Layers.Add(layer, new Tile[Options.MapWidth, Options.MapHeight]);
+                    Layers.Add(layer, new Tile[Options.Instance.Map.MapWidth, Options.Instance.Map.MapHeight]);
                 }
             }
         }
@@ -149,7 +148,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
 
         if (!mAttributeAnimInstances.ContainsKey(attr))
         {
-            mAttributeAnimInstances.Add(attr, new Animation(AnimationBase.Get(animId), true));
+            mAttributeAnimInstances.Add(attr, new Animation(AnimationDescriptor.Get(animId), true));
         }
 
         return mAttributeAnimInstances[attr];
@@ -300,7 +299,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
         }
     }
 
-    public EventBase FindEventAt(int x, int y)
+    public EventBase? FindEventAt(int x, int y)
     {
         if (LocalEvents.Count <= 0)
         {

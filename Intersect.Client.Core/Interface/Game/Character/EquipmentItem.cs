@@ -42,22 +42,27 @@ public partial class EquipmentItem
     {
         Pnl.HoverEnter += pnl_HoverEnter;
         Pnl.HoverLeave += pnl_HoverLeave;
-        Pnl.RightClicked += pnl_RightClicked;
+        Pnl.Clicked += pnl_RightClicked;
 
         ContentPanel = new ImagePanel(Pnl, "EquipmentIcon");
         ContentPanel.MouseInputEnabled = false;
-        Pnl.SetToolTipText(Options.EquipmentSlots[mYindex]);
+        Pnl.SetToolTipText(Options.Instance.Equipment.Slots[mYindex]);
     }
 
-    void pnl_RightClicked(Base sender, ClickedEventArgs arguments)
+    void pnl_RightClicked(Base sender, MouseButtonState arguments)
     {
+        if (arguments.MouseButton != MouseButton.Right)
+        {
+            return;
+        }
+
         if (ClientConfiguration.Instance.EnableContextMenus)
         {
             var window = Interface.GameUi.GameMenu.GetInventoryWindow();
             if (window != null)
             {
                 var invSlot = Globals.Me.MyEquipment[mYindex];
-                if (invSlot >= 0 && invSlot < Options.MaxInvItems)
+                if (invSlot >= 0 && invSlot < Options.Instance.Player.MaxInventory)
                 {
                     window.OpenContextMenu(invSlot);
                 }
@@ -67,7 +72,7 @@ public partial class EquipmentItem
         {
             PacketSender.SendUnequipItem(mYindex);
         }
-        
+
     }
 
     void pnl_HoverLeave(Base sender, EventArgs arguments)
@@ -86,7 +91,7 @@ public partial class EquipmentItem
             return;
         }
 
-        if (Globals.InputManager.MouseButtonDown(MouseButtons.Left))
+        if (Globals.InputManager.IsMouseButtonDown(MouseButton.Left))
         {
             return;
         }
@@ -110,8 +115,8 @@ public partial class EquipmentItem
     {
         var rect = new FloatRect()
         {
-            X = Pnl.LocalPosToCanvas(new Point(0, 0)).X,
-            Y = Pnl.LocalPosToCanvas(new Point(0, 0)).Y,
+            X = Pnl.ToCanvas(new Point(0, 0)).X,
+            Y = Pnl.ToCanvas(new Point(0, 0)).Y,
             Width = Pnl.Width,
             Height = Pnl.Height
         };

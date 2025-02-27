@@ -1,4 +1,6 @@
-﻿using Intersect.Client.Framework.Gwen.Input;
+﻿using Intersect.Client.Framework.GenericClasses;
+using Intersect.Client.Framework.Gwen.Input;
+using Intersect.Client.Framework.Input;
 
 namespace Intersect.Client.Framework.Gwen.Control;
 
@@ -47,18 +49,13 @@ public partial class VerticalScrollBar : ScrollBar
 
     public override float NudgeAmount
     {
-        get
-        {
-            if (mDepressed)
-            {
-                return mViewableContentSize / mContentSize;
-            }
-            else
-            {
-                return base.NudgeAmount;
-            }
-        }
+        get => mDepressed ? mViewableContentSize / mContentSize : base.NudgeAmount;
         set => base.NudgeAmount = value;
+    }
+
+    protected override void OnBoundsChanged(Rectangle oldBounds, Rectangle newBounds)
+    {
+        base.OnBoundsChanged(oldBounds, newBounds);
     }
 
     /// <summary>
@@ -67,8 +64,6 @@ public partial class VerticalScrollBar : ScrollBar
     /// <param name="skin">Skin to use.</param>
     protected override void Layout(Skin.Base skin)
     {
-        base.Layout(skin);
-
         mScrollButton[0].Height = Width;
         mScrollButton[0].Dock = Pos.Top;
 
@@ -76,7 +71,7 @@ public partial class VerticalScrollBar : ScrollBar
         mScrollButton[1].Dock = Pos.Bottom;
 
         mBar.Width = ButtonSize;
-        mBar.Padding = new Padding(0, ButtonSize, 0, ButtonSize);
+        mBar.Margin = new Margin(0, ButtonSize, 0, ButtonSize);
 
         var barHeight = 0.0f;
         if (mContentSize > 0.0f)
@@ -93,11 +88,18 @@ public partial class VerticalScrollBar : ScrollBar
         mBar.IsHidden = Height - ButtonSize * 2 <= barHeight;
 
         //Based on our last scroll amount, produce a position for the bar
-        if (!mBar.IsHeld)
+        var isHeld = mBar.IsActive;
+        if (!isHeld)
         {
-            SetScrollAmount(ScrollAmount, true);
+            SetScrollAmount(ScrollAmount, _wasHeld != isHeld);
         }
+
+        _wasHeld = isHeld;
+
+        base.Layout(skin);
     }
+
+    private bool _wasHeld;
 
     public virtual void NudgeUp(Base control, EventArgs args)
     {
@@ -127,35 +129,40 @@ public partial class VerticalScrollBar : ScrollBar
         SetScrollAmount(1, true);
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    /// <param name="down">If set to <c>true</c> mouse button is down.</param>
-    protected override void OnMouseClickedLeft(int x, int y, bool down, bool automated = false)
+    protected override void OnMouseDown(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        base.OnMouseClickedLeft(x, y, down);
-        if (down)
-        {
-            mDepressed = true;
-            InputHandler.MouseFocus = this;
-        }
-        else
-        {
-            var clickPos = CanvasPosToLocal(new Point(x, y));
-            if (clickPos.Y < mBar.Y)
-            {
-                NudgeUp(this, EventArgs.Empty);
-            }
-            else if (clickPos.Y > mBar.Y + mBar.Height)
-            {
-                NudgeDown(this, EventArgs.Empty);
-            }
+        base.OnMouseDown(mouseButton, mousePosition, userAction);
 
-            mDepressed = false;
-            InputHandler.MouseFocus = null;
+        if (mouseButton != MouseButton.Left)
+        {
+            return;
         }
+
+        mDepressed = true;
+        InputHandler.MouseFocus = this;
+    }
+
+    protected override void OnMouseUp(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        base.OnMouseUp(mouseButton, mousePosition, userAction);
+
+        if (mouseButton != MouseButton.Left)
+        {
+            return;
+        }
+
+        var localCoordinates = CanvasPosToLocal(mousePosition);
+        if (localCoordinates.Y < mBar.Y)
+        {
+            NudgeUp(this, EventArgs.Empty);
+        }
+        else if (localCoordinates.Y > mBar.Y + mBar.Height)
+        {
+            NudgeDown(this, EventArgs.Empty);
+        }
+
+        mDepressed = false;
+        InputHandler.MouseFocus = null;
     }
 
     protected override float CalculateScrolledAmount()
@@ -193,7 +200,7 @@ public partial class VerticalScrollBar : ScrollBar
     /// <param name="control">The control.</param>
     protected override void OnBarMoved(Base control, EventArgs args)
     {
-        if (mBar.IsHeld)
+        if (mBar.IsActive)
         {
             SetScrollAmount(CalculateScrolledAmount(), false);
             base.OnBarMoved(control, EventArgs.Empty);

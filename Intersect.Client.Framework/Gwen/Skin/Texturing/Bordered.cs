@@ -16,8 +16,23 @@ public partial struct SubRect
 /// </summary>
 public partial struct Bordered : IEquatable<Bordered>
 {
+    private readonly float mX;
+    private readonly float mY;
 
-    private GameTexture mTexture;
+    public static implicit operator FivePatch(Bordered bordered)
+    {
+        return new FivePatch(
+            bordered.mTexture,
+            (int)bordered.mX,
+            (int)bordered.mY,
+            (int)bordered.mWidth,
+            (int)bordered.mHeight,
+            bordered.mMargin,
+            default
+        );
+    }
+
+    private IGameTexture mTexture;
 
     private readonly SubRect[] mRects;
 
@@ -28,22 +43,23 @@ public partial struct Bordered : IEquatable<Bordered>
     private float mHeight;
 
     public Bordered(
-        GameTexture texture,
+        IGameTexture texture,
         float x,
         float y,
         float w,
         float h,
-        Margin inMargin,
-        float drawMarginScale = 1.0f
+        Margin inMargin
     ) : this()
     {
+        mX = x;
+        mY = y;
         mRects = new SubRect[9];
         for (var i = 0; i < mRects.Length; i++)
         {
             mRects[i].Uv = new float[4];
         }
 
-        Init(texture, x, y, w, h, inMargin, drawMarginScale);
+        Init(texture, x, y, w, h, inMargin);
     }
 
     void DrawRect(Renderer.Base render, int i, int x, int y, int w, int h, Color clr)
@@ -78,7 +94,7 @@ public partial struct Bordered : IEquatable<Bordered>
     }
 
     private void Init(
-        GameTexture texture,
+        IGameTexture texture,
         float x,
         float y,
         float w,
@@ -97,22 +113,21 @@ public partial struct Bordered : IEquatable<Bordered>
 
         SetRect(3, x, y + mMargin.Top, mMargin.Left, h - mMargin.Top - mMargin.Bottom);
         SetRect(
-            4, x + mMargin.Left, y + mMargin.Top, w - mMargin.Left - mMargin.Right, h - mMargin.Top - mMargin.Bottom
+            4,
+            x + mMargin.Left,
+            y + mMargin.Top,
+            w - mMargin.Left - mMargin.Right,
+            h - mMargin.Top - mMargin.Bottom
         );
 
-        SetRect(5, x + w - mMargin.Right, y + mMargin.Top, mMargin.Right, h - mMargin.Top - mMargin.Bottom - 1);
+        SetRect(5, x + w - mMargin.Right, y + mMargin.Top, mMargin.Right, h - mMargin.Top - mMargin.Bottom);
 
         SetRect(6, x, y + h - mMargin.Bottom, mMargin.Left, mMargin.Bottom);
         SetRect(7, x + mMargin.Left, y + h - mMargin.Bottom, w - mMargin.Left - mMargin.Right, mMargin.Bottom);
         SetRect(8, x + w - mMargin.Right, y + h - mMargin.Bottom, mMargin.Right, mMargin.Bottom);
 
-        mMargin.Left = (int) (mMargin.Left * drawMarginScale);
-        mMargin.Right = (int) (mMargin.Right * drawMarginScale);
-        mMargin.Top = (int) (mMargin.Top * drawMarginScale);
-        mMargin.Bottom = (int) (mMargin.Bottom * drawMarginScale);
-
-        mWidth = w - x;
-        mHeight = h - y;
+        mWidth = w;
+        mHeight = h;
     }
 
     // can't have this as default param

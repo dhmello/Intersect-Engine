@@ -1,8 +1,6 @@
 using System.Media;
-
 using DarkUI.Controls;
 using DarkUI.Forms;
-
 using Intersect.Editor.Content;
 using Intersect.Editor.Core;
 using Intersect.Editor.General;
@@ -11,7 +9,6 @@ using Intersect.Editor.Networking;
 using Intersect.Enums;
 using Intersect.GameObjects;
 using Intersect.Utilities;
-
 using Microsoft.Xna.Framework.Graphics;
 
 namespace Intersect.Editor.Forms.Editors;
@@ -21,11 +18,11 @@ public partial class FrmAnimation : EditorForm
 {
     private readonly ToolTip _tooltip = new();
 
-    private List<AnimationBase> mChanged = new List<AnimationBase>();
+    private List<AnimationDescriptor> mChanged = new List<AnimationDescriptor>();
 
     private string mCopiedItem;
 
-    private AnimationBase mEditorItem;
+    private AnimationDescriptor mEditorItem;
 
     private List<string> mKnownFolders = new List<string>();
 
@@ -61,7 +58,7 @@ public partial class FrmAnimation : EditorForm
 
     private void AssignEditorItem(Guid id)
     {
-        mEditorItem = AnimationBase.Get(id);
+        mEditorItem = AnimationDescriptor.Get(id);
         UpdateEditor();
     }
 
@@ -73,7 +70,7 @@ public partial class FrmAnimation : EditorForm
         }
 
         InitEditor();
-        if (mEditorItem == null || AnimationBase.Lookup.Values.Contains(mEditorItem))
+        if (mEditorItem == null || AnimationDescriptor.Lookup.Values.Contains(mEditorItem))
         {
             return;
         }
@@ -823,15 +820,15 @@ public partial class FrmAnimation : EditorForm
     {
         //Collect folders
         var mFolders = new List<string>();
-        foreach (var anim in AnimationBase.Lookup)
+        foreach (var anim in AnimationDescriptor.Lookup)
         {
-            if (!string.IsNullOrEmpty(((AnimationBase)anim.Value).Folder) &&
-                !mFolders.Contains(((AnimationBase)anim.Value).Folder))
+            if (!string.IsNullOrEmpty(((AnimationDescriptor)anim.Value).Folder) &&
+                !mFolders.Contains(((AnimationDescriptor)anim.Value).Folder))
             {
-                mFolders.Add(((AnimationBase)anim.Value).Folder);
-                if (!mKnownFolders.Contains(((AnimationBase)anim.Value).Folder))
+                mFolders.Add(((AnimationDescriptor)anim.Value).Folder);
+                if (!mKnownFolders.Contains(((AnimationDescriptor)anim.Value).Folder))
                 {
-                    mKnownFolders.Add(((AnimationBase)anim.Value).Folder);
+                    mKnownFolders.Add(((AnimationDescriptor)anim.Value).Folder);
                 }
             }
         }
@@ -842,8 +839,8 @@ public partial class FrmAnimation : EditorForm
         cmbFolder.Items.Add("");
         cmbFolder.Items.AddRange(mKnownFolders.ToArray());
 
-        var items = AnimationBase.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
-            new KeyValuePair<string, string>(((AnimationBase)pair.Value)?.Name ?? Models.DatabaseObject<AnimationBase>.Deleted, ((AnimationBase)pair.Value)?.Folder ?? ""))).ToArray();
+        var items = AnimationDescriptor.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
+            new KeyValuePair<string, string>(((AnimationDescriptor)pair.Value)?.Name ?? Models.DatabaseObject<AnimationDescriptor>.Deleted, ((AnimationDescriptor)pair.Value)?.Folder ?? ""))).ToArray();
         lstGameObjects.Repopulate(items, mFolders, btnAlphabetical.Checked, CustomSearch(), txtSearch.Text);
     }
 

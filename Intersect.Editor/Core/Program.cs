@@ -1,9 +1,17 @@
 using System.Diagnostics;
 using System.Reflection;
-
 using Intersect.Editor.Forms;
 using Intersect.Editor.General;
-using Intersect.Logging;
+using Intersect.Framework.Logging;
+using Intersect.Network;
+using Intersect.Plugins.Helpers;
+using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
+using Serilog.Extensions.Logging;
+using ApplicationContext = Intersect.Core.ApplicationContext;
+
 
 namespace Intersect.Editor.Core;
 
@@ -33,7 +41,34 @@ public static partial class Program
     [STAThread]
     public static void Main()
     {
-        Log.Diagnostic("Starting editor...");
+        LoggingLevelSwitch loggingLevelSwitch =
+            new(Debugger.IsAttached ? LogEventLevel.Debug : LogEventLevel.Information);
+
+        var executingAssembly = Assembly.GetExecutingAssembly();
+        var (loggerFactory, logger) = new LoggerConfiguration().CreateLoggerForIntersect(
+            executingAssembly,
+            "Editor",
+            loggingLevelSwitch
+        );
+
+        var packetTypeRegistry = new PacketTypeRegistry(
+            loggerFactory.CreateLogger<PacketTypeRegistry>(),
+            typeof(SharedConstants).Assembly
+        );
+        if (!packetTypeRegistry.TryRegisterBuiltIn())
+        {
+            throw new Exception("Failed to register built-in packets.");
+        }
+
+        var packetHandlerRegistry = new PacketHandlerRegistry(
+            packetTypeRegistry,
+            loggerFactory.CreateLogger<PacketHandlerRegistry>()
+        );
+        var packetHelper = new PacketHelper(packetTypeRegistry, packetHandlerRegistry);
+        PackedIntersectPacket.AddKnownTypes(packetHelper.AvailablePacketTypes);
+        EditorContext editorContext = new(executingAssembly, packetHelper, logger);
+        
+        ApplicationContext.CurrentContext.Logger.LogTrace("Starting editor...");
 
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         Application.ThreadException += Application_ThreadException;
@@ -41,7 +76,7 @@ public static partial class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        Log.Diagnostic("Unpacking libraries...");
+        ApplicationContext.CurrentContext.Logger.LogTrace("Unpacking libraries...");
 
         //Place sqlite3.dll where it's needed.
         var dllname = Environment.Is64BitProcess ? "sqlite3x64.dll" : "sqlite3x86.dll";
@@ -57,15 +92,15 @@ public static partial class Program
             }
         }
 
-        Log.Diagnostic("Libraries unpacked.");
+        ApplicationContext.CurrentContext.Logger.LogTrace("Libraries unpacked.");
 
-        Log.Diagnostic("Creating forms...");
+        ApplicationContext.CurrentContext.Logger.LogTrace("Creating forms...");
         Globals.UpdateForm = new FrmUpdate();
         Globals.LoginForm = new FrmLogin();
         Globals.MainForm = new FrmMain();
-        Log.Diagnostic("Forms created.");
+        ApplicationContext.CurrentContext.Logger.LogTrace("Forms created.");
 
-        Log.Diagnostic("Starting application.");
+        ApplicationContext.CurrentContext.Logger.LogTrace("Starting application.");
         Application.Run(Globals.UpdateForm);
     }
 
@@ -77,7 +112,10 @@ public static partial class Program
     //Really basic error handler for debugging purposes
     public static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs exception)
     {
-        Log.Error((Exception) exception?.ExceptionObject);
+        ApplicationContext.CurrentContext.Logger.LogError(
+            (Exception)exception?.ExceptionObject,
+            "Unhandled exception"
+        );
         MessageBox.Show(
             @"The Intersect Editor has encountered an error and must close. Error information can be found in logs/errors.log"
         );

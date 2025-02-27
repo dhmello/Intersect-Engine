@@ -56,10 +56,10 @@ public partial class QuestOfferWindow
         mDeclineButton.Clicked += _declineButton_Clicked;
 
         mQuestOfferWindow.LoadJsonUi(GameContentManager.UI.InGame, Graphics.Renderer.GetResolutionString());
-        Interface.InputBlockingElements.Add(mQuestOfferWindow);
+        Interface.InputBlockingComponents.Add(mQuestOfferWindow);
     }
 
-    private void _declineButton_Clicked(Base sender, ClickedEventArgs arguments)
+    private void _declineButton_Clicked(Base sender, MouseButtonState arguments)
     {
         if (Globals.QuestOffers.Count > 0)
         {
@@ -68,7 +68,7 @@ public partial class QuestOfferWindow
         }
     }
 
-    private void _acceptButton_Clicked(Base sender, ClickedEventArgs arguments)
+    private void _acceptButton_Clicked(Base sender, MouseButtonState arguments)
     {
         if (Globals.QuestOffers.Count > 0)
         {
@@ -90,7 +90,7 @@ public partial class QuestOfferWindow
             if (mQuestOfferText != quest.StartDescription)
             {
                 mQuestPromptLabel.ClearText();
-                mQuestPromptLabel.Width = mQuestPromptArea.Width - mQuestPromptArea.GetVerticalScrollBar().Width;
+                mQuestPromptLabel.Width = mQuestPromptArea.Width - mQuestPromptArea.VerticalScrollBar.Width;
                 mQuestPromptLabel.AddText(quest.StartDescription, mQuestPromptTemplate);
 
                 mQuestPromptLabel.SizeToChildren(false, true);

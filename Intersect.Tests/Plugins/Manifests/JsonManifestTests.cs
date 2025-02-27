@@ -1,11 +1,7 @@
 ﻿
 using Newtonsoft.Json;
-
 using NUnit.Framework;
-
 using Semver;
-
-using System.IO;
 
 namespace Intersect.Plugins.Manifests
 {

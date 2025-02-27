@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Collections.Immutable;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -9,6 +8,7 @@ using System.Text;
 using Amib.Threading;
 using Intersect.Collections;
 using Intersect.Config;
+using Intersect.Core;
 using Intersect.Enums;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.Framework.Reflection;
@@ -17,8 +17,6 @@ using Intersect.GameObjects.Crafting;
 using Intersect.GameObjects.Events;
 using Intersect.GameObjects.Maps;
 using Intersect.GameObjects.Maps.MapList;
-using Intersect.Logging;
-using Intersect.Logging.Output;
 using Intersect.Models;
 using Intersect.Server.Core;
 using Intersect.Server.Database.GameData;
@@ -31,12 +29,13 @@ using Intersect.Server.General;
 using Intersect.Server.Localization;
 using Intersect.Server.Maps;
 using Intersect.Server.Networking;
-
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.Extensions.Logging;
 using MySqlConnector;
-using LogLevel = Intersect.Logging.LogLevel;
+using Serilog;
+using Serilog.Events;
+using Serilog.Extensions.Logging;
 
 namespace Intersect.Server.Database;
 
@@ -63,10 +62,6 @@ public static partial class DbInterface
     private static string LoggingDbFilename => Path.Combine(ServerContext.ResourceDirectory, "logging.db");
 
     private static string PlayersDbFilename => Path.Combine(ServerContext.ResourceDirectory, "playerdata.db");
-
-    private static Logger _gameDatabaseLogger { get; set; }
-
-    private static Logger _playerDatabaseLogger { get; set; }
 
     public static Dictionary<string, ServerVariableDescriptor> ServerVariableEventTextLookup = new();
 
@@ -97,9 +92,7 @@ public static partial class DbInterface
         ExplicitLoad = explicitLoad,
         KillServerOnConcurrencyException = Options.Instance.GameDatabase.KillServerOnConcurrencyException,
         LazyLoading = lazyLoading,
-#if DEBUG
-        LoggerFactory = new IntersectLoggerFactory(nameof(GameContext)),
-#endif
+        LoggerFactory = CreateLoggerFactory<GameContext>(Options.Instance.GameDatabase),
         QueryTrackingBehavior = queryTrackingBehavior,
         ReadOnly = readOnly,
     });
@@ -121,9 +114,7 @@ public static partial class DbInterface
         ExplicitLoad = explicitLoad,
         KillServerOnConcurrencyException = Options.Instance.LoggingDatabase.KillServerOnConcurrencyException,
         LazyLoading = lazyLoading,
-#if DEBUG
-        LoggerFactory = new IntersectLoggerFactory(nameof(LoggingContext)),
-#endif
+        LoggerFactory = CreateLoggerFactory<LoggingContext>(Options.Instance.LoggingDatabase),
         QueryTrackingBehavior = queryTrackingBehavior,
         ReadOnly = readOnly,
     });
@@ -150,43 +141,10 @@ public static partial class DbInterface
         ExplicitLoad = explicitLoad,
         KillServerOnConcurrencyException = Options.Instance.PlayerDatabase.KillServerOnConcurrencyException,
         LazyLoading = lazyLoading,
-#if DEBUG
-        LoggerFactory = new IntersectLoggerFactory(nameof(PlayerContext)),
-#endif
+        LoggerFactory = CreateLoggerFactory<PlayerContext>(Options.Instance.PlayerDatabase),
         QueryTrackingBehavior = queryTrackingBehavior,
         ReadOnly = readOnly,
     });
-
-    public static void InitializeDbLoggers()
-    {
-        if (Options.Instance.GameDatabase.LogLevel > LogLevel.None)
-        {
-            _gameDatabaseLogger = new Logger(
-                new LogConfiguration
-                {
-                    Tag = "GAMEDB",
-                    LogLevel = Options.Instance.GameDatabase.LogLevel,
-                    Outputs = ImmutableList.Create<ILogOutput>(
-                        new FileOutput(Log.SuggestFilename(null, "gamedb"), LogLevel.Debug)
-                    )
-                }
-            );
-        }
-
-        if (Options.Instance.PlayerDatabase.LogLevel > LogLevel.None)
-        {
-            _playerDatabaseLogger = new Logger(
-                new LogConfiguration
-                {
-                    Tag = "PLAYERDB",
-                    LogLevel = Options.Instance.PlayerDatabase.LogLevel,
-                    Outputs = ImmutableList.Create<ILogOutput>(
-                        new FileOutput(Log.SuggestFilename(null, "playerdb"), LogLevel.Debug)
-                    )
-                }
-            );
-        }
-    }
 
     //Check Directories
     public static void CheckDirectories()
@@ -250,18 +208,18 @@ public static partial class DbInterface
     {
         if (!context.HasPendingMigrations)
         {
-            Log.Verbose($"No pending migrations for {context.GetType().GetName(qualified: true)}, skipping...");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"No pending migrations for {context.GetType().GetName(qualified: true)}, skipping...");
             return;
         }
 
-        Log.Verbose($"Pending schema migrations for {typeof(TContext).Name}:\n\t{string.Join("\n\t", context.PendingSchemaMigrations)}");
-        Log.Verbose($"Pending data migrations for {typeof(TContext).Name}:\n\t{string.Join("\n\t", context.PendingDataMigrationNames)}");
+        ApplicationContext.Context.Value?.Logger.LogDebug($"Pending schema migrations for {typeof(TContext).Name}:\n\t{string.Join("\n\t", context.PendingSchemaMigrations)}");
+        ApplicationContext.Context.Value?.Logger.LogDebug($"Pending data migrations for {typeof(TContext).Name}:\n\t{string.Join("\n\t", context.PendingDataMigrationNames)}");
 
         var migrationScheduler = new MigrationScheduler<TContext>(context);
-        Log.Verbose("Scheduling pending migrations...");
+        ApplicationContext.Context.Value?.Logger.LogDebug("Scheduling pending migrations...");
         migrationScheduler.SchedulePendingMigrations();
 
-        Log.Verbose("Applying scheduled migrations...");
+        ApplicationContext.Context.Value?.Logger.LogDebug("Applying scheduled migrations...");
         migrationScheduler.ApplyScheduledMigrations();
 
         var remainingPendingSchemaMigrations = context.PendingSchemaMigrations.ToList();
@@ -271,10 +229,28 @@ public static partial class DbInterface
         context.OnSchemaMigrationsProcessed(processedSchemaMigrations.ToArray());
     }
 
+    internal static ILoggerFactory CreateLoggerFactory<TDBContext>(DatabaseOptions databaseOptions)
+        where TDBContext : IntersectDbContext<TDBContext>
+    {
+        var contextName = typeof(TDBContext).Name;
+        var configuration = new LoggerConfiguration()
+            .Enrich.FromLogContext()
+            .MinimumLevel.Is(LevelConvert.ToSerilogLevel(databaseOptions.LogLevel))
+            .WriteTo.Console(restrictedToMinimumLevel: Debugger.IsAttached ? LogEventLevel.Warning : LogEventLevel.Error)
+            .WriteTo.File(path: $"logs/db-{contextName}.log").WriteTo.File(
+                path: $"logs/db-errors-{contextName}.log",
+                restrictedToMinimumLevel: LogEventLevel.Error,
+                rollOnFileSizeLimit: true,
+                retainedFileTimeLimit: TimeSpan.FromDays(30)
+            );
+
+        return new SerilogLoggerFactory(configuration.CreateLogger());
+    }
+
     private static bool EnsureUpdated(IServerContext serverContext)
     {
         var gameDatabaseOptions = Options.Instance.GameDatabase;
-        Log.Info($"Creating game context using {gameDatabaseOptions.Type}...");
+        ApplicationContext.Context.Value?.Logger.LogInformation($"Creating game context using {gameDatabaseOptions.Type}...");
         using var gameContext = GameContext.Create(new DatabaseContextOptions
         {
             ConnectionStringBuilder = gameDatabaseOptions.Type.CreateConnectionStringBuilder(
@@ -284,11 +260,11 @@ public static partial class DbInterface
             DatabaseType = gameDatabaseOptions.Type,
             EnableDetailedErrors = true,
             EnableSensitiveDataLogging = true,
-            LoggerFactory = new IntersectLoggerFactory(nameof(GameContext)),
+            LoggerFactory = CreateLoggerFactory<GameContext>(gameDatabaseOptions),
         });
 
         var playerDatabaseOptions = Options.Instance.PlayerDatabase;
-        Log.Info($"Creating player context using {playerDatabaseOptions.Type}...");
+        ApplicationContext.Context.Value?.Logger.LogInformation($"Creating player context using {playerDatabaseOptions.Type}...");
         using var playerContext = PlayerContext.Create(new DatabaseContextOptions
         {
             ConnectionStringBuilder = playerDatabaseOptions.Type.CreateConnectionStringBuilder(
@@ -298,11 +274,11 @@ public static partial class DbInterface
             DatabaseType = playerDatabaseOptions.Type,
             EnableDetailedErrors = true,
             EnableSensitiveDataLogging = true,
-            LoggerFactory = new IntersectLoggerFactory(nameof(PlayerContext)),
+            LoggerFactory = CreateLoggerFactory<PlayerContext>(playerDatabaseOptions),
         });
 
         var loggingDatabaseOptions = Options.Instance.LoggingDatabase;
-        Log.Info($"Creating logging context using {loggingDatabaseOptions.Type}...");
+        ApplicationContext.Context.Value?.Logger.LogInformation($"Creating logging context using {loggingDatabaseOptions.Type}...");
         using var loggingContext = LoggingContext.Create(new DatabaseContextOptions
         {
             ConnectionStringBuilder = loggingDatabaseOptions.Type.CreateConnectionStringBuilder(
@@ -312,7 +288,7 @@ public static partial class DbInterface
             DatabaseType = loggingDatabaseOptions.Type,
             EnableDetailedErrors = true,
             EnableSensitiveDataLogging = true,
-            LoggerFactory = new IntersectLoggerFactory(nameof(LoggingContext)),
+            LoggerFactory = CreateLoggerFactory<LoggingContext>(loggingDatabaseOptions),
         });
 
         // We don't want anyone running the old migration tool accidentally
@@ -357,7 +333,9 @@ public static partial class DbInterface
             if (serverContext.StartupOptions.MigrateAutomatically)
             {
                 Console.WriteLine(Strings.Database.MigratingAutomatically);
-                Log.Default.Write("Skipping user prompt for database migration...");
+                ApplicationContext.Context.Value?.Logger.LogInformation(
+                    "Skipping user prompt for database migration..."
+                );
             }
             else
             {
@@ -428,6 +406,9 @@ public static partial class DbInterface
         Console.WriteLine("Loading game data...");
 
         LoadAllGameObjects();
+
+        ValidateMapEvents();
+        
         LoadTime();
         OnClassesLoaded();
         OnMapsLoaded();
@@ -437,24 +418,6 @@ public static partial class DbInterface
         CacheUserVariableEventTextLookups();
 
         return true;
-    }
-
-    public static Client GetPlayerClient(string username)
-    {
-        //Try to fetch a player entity by username, online or offline.
-        //Check Online First
-        lock (Globals.ClientLock)
-        {
-            foreach (var client in Globals.Clients)
-            {
-                if (client.Entity != null && client.Name.ToLower() == username.ToLower())
-                {
-                    return client;
-                }
-            }
-        }
-
-        return null;
     }
 
     public static void SetPlayerPower(string username, UserRights power)
@@ -531,7 +494,12 @@ public static partial class DbInterface
             catch (Exception exception)
             {
                 Debugger.Break();
-                Log.Error(exception);
+                ApplicationContext.Context.Value?.Logger.LogError(
+                    exception,
+                    "Failed to load relationships for user {UserId}'s player {PlayerId}",
+                    user.Id,
+                    playerId
+                );
                 throw new Exception($"Error during explicit load of player {BitConverter.ToString(playerId.ToByteArray()).Replace("-", string.Empty)}", exception);
             }
 
@@ -575,7 +543,11 @@ public static partial class DbInterface
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error while registering '{Username}'",
+                username
+            );
             user = default;
             return false;
         }
@@ -665,7 +637,7 @@ public static partial class DbInterface
         switch (type)
         {
             case GameObjectType.Animation:
-                AnimationBase.Lookup.Clear();
+                AnimationDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Class:
@@ -755,7 +727,7 @@ public static partial class DbInterface
                     case GameObjectType.Animation:
                         foreach (var anim in context.Animations) // TODO: fix "The data is NULL at ordinal 2"
                         {
-                            AnimationBase.Lookup.Set(anim.Id, anim);
+                            AnimationDescriptor.Lookup.Set(anim.Id, anim);
                         }
 
                         break;
@@ -837,7 +809,7 @@ public static partial class DbInterface
                         foreach (var map in context.Maps)
                         {
                             MapController.Lookup.Set(map.Id, map);
-                            if (Options.Instance.MapOpts.Layers.DestroyOrphanedLayers)
+                            if (Options.Instance.Map.Layers.DestroyOrphanedLayers)
                             {
                                 map.DestroyOrphanedLayers();
                             }
@@ -893,11 +865,116 @@ public static partial class DbInterface
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error while loading game objects of type {GameObjectType}",
+                gameObjectType
+            );
             throw;
         }
+    }
+    
+    private static void ValidateMapEvents()
+    {
+        var missingEvents = 0;
+        var correctedEvents = 0;
+        
+        foreach (var (mapId, databaseObject) in MapController.Lookup)
+        {
+            if (databaseObject is not MapBase mapDescriptor)
+            {
+                ApplicationContext.CurrentContext.Logger.LogError(
+                    "Found an invalid database object in the MapDescriptor lookup ({InvalidObjectType}, {InvalidObjectId}, '{InvalidObjectName}'",
+                    databaseObject.GetType().GetName(qualified: true),
+                    databaseObject.Id,
+                    databaseObject.Name
+                );
+                continue;
+            }
+
+            var actualMapId = mapDescriptor.Id;
+            if (mapId != actualMapId)
+            {
+                ApplicationContext.CurrentContext.Logger.LogError(
+                    "Map with ID {ActualMapId} was recorded in the lookup under the ID {ExpectedMapId}, this needs to be investigated",
+                    actualMapId,
+                    mapId
+                );
+            }
+            
+            foreach (var eventId in mapDescriptor.EventIds)
+            {
+                if (!EventBase.TryGet(eventId, out var eventDescriptor))
+                {
+                    ApplicationContext.CurrentContext.Logger.LogWarning(
+                        "Map {MapId} references missing event {EventId}, unexpected behavior may occur",
+                        mapId,
+                        eventId
+                    );
+                    ++missingEvents;
+                    continue;
+                }
+
+                // Ignore common events
+                if (eventDescriptor is not { CommonEvent: false })
+                {
+                    continue;
+                }
+
+                // The map ID is correct, no validation necessary
+                var referencedMapId = eventDescriptor.MapId;
+                if (referencedMapId == mapId)
+                {
+                    continue;
+                }
+
+                // If the event is 1) not common and 2) is not using this map's ID, fix it. It was copied wrong in the editor
+                string referencedMapName = $"deleted map {referencedMapId}";
+                if (MapController.TryGet(referencedMapId, out var referencedMapDescriptor))
+                {
+                    referencedMapName = referencedMapDescriptor.Name;
+                }
+
+                if (string.IsNullOrWhiteSpace(referencedMapName))
+                {
+                    referencedMapName = "(unnamed map)";
+                }
+
+                eventDescriptor.MapId = mapId;
+                ++correctedEvents;
+
+                var eventName = eventDescriptor.Name?.Trim();
+                if (string.IsNullOrWhiteSpace(eventName))
+                {
+                    eventName = "(unnamed event)";
+                }
+
+                var mapName = mapDescriptor.Name;
+                if (string.IsNullOrWhiteSpace(mapName))
+                {
+                    mapName = "(unnamed map)";
+                }
+
+
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "Event '{EventName}' ({EventId}) on the map '{MapName}'({MapId}) was pointing to '{ReferencedMapName}' ({ReferencedMapId}) and while this has been corrected, the correction will not be saved until the event is resaved",
+                    eventName,
+                    eventId,
+                    mapName,
+                    mapId,
+                    referencedMapName,
+                    referencedMapId
+                );
+            }
+        }
+
+        ApplicationContext.CurrentContext.Logger.LogWarning(
+            "Finished validating map events on all maps, there were {MissingEvents} missing events and {CorrectedEvents} corrected events",
+            missingEvents,
+            correctedEvents
+        );
     }
 
     public static IDatabaseObject AddGameObject(GameObjectType gameObjectType)
@@ -916,7 +993,7 @@ public static partial class DbInterface
         switch (gameObjectType)
         {
             case GameObjectType.Animation:
-                dbObj = new AnimationBase(predefinedid);
+                dbObj = new AnimationDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Class:
@@ -1013,8 +1090,8 @@ public static partial class DbInterface
                 switch (gameObjectType)
                 {
                     case GameObjectType.Animation:
-                        context.Animations.Add((AnimationBase)dbObj);
-                        AnimationBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Animations.Add((AnimationDescriptor)dbObj);
+                        AnimationDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
@@ -1133,9 +1210,13 @@ public static partial class DbInterface
 
             return dbObj;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error adding a {GameObjectType}",
+                gameObjectType
+            );
             throw;
         }
     }
@@ -1149,7 +1230,7 @@ public static partial class DbInterface
                 switch (gameObject.Type)
                 {
                     case GameObjectType.Animation:
-                        context.Animations.Remove((AnimationBase)gameObject);
+                        context.Animations.Remove((AnimationDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Class:
@@ -1272,9 +1353,15 @@ public static partial class DbInterface
                 context.SaveChanges();
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error deleting {GameObjectType} {GameObjectId} '{GameObjectName}'",
+                gameObject.Type,
+                gameObject.Id,
+                gameObject.Name
+            );
             throw;
         }
     }
@@ -1289,7 +1376,7 @@ public static partial class DbInterface
                 switch (gameObject.Type)
                 {
                     case GameObjectType.Animation:
-                        context.Animations.Update((AnimationBase)gameObject);
+                        context.Animations.Update((AnimationDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Class:
@@ -1412,9 +1499,15 @@ public static partial class DbInterface
                 context.SaveChanges();
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error saving {GameObjectType} {GameObjectId} '{GameObjectName}'",
+                gameObject.Type,
+                gameObject.Id,
+                gameObject.Name
+            );
             throw;
         }
     }
@@ -1693,9 +1786,9 @@ public static partial class DbInterface
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error loading map folders");
             throw;
         }
 
@@ -1722,9 +1815,9 @@ public static partial class DbInterface
                 context.SaveChanges();
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error saving map list");
             throw;
         }
     }
@@ -1750,9 +1843,9 @@ public static partial class DbInterface
             }
             Time.Init();
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error loading time objects");
             throw;
         }
     }
@@ -1768,9 +1861,9 @@ public static partial class DbInterface
                 context.SaveChanges();
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error saving time objects");
             throw;
         }
     }
@@ -1910,7 +2003,11 @@ public static partial class DbInterface
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error processing migration for {SelectedContextType}",
+                selectedContextType
+            );
             throw;
         }
     }
@@ -1944,9 +2041,9 @@ public static partial class DbInterface
             DatabaseType = fromDatabaseOptions.Type,
             ExplicitLoad = false,
             LazyLoading = false,
-            LoggerFactory = default,
+            LoggerFactory = CreateLoggerFactory<TContext>(fromDatabaseOptions),
             QueryTrackingBehavior = default,
-            ReadOnly = false
+            ReadOnly = false,
         };
 
         DatabaseOptions toDatabaseOptions;
@@ -2004,7 +2101,8 @@ public static partial class DbInterface
                             Port = port,
                             Database = database,
                             Username = username,
-                            Password = password
+                            Password = password,
+                            LogLevel = fromDatabaseOptions.LogLevel,
                         };
                         toContextOptions = new()
                         {
@@ -2012,7 +2110,8 @@ public static partial class DbInterface
                                 toDatabaseOptions,
                                 default
                             ),
-                            DatabaseType = toDatabaseType
+                            DatabaseType = toDatabaseType,
+                            LoggerFactory = CreateLoggerFactory<TContext>(toDatabaseOptions),
                         };
 
                         try
@@ -2022,7 +2121,7 @@ public static partial class DbInterface
                         }
                         catch (Exception exception)
                         {
-                            Log.Error(Strings.Migration.MySqlConnectionError.ToString(exception));
+                            ApplicationContext.Context.Value?.Logger.LogError(Strings.Migration.MySqlConnectionError.ToString(exception));
                             Console.WriteLine();
                             Console.WriteLine(Strings.Migration.MySqlTryAgain);
                             var input = Console.ReadLine();
@@ -2040,7 +2139,7 @@ public static partial class DbInterface
                                 continue;
                             }
 
-                            Log.Info(Strings.Migration.MigrationCanceled);
+                            ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Migration.MigrationCanceled);
                             return;
                         }
                     }
@@ -2073,27 +2172,32 @@ public static partial class DbInterface
                     {
                         // If it does, check if it is OK to overwrite
                         Console.WriteLine();
-                        Log.Error(Strings.Migration.DatabaseFileAlreadyExists.ToString(dbFileName));
+                        ApplicationContext.Context.Value?.Logger.LogError(Strings.Migration.DatabaseFileAlreadyExists.ToString(dbFileName));
                         var input = Console.ReadLine();
                         var key = input.Length > 0 ? input[0] : ' ';
                         Console.WriteLine();
                         if (key.ToString() != Strings.Migration.ConfirmCharacter)
                         {
-                            Log.Info(Strings.Migration.MigrationCanceled);
+                            ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Migration.MigrationCanceled);
                             return;
                         }
 
                         File.Delete(dbFileName);
                     }
 
-                    toDatabaseOptions = new() { Type = toDatabaseType };
+                    toDatabaseOptions = new()
+                    {
+                        LogLevel = fromDatabaseOptions.LogLevel,
+                        Type = toDatabaseType,
+                    };
                     toContextOptions = new()
                     {
                         ConnectionStringBuilder = toDatabaseType.CreateConnectionStringBuilder(
                             toDatabaseOptions,
                             dbFileName
                         ),
-                        DatabaseType = toDatabaseType
+                        DatabaseType = toDatabaseType,
+                        LoggerFactory = CreateLoggerFactory<TContext>(toDatabaseOptions),
                     };
 
                     break;
@@ -2104,7 +2208,7 @@ public static partial class DbInterface
         }
 
         // Shut down server, start migration.
-        Log.Info(Strings.Migration.StoppingServer);
+        ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Migration.StoppingServer);
 
         //This variable will end the server loop and save any pending changes
         ServerContext.Instance.DisposeWithoutExiting = true;
@@ -2115,7 +2219,7 @@ public static partial class DbInterface
             Thread.Sleep(100);
         }
 
-        Log.Info(Strings.Migration.StartingMigration);
+        ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Migration.StartingMigration);
         var migrationService = new DatabaseTypeMigrationService();
         if (await migrationService.TryMigrate<TContext>(fromContextOptions, toContextOptions))
         {
@@ -2138,13 +2242,13 @@ public static partial class DbInterface
 
             Options.SaveToDisk();
 
-            Log.Info(Strings.Migration.MigrationComplete);
+            ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Migration.MigrationComplete);
             Bootstrapper.Context.WaitForConsole();
             ServerContext.Exit(0);
         }
         else
         {
-            Log.Error($"Error migrating context type: {typeof(TContext).FullName}");
+            ApplicationContext.Context.Value?.Logger.LogError($"Error migrating context type: {typeof(TContext).FullName}");
             ServerContext.Exit(1);
         }
     }

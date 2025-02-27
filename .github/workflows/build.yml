@@ -38,9 +38,41 @@ permissions:
 
 env:
   VERSION_PREFIX: 0.8.0
+  VERSION_SUFFIX_NAME: beta
   VERSION_SUFFIX: -beta
 
 jobs:
+  check-tokens:
+    name: Check the access tokens used for publishing
+    runs-on: ubuntu-latest
+    if: inputs.packagingDebug != true && inputs.skipForumPublish != true
+    outputs:
+      publish-forum: ${{ secrets.INTERSECTBOT_FORUM_TOKEN != '' }}
+      publish-github: ${{ secrets.INTERSECTBOT_ACCESS_TOKEN != '' }}
+    steps:
+      - id: dump-token-state
+        name: Log the state of the tokens
+        env:
+          PUBLISH_FORUM: ${{ secrets.INTERSECTBOT_FORUM_TOKEN != '' }}
+          PUBLISH_GITHUB: ${{ secrets.INTERSECTBOT_ACCESS_TOKEN != '' }}
+        run: |
+          echo "PUBLISH_FORUM='$PUBLISH_FORUM'"
+          echo "PUBLISH_GITHUB='$PUBLISH_GITHUB'"
+
+  # debug-check-tokens:
+  #   name: Debug state of check-tokens
+  #   needs: [check-tokens]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - id: dump
+  #       name: Dump check-tokens output
+  #       env:
+  #         PUBLISH_FORUM: ${{ needs.check-tokens.outputs.publish-forum }}
+  #         PUBLISH_GITHUB: ${{ needs.check-tokens.outputs.publish-github }}
+  #       run: |
+  #         echo "PUBLISH_FORUM='$PUBLISH_FORUM'"
+  #         echo "PUBLISH_GITHUB='$PUBLISH_GITHUB'"
+
   generate-keys:
     name: Generate Version-Specific Network Keys
     runs-on: ubuntu-latest
@@ -75,7 +107,7 @@ jobs:
           Intersect*/obj/
 
     - name: Apply environment patches
-      run: git apply disable-windows-editor.patch
+      run: git apply disable-windows-only.patch
 
     - name: Restore NuGet Packages
       if: steps.cache-binaries.outputs.cache-hit != 'true' && steps.cache-nuget.outputs.cache-hit != 'true' || inputs.forceRestore == true
@@ -131,7 +163,7 @@ jobs:
           Intersect*/obj/
 
     - name: Apply environment patches
-      run: git apply disable-windows-editor.patch
+      run: git apply disable-windows-only.patch
 
     - name: Restore NuGet Packages
       if: steps.cache-binaries.outputs.cache-hit != 'true' && steps.cache-nuget.outputs.cache-hit != 'true' || inputs.forceRestore == true
@@ -148,7 +180,7 @@ jobs:
 
     - name: Build solution
       if: steps.cache-binaries.outputs.cache-hit != 'true' || inputs.forceBuild == true || inputs.forceRestore == true
-      run: dotnet publish Intersect.sln --sc -r linux-x64 -p:Configuration=Release -p:PackageVersion=${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}+build.${{ github.sha }} -p:Version=${{ env.VERSION_PREFIX }}.${{ github.run_number }}
+      run: dotnet publish Intersect.sln --sc -r linux-x64 -p:Configuration=Release -p:PackageVersion=${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}+build.${{ github.sha }} -p:Version=${{ env.VERSION_PREFIX }}.${{ github.run_number }} -p:CommitSha=${{ github.sha }} -p:BuildNumber=${{ github.run_number }} -p:VersionNameSuffix=${{ env.VERSION_SUFFIX_NAME }}
 
     - name: Tarball artifacts to maintain unix file permissions
       run: tar -cvf linux.tar Intersect.Client/bin/Release/*/*/publish Intersect.Server/bin/Release/*/*/publish
@@ -199,7 +231,7 @@ jobs:
           Intersect*/obj/
 
     - name: Apply environment patches
-      run: git apply disable-windows-editor.patch
+      run: git apply disable-windows-only.patch
 
     - name: Restore NuGet Packages
       if: steps.cache-binaries.outputs.cache-hit != 'true' && steps.cache-nuget.outputs.cache-hit != 'true' || inputs.forceRestore == true
@@ -216,7 +248,7 @@ jobs:
 
     - name: Build solution
       if: steps.cache-binaries.outputs.cache-hit != 'true' || inputs.forceBuild == true || inputs.forceRestore == true
-      run: dotnet publish Intersect.sln --sc -r osx-x64   -p:Configuration=Release -p:PackageVersion=${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}+build.${{ github.sha }} -p:Version=${{ env.VERSION_PREFIX }}.${{ github.run_number }}
+      run: dotnet publish Intersect.sln --sc -r osx-x64   -p:Configuration=Release -p:PackageVersion=${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}+build.${{ github.sha }} -p:Version=${{ env.VERSION_PREFIX }}.${{ github.run_number }} -p:CommitSha=${{ github.sha }} -p:BuildNumber=${{ github.run_number }} -p:VersionNameSuffix=${{ env.VERSION_SUFFIX_NAME }}
 
     - name: Tarball artifacts to maintain unix file permissions
       run: tar -cvf osx.tar Intersect.Client/bin/Release/*/*/publish Intersect.Server/bin/Release/*/*/publish
@@ -285,7 +317,7 @@ jobs:
 
     - name: Build solution
       if: steps.cache-binaries.outputs.cache-hit != 'true' || inputs.forceBuild == true || inputs.forceRestore == true
-      run: dotnet publish Intersect.sln --sc -r win-x64   -p:Configuration=Release -p:PackageVersion=${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}+build.${{ github.sha }} -p:Version=${{ env.VERSION_PREFIX }}.${{ github.run_number }}
+      run: dotnet publish Intersect.sln --sc -r win-x64 -p:Configuration=Release -p:PackageVersion=${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}+build.${{ github.sha }} -p:Version=${{ env.VERSION_PREFIX }}.${{ github.run_number }} -p:CommitSha=${{ github.sha }} -p:BuildNumber=${{ github.run_number }} -p:VersionNameSuffix=${{ env.VERSION_SUFFIX_NAME }}
 
     - name: Tarball artifacts to maintain unix file permissions
       run: tar -cvf win.tar Intersect.Client/bin/Release/*/*/publish Intersect.Editor/bin/Release/*/*/publish Intersect.Server/bin/Release/*/*/publish
@@ -327,9 +359,9 @@ jobs:
 
   publish-github:
     name: Publish GitHub Release
-    if: inputs.workflowDebug != true
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos, build-windows, check-tokens]
     runs-on: ubuntu-latest
+    if: inputs.workflowDebug != true && needs.check-tokens.outputs.publish-github == 'true'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -386,26 +418,11 @@ jobs:
           prerelease: true
           tag: v${{ env.VERSION_PREFIX }}${{ env.VERSION_SUFFIX }}.${{ github.run_number }}
 
-  check-publish-forum:
-    name: Check if token set to publish to forum
-    if: inputs.workflowDebug != true && inputs.packagingDebug != true && inputs.skipForumPublish != true
-    needs: publish-github
-    runs-on: ubuntu-latest
-    outputs:
-      skip: ${{ steps.check-INTERSECTBOT_FORUM_TOKEN.outputs.skip == 'true' }}
-    steps:
-      - id: check-INTERSECTBOT_FORUM_TOKEN
-        name: Check INTERSECTBOT_FORUM_TOKEN
-        env:
-          INTERSECTBOT_FORUM_TOKEN: ${{ secrets.INTERSECTBOT_FORUM_TOKEN }}
-        if: ${{ env.INTERSECTBOT_FORUM_TOKEN == '' }}
-        run: echo "skip=true" >> "$GITHUB_OUTPUT"
-
   publish-forum:
     name: Publish to Forum
-    if: inputs.workflowDebug != true && inputs.packagingDebug != true && inputs.skipForumPublish != true && needs.check-publish-forum.outputs.skip != 'true'
-    needs: check-publish-forum
+    needs: [build-linux, build-macos, build-windows, check-tokens]
     runs-on: ubuntu-latest
+    if: inputs.workflowDebug != true && inputs.packagingDebug != true && inputs.skipForumPublish != true && needs.check-tokens.outputs.publish-forum == 'true'
     steps:
       - name: Publish to Forum
         uses: AscensionGameDev/actions@0223df40becb110039c705c02cfd2cd8f274199c

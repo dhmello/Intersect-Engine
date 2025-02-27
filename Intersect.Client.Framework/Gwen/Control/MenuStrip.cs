@@ -15,7 +15,7 @@ public partial class MenuStrip : Menu
     {
         SetBounds(0, 0, 200, 22);
         Dock = Pos.Top;
-        mInnerPanel.Padding = new Padding(5, 0, 0, 0);
+        _innerPanel.Padding = new Padding(5, 0, 0, 0);
     }
 
     /// <summary>
@@ -63,7 +63,6 @@ public partial class MenuStrip : Menu
     protected override void OnAddItem(MenuItem item)
     {
         item.Dock = Pos.Left;
-        item.TextPadding = new Padding(5, 0, 5, 0);
         item.Padding = new Padding(10, 0, 10, 0);
         item.SizeToContents();
         item.IsOnStrip = true;

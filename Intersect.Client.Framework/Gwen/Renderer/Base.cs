@@ -1,4 +1,5 @@
-﻿using Intersect.Client.Framework.GenericClasses;
+﻿using System.Numerics;
+using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
 #if DEBUG || DIAGNOSTIC
 #endif
@@ -10,7 +11,7 @@ namespace Intersect.Client.Framework.Gwen.Renderer;
 /// <summary>
 ///     Base renderer.
 /// </summary>
-public partial class Base : IDisposable
+public partial class Base : IDisposable, ITextHelper
 {
 
     private Rectangle mClipRegion;
@@ -108,7 +109,7 @@ public partial class Base : IDisposable
 #if DIAGNOSTIC
     ~Base()
     {
-        Log.Debug($"IDisposable object finalized: {GetType()}");
+        ApplicationContext.Context.Value?.Logger.LogDebug($"IDisposable object finalized: {GetType()}");
     }
 #endif
 
@@ -126,7 +127,7 @@ public partial class Base : IDisposable
     {
     }
 
-    public virtual GameTexture GetWhiteTexture()
+    public virtual IGameTexture GetWhiteTexture()
     {
         return null;
     }
@@ -168,7 +169,7 @@ public partial class Base : IDisposable
     ///     Loads the specified texture.
     /// </summary>
     /// <param name="t"></param>
-    public virtual void LoadTexture(GameTexture t)
+    public virtual void LoadTexture(IGameTexture t)
     {
     }
 
@@ -176,23 +177,23 @@ public partial class Base : IDisposable
     ///     Frees the specified texture.
     /// </summary>
     /// <param name="t">Texture to free.</param>
-    public virtual void FreeTexture(GameTexture t)
+    public virtual void FreeTexture(IGameTexture t)
     {
     }
 
     /// <summary>
     ///     Draws textured rectangle.
     /// </summary>
-    /// <param name="t">Texture to use.</param>
-    /// <param name="targetRect">Rectangle bounds.</param>
+    /// <param name="texture">Texture to use.</param>
+    /// <param name="targetBounds">Rectangle bounds.</param>
     /// <param name="u1">Texture coordinate u1.</param>
     /// <param name="v1">Texture coordinate v1.</param>
     /// <param name="u2">Texture coordinate u2.</param>
     /// <param name="v2">Texture coordinate v2.</param>
     public virtual void DrawTexturedRect(
-        GameTexture t,
-        Rectangle targetRect,
-        Color clr,
+        IGameTexture? texture,
+        Rectangle targetBounds,
+        Color color,
         float u1 = 0,
         float v1 = 0,
         float u2 = 1,
@@ -217,7 +218,7 @@ public partial class Base : IDisposable
     /// </summary>
     /// <param name="font">Font to load.</param>
     /// <returns>True if succeeded.</returns>
-    public virtual bool LoadFont(GameFont font)
+    public virtual bool LoadFont(IFont font)
     {
         return false;
     }
@@ -226,7 +227,7 @@ public partial class Base : IDisposable
     ///     Frees the specified font.
     /// </summary>
     /// <param name="font">Font to free.</param>
-    public virtual void FreeFont(GameFont font)
+    public virtual void FreeFont(IFont font)
     {
     }
 
@@ -234,25 +235,25 @@ public partial class Base : IDisposable
     ///     Returns dimensions of the text using specified font.
     /// </summary>
     /// <param name="font">Font to use.</param>
+    /// <param name="fontSize"></param>
     /// <param name="text">Text to measure.</param>
+    /// <param name="scale"></param>
     /// <returns>Width and height of the rendered text.</returns>
-    public virtual Point MeasureText(GameFont font, string text, float scale = 1f)
-    {
-        return Point.Empty;
-    }
+    public virtual Point MeasureText(IFont? font, int fontSize, string? text, float scale = 1f) => default;
 
     /// <summary>
     ///     Renders text using specified font.
     /// </summary>
     /// <param name="font">Font to use.</param>
+    /// <param name="fontSize"></param>
     /// <param name="position">Top-left corner of the text.</param>
     /// <param name="text">Text to render.</param>
-    public virtual void RenderText(GameFont font, Point position, string text, float scale = 1f)
+    public virtual void RenderText(IFont? font, int fontSize, Point position, string text, float scale = 1f)
     {
     }
 
     //
-    // No need to implement these functions in your derived class, but if 
+    // No need to implement these functions in your derived class, but if
     // you can do them faster than the default implementation it's a good idea to.
     //
 
@@ -295,7 +296,7 @@ public partial class Base : IDisposable
     /// <param name="x">X.</param>
     /// <param name="y">Y.</param>
     /// <returns>Pixel color.</returns>
-    public virtual Color PixelColor(GameTexture texture, uint x, uint y)
+    public virtual Color PixelColor(IGameTexture texture, uint x, uint y)
     {
         return PixelColor(texture, x, y, Color.White);
     }
@@ -308,7 +309,7 @@ public partial class Base : IDisposable
     /// <param name="y">Y.</param>
     /// <param name="defaultColor">Color to return on failure.</param>
     /// <returns>Pixel color.</returns>
-    public virtual Color PixelColor(GameTexture texture, uint x, uint y, Color defaultColor)
+    public virtual Color PixelColor(IGameTexture texture, uint x, uint y, Color defaultColor)
     {
         return defaultColor;
     }
@@ -394,7 +395,10 @@ public partial class Base : IDisposable
     public Rectangle Translate(Rectangle rect)
     {
         return new Rectangle(
-            TranslateX(rect.X), TranslateY(rect.Y), Util.Ceil(rect.Width * Scale), Util.Ceil(rect.Height * Scale)
+            TranslateX(rect.X),
+            TranslateY(rect.Y),
+            Util.Ceil(rect.Width * Scale),
+            Util.Ceil(rect.Height * Scale)
         );
     }
 
@@ -442,4 +446,6 @@ public partial class Base : IDisposable
         mClipRegion = r;
     }
 
+    public Vector2 MeasureText(string? text, IFont? font, int size, float fontScale) =>
+        MeasureText(font: font, fontSize: size, text: text, scale: fontScale);
 }

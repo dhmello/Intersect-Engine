@@ -16,19 +16,19 @@ public partial class GroupBox : Label
     {
         AutoSizeToContents = false;
 
-        // Set to true, because it's likely that our  
+        // Set to true, because it's likely that our
         // children will want mouse input, and they
         // can't get it without us..
         MouseInputEnabled = true;
         KeyboardInputEnabled = true;
 
-        TextPadding = new Padding(10, 0, 10, 0);
-        Alignment = Pos.Top | Pos.Left;
+        Padding = new Padding(10, 0, 10, 0);
+        TextAlign = Pos.Top | Pos.Left;
         Invalidate();
 
-        mInnerPanel = new Base(this);
-        mInnerPanel.Dock = Pos.Fill;
-        mInnerPanel.Margin = new Margin(5, TextHeight + 5, 5, 5);
+        _innerPanel = new Base(this, name: nameof(_innerPanel));
+        _innerPanel.Dock = Pos.Fill;
+        _innerPanel.Margin = new Margin(5, TextHeight + 5, 5, 5);
 
         //Margin = new Margin(5, 5, 5, 5);
     }
@@ -58,20 +58,27 @@ public partial class GroupBox : Label
     /// <summary>
     ///     Sizes to contents.
     /// </summary>
-    public override void SizeToContents()
+    public override bool SizeToContents(out Point contentSize)
     {
-        // we inherit from Label and shouldn't use its method.
-        DoSizeToContents();
+        var sizeChanged = DoSizeToContents();
+        contentSize = MeasureContent();
+        return sizeChanged;
     }
 
-    protected virtual void DoSizeToContents()
+    protected virtual bool DoSizeToContents()
     {
-        mInnerPanel.SizeToChildren();
-        SizeToChildren();
-        if (Width < TextWidth + TextPadding.Right + TextPadding.Left)
+        var sizeChanged = _innerPanel?.SizeToChildren() ?? false;
+        sizeChanged &= SizeToChildren();
+
+        var textWidth = TextWidth + Padding.Right + Padding.Left;
+
+        // ReSharper disable once InvertIf
+        if (Width < textWidth)
         {
-            Width = TextWidth + TextPadding.Right + TextPadding.Left;
+            Width = textWidth;
+            sizeChanged = true;
         }
-    }
 
+        return sizeChanged;
+    }
 }

@@ -1,4 +1,6 @@
-﻿namespace Intersect.Client.Framework.Gwen.Control.Property;
+﻿using Intersect.Client.Framework.Gwen.Control.EventArguments;
+
+namespace Intersect.Client.Framework.Gwen.Control.Property;
 
 
 /// <summary>
@@ -7,7 +9,7 @@
 public partial class Check : Base
 {
 
-    protected readonly Control.CheckBox mCheckBox;
+    protected readonly Checkbox Checkbox;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="Check" /> class.
@@ -15,14 +17,19 @@ public partial class Check : Base
     /// <param name="parent">Parent control.</param>
     public Check(Control.Base parent) : base(parent)
     {
-        mCheckBox = new Control.CheckBox(this);
-        mCheckBox.ShouldDrawBackground = false;
-        mCheckBox.CheckChanged += OnValueChanged;
-        mCheckBox.IsTabable = true;
-        mCheckBox.KeyboardInputEnabled = true;
-        mCheckBox.SetPosition(2, 1);
+        Checkbox = new Checkbox(this);
+        Checkbox.ShouldDrawBackground = false;
+        Checkbox.CheckChanged += OnCheckChanged;
+        Checkbox.IsTabable = true;
+        Checkbox.KeyboardInputEnabled = true;
+        Checkbox.SetPosition(2, 1);
 
         Height = 18;
+    }
+
+    private void OnCheckChanged(ICheckbox checkbox, ValueChangedEventArgs<bool> args)
+    {
+        OnValueChanged((checkbox as Control.Base)!, args);
     }
 
     /// <summary>
@@ -30,19 +37,19 @@ public partial class Check : Base
     /// </summary>
     public override string Value
     {
-        get => mCheckBox.IsChecked ? "1" : "0";
+        get => Checkbox.IsChecked ? "1" : "0";
         set => base.Value = value;
     }
 
     /// <summary>
     ///     Indicates whether the property value is being edited.
     /// </summary>
-    public override bool IsEditing => mCheckBox.HasFocus;
+    public override bool IsEditing => Checkbox.HasFocus;
 
     /// <summary>
     ///     Indicates whether the control is hovered by mouse pointer.
     /// </summary>
-    public override bool IsHovered => base.IsHovered || mCheckBox.IsHovered;
+    public override bool IsHovered => base.IsHovered || Checkbox.IsHovered;
 
     /// <summary>
     ///     Sets the property value.
@@ -53,11 +60,11 @@ public partial class Check : Base
     {
         if (value == "1" || value.ToLower() == "true" || value.ToLower() == "yes")
         {
-            mCheckBox.IsChecked = true;
+            Checkbox.IsChecked = true;
         }
         else
         {
-            mCheckBox.IsChecked = false;
+            Checkbox.IsChecked = false;
         }
     }
 

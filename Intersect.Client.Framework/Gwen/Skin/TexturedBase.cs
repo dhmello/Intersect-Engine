@@ -1,12 +1,14 @@
 using System.Diagnostics;
-
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.Framework.Gwen.ControlInternal;
 using Intersect.Client.Framework.Gwen.Skin.Texturing;
-
+using Intersect.Core;
+using Intersect.Framework;
+using Intersect.Framework.Reflection;
+using Microsoft.Extensions.Logging;
 using Single = Intersect.Client.Framework.Gwen.Skin.Texturing.Single;
 
 namespace Intersect.Client.Framework.Gwen.Skin;
@@ -27,6 +29,7 @@ public partial struct SkinTextures
 
     public partial struct _Panel
     {
+        public Bordered Control;
 
         public Bordered Normal;
 
@@ -36,6 +39,14 @@ public partial struct SkinTextures
 
         public Bordered Highlight;
 
+    }
+
+    public partial struct _FivePatchButton
+    {
+        public FivePatch Normal;
+        public FivePatch Disabled;
+        public FivePatch Hovered;
+        public FivePatch Active;
     }
 
     public partial struct _Window
@@ -49,13 +60,7 @@ public partial struct SkinTextures
 
         public Bordered InactiveTitleBar;
 
-        public Single Close;
-
-        public Single CloseHover;
-
-        public Single CloseDown;
-
-        public Single CloseDisabled;
+        public _FivePatchButton CloseButton;
 
     }
 
@@ -144,35 +149,19 @@ public partial struct SkinTextures
 
     public partial struct _Scroller
     {
-
-        public Bordered TrackV;
-
         public Bordered TrackH;
-
-        public Bordered ButtonVNormal;
-
-        public Bordered ButtonVHover;
-
-        public Bordered ButtonVDown;
-
-        public Bordered ButtonVDisabled;
-
-        public Bordered ButtonHNormal;
-
-        public Bordered ButtonHHover;
-
-        public Bordered ButtonHDown;
-
-        public Bordered ButtonHDisabled;
+        public Bordered TrackV;
+        public _Input._Button BarH;
+        public _Input._Button BarV;
 
         public partial struct _Button
         {
 
             public Bordered[] Normal;
 
-            public Bordered[] Hover;
+            public Bordered[] Hovered;
 
-            public Bordered[] Down;
+            public Bordered[] Active;
 
             public Bordered[] Disabled;
 
@@ -201,18 +190,12 @@ public partial struct SkinTextures
 
     public partial struct _Input
     {
-
         public partial struct _Button
         {
-
             public Bordered Normal;
-
-            public Bordered Hovered;
-
             public Bordered Disabled;
-
-            public Bordered Pressed;
-
+            public Bordered Hovered;
+            public Bordered Active;
         }
 
         public partial struct _ComboBox
@@ -245,36 +228,17 @@ public partial struct SkinTextures
 
         public partial struct _Slider
         {
-
-            public partial struct _H
+            public partial struct _SliderSource
             {
-
-                public Single Normal;
-
-                public Single Hover;
-
-                public Single Down;
-
-                public Single Disabled;
-
+                public Bordered Normal;
+                public Bordered Hover;
+                public Bordered Active;
+                public Bordered Disabled;
             }
 
-            public partial struct _V
-            {
+            public _SliderSource H;
 
-                public Single Normal;
-
-                public Single Hover;
-
-                public Single Down;
-
-                public Single Disabled;
-
-            }
-
-            public _H H;
-
-            public _V V;
+            public _SliderSource V;
 
         }
 
@@ -439,30 +403,55 @@ public partial struct SkinTextures
 /// </summary>
 public partial class TexturedBase : Skin.Base
 {
-
     public static TexturedBase FindSkin(Renderer.Base renderer, GameContentManager contentManager, string skinName)
     {
+        if (string.Equals("Intersect2021", skinName, StringComparison.InvariantCultureIgnoreCase))
+        {
+            return new Intersect2021(renderer, contentManager);
+        }
+
+        var skinNameParts = skinName.Split(':');
+        var skinClassName = skinNameParts.FirstOrDefault() ?? nameof(IntersectSkin);
+        var skinTextureName = skinNameParts.Skip(1).FirstOrDefault();
+
+        if (string.Equals(nameof(IntersectSkin), skinClassName, StringComparison.InvariantCultureIgnoreCase))
+        {
+            return string.IsNullOrWhiteSpace(skinTextureName)
+                ? new IntersectSkin(renderer, contentManager)
+                : new IntersectSkin(renderer, contentManager, skinTextureName);
+        }
+
         var skinMap = typeof(TexturedBase).Assembly.GetTypes()
             .Where(type => !type.IsAbstract && typeof(TexturedBase).IsAssignableFrom(type))
             .ToDictionary(type => type.Name.ToLowerInvariant(), type => type);
 
-        if (skinMap.TryGetValue(skinName.ToLowerInvariant(), out var skinType))
+        if (!skinMap.TryGetValue(skinClassName.ToLowerInvariant(), out var skinType))
         {
-            try
+            return new TexturedBase(renderer, contentManager, skinName);
+        }
+
+        try
+        {
+            var skin = Activator.CreateInstance(skinType, renderer, contentManager, skinTextureName) as TexturedBase;
+            if (skin != null)
             {
-                var skin = Activator.CreateInstance(skinType, renderer, contentManager) as TexturedBase;
                 return skin;
             }
-            catch
-            {
-                // ignore
-            }
+
+            ApplicationContext.Context.Value?.Logger.LogError(
+                "Failed to create instance of '{SkinTypeName}'",
+                skinType.GetName(qualified: true)
+            );
+        }
+        catch
+        {
+            // ignore
         }
 
         return new TexturedBase(renderer, contentManager, skinName);
     }
 
-    protected readonly GameTexture mTexture;
+    protected readonly IGameTexture _texture;
 
     protected SkinTextures mTextures;
 
@@ -472,10 +461,11 @@ public partial class TexturedBase : Skin.Base
     ///     Initializes a new instance of the <see cref="TexturedBase" /> class.
     /// </summary>
     /// <param name="renderer">Renderer to use.</param>
-    /// <param name="textureName">Name of the skin texture map.</param>
-    public TexturedBase(Renderer.Base renderer, GameTexture texture) : base(renderer)
+    /// <param name="texture"></param>
+    public TexturedBase(Renderer.Base renderer, IGameTexture texture) : base(renderer)
     {
-        mTexture = texture;
+        _texture = texture ?? throw new ArgumentNullException(nameof(texture));
+        texture.Loaded += _ => InitializeColors();
 
         InitializeColors();
         InitializeTextures();
@@ -487,7 +477,7 @@ public partial class TexturedBase : Skin.Base
     }
 
     protected TexturedBase(Renderer.Base renderer, GameContentManager contentManager, string textureName)
-        : this(renderer, contentManager?.GetTexture(Framework.Content.TextureType.Gui, textureName))
+        : this(renderer, contentManager?.GetTexture(Content.TextureType.Gui, textureName)!)
     {
     }
 
@@ -503,194 +493,195 @@ public partial class TexturedBase : Skin.Base
 
     protected virtual void InitializeColors()
     {
-        Colors.Window.TitleActive = Renderer.PixelColor(mTexture, 4 + 8 * 0, 508, Color.Red);
-        Colors.Window.TitleInactive = Renderer.PixelColor(mTexture, 4 + 8 * 1, 508, Color.Yellow);
+        Colors.Window.TitleActive = Renderer.PixelColor(_texture, 4 + 8 * 0, 508, Color.Red);
+        Colors.Window.TitleInactive = Renderer.PixelColor(_texture, 4 + 8 * 1, 508, Color.Yellow);
 
-        Colors.Button.Normal = Renderer.PixelColor(mTexture, 4 + 8 * 2, 508, Color.Yellow);
-        Colors.Button.Hover = Renderer.PixelColor(mTexture, 4 + 8 * 3, 508, Color.Yellow);
-        Colors.Button.Down = Renderer.PixelColor(mTexture, 4 + 8 * 2, 500, Color.Yellow);
-        Colors.Button.Disabled = Renderer.PixelColor(mTexture, 4 + 8 * 3, 500, Color.Yellow);
+        Colors.Button.Normal = Renderer.PixelColor(_texture, 4 + 8 * 2, 508, Color.Yellow);
+        Colors.Button.Hover = Renderer.PixelColor(_texture, 4 + 8 * 3, 508, Color.Yellow);
+        Colors.Button.Active = Renderer.PixelColor(_texture, 4 + 8 * 2, 500, Color.Yellow);
+        Colors.Button.Disabled = Renderer.PixelColor(_texture, 4 + 8 * 3, 500, Color.Yellow);
 
-        Colors.Tab.Active.Normal = Renderer.PixelColor(mTexture, 4 + 8 * 4, 508, Color.Yellow);
-        Colors.Tab.Active.Hover = Renderer.PixelColor(mTexture, 4 + 8 * 5, 508, Color.Yellow);
-        Colors.Tab.Active.Down = Renderer.PixelColor(mTexture, 4 + 8 * 4, 500, Color.Yellow);
-        Colors.Tab.Active.Disabled = Renderer.PixelColor(mTexture, 4 + 8 * 5, 500, Color.Yellow);
-        Colors.Tab.Inactive.Normal = Renderer.PixelColor(mTexture, 4 + 8 * 6, 508, Color.Yellow);
-        Colors.Tab.Inactive.Hover = Renderer.PixelColor(mTexture, 4 + 8 * 7, 508, Color.Yellow);
-        Colors.Tab.Inactive.Down = Renderer.PixelColor(mTexture, 4 + 8 * 6, 500, Color.Yellow);
-        Colors.Tab.Inactive.Disabled = Renderer.PixelColor(mTexture, 4 + 8 * 7, 500, Color.Yellow);
+        Colors.Tab.Active.Normal = Renderer.PixelColor(_texture, 4 + 8 * 2, 508, Color.Yellow);
+        Colors.Tab.Active.Hover = Renderer.PixelColor(_texture, 4 + 8 * 3, 508, Color.Yellow);
+        Colors.Tab.Active.Active = Renderer.PixelColor(_texture, 4 + 8 * 2, 500, Color.Yellow);
+        Colors.Tab.Active.Disabled = Renderer.PixelColor(_texture, 4 + 8 * 3, 500, Color.Yellow);
+        Colors.Tab.Inactive.Normal = Renderer.PixelColor(_texture, 4 + 8 * 2, 508, Color.Yellow);
+        Colors.Tab.Inactive.Hover = Renderer.PixelColor(_texture, 4 + 8 * 3, 508, Color.Yellow);
+        Colors.Tab.Inactive.Active = Renderer.PixelColor(_texture, 4 + 8 * 2, 500, Color.Yellow);
+        Colors.Tab.Inactive.Disabled = Renderer.PixelColor(_texture, 4 + 8 * 3, 500, Color.Yellow);
 
-        Colors.Label.Default = Renderer.PixelColor(mTexture, 4 + 8 * 8, 508, Color.Yellow);
-        Colors.Label.Bright = Renderer.PixelColor(mTexture, 4 + 8 * 9, 508, Color.Yellow);
-        Colors.Label.Dark = Renderer.PixelColor(mTexture, 4 + 8 * 8, 500, Color.Yellow);
-        Colors.Label.Highlight = Renderer.PixelColor(mTexture, 4 + 8 * 9, 500, Color.Yellow);
+        Colors.Label.Normal = Renderer.PixelColor(_texture, 4 + 8 * 8, 508, Color.Yellow);
+        Colors.Label.Hover = Renderer.PixelColor(_texture, 4 + 8 * 9, 508, Color.Yellow);
+        Colors.Label.Disabled = Renderer.PixelColor(_texture, 4 + 8 * 8, 500, Color.Yellow);
+        Colors.Label.Active = Renderer.PixelColor(_texture, 4 + 8 * 9, 500, Color.Yellow);
 
-        Colors.Tree.Lines = Renderer.PixelColor(mTexture, 4 + 8 * 10, 508, Color.Yellow);
-        Colors.Tree.Normal = Renderer.PixelColor(mTexture, 4 + 8 * 11, 508, Color.Yellow);
-        Colors.Tree.Hover = Renderer.PixelColor(mTexture, 4 + 8 * 10, 500, Color.Yellow);
-        Colors.Tree.Selected = Renderer.PixelColor(mTexture, 4 + 8 * 11, 500, Color.Yellow);
+        Colors.Tree.Lines = Renderer.PixelColor(_texture, 4 + 8 * 10, 508, Color.Yellow);
+        Colors.Tree.Normal = Renderer.PixelColor(_texture, 4 + 8 * 11, 508, Color.Yellow);
+        Colors.Tree.Hover = Renderer.PixelColor(_texture, 4 + 8 * 10, 500, Color.Yellow);
+        Colors.Tree.Selected = Renderer.PixelColor(_texture, 4 + 8 * 11, 500, Color.Yellow);
 
-        Colors.Properties.LineNormal = Renderer.PixelColor(mTexture, 4 + 8 * 12, 508, Color.Yellow);
-        Colors.Properties.LineSelected = Renderer.PixelColor(mTexture, 4 + 8 * 13, 508, Color.Yellow);
-        Colors.Properties.LineHover = Renderer.PixelColor(mTexture, 4 + 8 * 12, 500, Color.Yellow);
-        Colors.Properties.Title = Renderer.PixelColor(mTexture, 4 + 8 * 13, 500, Color.Yellow);
-        Colors.Properties.ColumnNormal = Renderer.PixelColor(mTexture, 4 + 8 * 14, 508, Color.Yellow);
-        Colors.Properties.ColumnSelected = Renderer.PixelColor(mTexture, 4 + 8 * 15, 508, Color.Yellow);
-        Colors.Properties.ColumnHover = Renderer.PixelColor(mTexture, 4 + 8 * 14, 500, Color.Yellow);
-        Colors.Properties.Border = Renderer.PixelColor(mTexture, 4 + 8 * 15, 500, Color.Yellow);
-        Colors.Properties.LabelNormal = Renderer.PixelColor(mTexture, 4 + 8 * 16, 508, Color.Yellow);
-        Colors.Properties.LabelSelected = Renderer.PixelColor(mTexture, 4 + 8 * 17, 508, Color.Yellow);
-        Colors.Properties.LabelHover = Renderer.PixelColor(mTexture, 4 + 8 * 16, 500, Color.Yellow);
+        Colors.Properties.LineNormal = Renderer.PixelColor(_texture, 4 + 8 * 12, 508, Color.Yellow);
+        Colors.Properties.LineSelected = Renderer.PixelColor(_texture, 4 + 8 * 13, 508, Color.Yellow);
+        Colors.Properties.LineHover = Renderer.PixelColor(_texture, 4 + 8 * 12, 500, Color.Yellow);
+        Colors.Properties.Title = Renderer.PixelColor(_texture, 4 + 8 * 13, 500, Color.Yellow);
+        Colors.Properties.ColumnNormal = Renderer.PixelColor(_texture, 4 + 8 * 14, 508, Color.Yellow);
+        Colors.Properties.ColumnSelected = Renderer.PixelColor(_texture, 4 + 8 * 15, 508, Color.Yellow);
+        Colors.Properties.ColumnHover = Renderer.PixelColor(_texture, 4 + 8 * 14, 500, Color.Yellow);
+        Colors.Properties.Border = Renderer.PixelColor(_texture, 4 + 8 * 15, 500, Color.Yellow);
+        Colors.Properties.LabelNormal = Renderer.PixelColor(_texture, 4 + 8 * 16, 508, Color.Yellow);
+        Colors.Properties.LabelSelected = Renderer.PixelColor(_texture, 4 + 8 * 17, 508, Color.Yellow);
+        Colors.Properties.LabelHover = Renderer.PixelColor(_texture, 4 + 8 * 16, 500, Color.Yellow);
 
-        Colors.ModalBackground = Renderer.PixelColor(mTexture, 4 + 8 * 18, 508, Color.Yellow);
+        Colors.ModalBackground = Renderer.PixelColor(_texture, 4 + 8 * 18, 508, Color.Yellow);
 
-        Colors.TooltipText = Renderer.PixelColor(mTexture, 4 + 8 * 19, 508, Color.Yellow);
+        Colors.TooltipText = Renderer.PixelColor(_texture, 4 + 8 * 9, 508, Color.Yellow);
 
-        Colors.Category.Header = Renderer.PixelColor(mTexture, 4 + 8 * 18, 500, Color.Yellow);
-        Colors.Category.HeaderClosed = Renderer.PixelColor(mTexture, 4 + 8 * 19, 500, Color.Yellow);
-        Colors.Category.Line.Text = Renderer.PixelColor(mTexture, 4 + 8 * 20, 508, Color.Yellow);
-        Colors.Category.Line.TextHover = Renderer.PixelColor(mTexture, 4 + 8 * 21, 508, Color.Yellow);
-        Colors.Category.Line.TextSelected = Renderer.PixelColor(mTexture, 4 + 8 * 20, 500, Color.Yellow);
-        Colors.Category.Line.Button = Renderer.PixelColor(mTexture, 4 + 8 * 21, 500, Color.Yellow);
-        Colors.Category.Line.ButtonHover = Renderer.PixelColor(mTexture, 4 + 8 * 22, 508, Color.Yellow);
-        Colors.Category.Line.ButtonSelected = Renderer.PixelColor(mTexture, 4 + 8 * 23, 508, Color.Yellow);
-        Colors.Category.LineAlt.Text = Renderer.PixelColor(mTexture, 4 + 8 * 22, 500, Color.Yellow);
-        Colors.Category.LineAlt.TextHover = Renderer.PixelColor(mTexture, 4 + 8 * 23, 500, Color.Yellow);
-        Colors.Category.LineAlt.TextSelected = Renderer.PixelColor(mTexture, 4 + 8 * 24, 508, Color.Yellow);
-        Colors.Category.LineAlt.Button = Renderer.PixelColor(mTexture, 4 + 8 * 25, 508, Color.Yellow);
-        Colors.Category.LineAlt.ButtonHover = Renderer.PixelColor(mTexture, 4 + 8 * 24, 500, Color.Yellow);
-        Colors.Category.LineAlt.ButtonSelected = Renderer.PixelColor(mTexture, 4 + 8 * 25, 500, Color.Yellow);
+        Colors.Category.Header = Renderer.PixelColor(_texture, 4 + 8 * 18, 500, Color.Yellow);
+        Colors.Category.HeaderClosed = Renderer.PixelColor(_texture, 4 + 8 * 19, 500, Color.Yellow);
+        Colors.Category.Line.Text = Renderer.PixelColor(_texture, 4 + 8 * 20, 508, Color.Yellow);
+        Colors.Category.Line.TextHover = Renderer.PixelColor(_texture, 4 + 8 * 21, 508, Color.Yellow);
+        Colors.Category.Line.TextSelected = Renderer.PixelColor(_texture, 4 + 8 * 20, 500, Color.Yellow);
+        Colors.Category.Line.Button = Renderer.PixelColor(_texture, 4 + 8 * 21, 500, Color.Yellow);
+        Colors.Category.Line.ButtonHover = Renderer.PixelColor(_texture, 4 + 8 * 22, 508, Color.Yellow);
+        Colors.Category.Line.ButtonSelected = Renderer.PixelColor(_texture, 4 + 8 * 23, 508, Color.Yellow);
+        Colors.Category.LineAlt.Text = Renderer.PixelColor(_texture, 4 + 8 * 22, 500, Color.Yellow);
+        Colors.Category.LineAlt.TextHover = Renderer.PixelColor(_texture, 4 + 8 * 23, 500, Color.Yellow);
+        Colors.Category.LineAlt.TextSelected = Renderer.PixelColor(_texture, 4 + 8 * 24, 508, Color.Yellow);
+        Colors.Category.LineAlt.Button = Renderer.PixelColor(_texture, 4 + 8 * 25, 508, Color.Yellow);
+        Colors.Category.LineAlt.ButtonHover = Renderer.PixelColor(_texture, 4 + 8 * 24, 500, Color.Yellow);
+        Colors.Category.LineAlt.ButtonSelected = Renderer.PixelColor(_texture, 4 + 8 * 25, 500, Color.Yellow);
     }
 
     protected virtual void InitializeTextures()
     {
-        mTextures.Shadow = new Bordered(mTexture, 448, 0, 31, 31, Margin.Eight);
-        mTextures.Tooltip = new Bordered(mTexture, 128, 320, 127, 31, Margin.Eight);
-        mTextures.StatusBar = new Bordered(mTexture, 128, 288, 127, 31, Margin.Eight);
-        mTextures.Selection = new Bordered(mTexture, 384, 32, 31, 31, Margin.Four);
+        mTextures.Shadow = new Bordered(_texture, 448, 0, 31, 31, Margin.Eight);
+        mTextures.Tooltip = new Bordered(_texture, 128, 320, 127, 31, Margin.Eight);
+        mTextures.StatusBar = new Bordered(_texture, 128, 288, 127, 31, Margin.Eight);
+        mTextures.Selection = new Bordered(_texture, 384, 32, 31, 31, Margin.Four);
 
-        mTextures.Panel.Normal = new Bordered(mTexture, 256, 0, 63, 63, new Margin(16, 16, 16, 16));
-        mTextures.Panel.Bright = new Bordered(mTexture, 256 + 64, 0, 63, 63, new Margin(16, 16, 16, 16));
-        mTextures.Panel.Dark = new Bordered(mTexture, 256, 64, 63, 63, new Margin(16, 16, 16, 16));
-        mTextures.Panel.Highlight = new Bordered(mTexture, 256 + 64, 64, 63, 63, new Margin(16, 16, 16, 16));
+        mTextures.Panel.Control = new Bordered(_texture, 256, 0, 63, 63, new Margin(16, 16, 16, 16));
+        mTextures.Panel.Normal = new Bordered(_texture, 256, 0, 63, 63, new Margin(16, 16, 16, 16));
+        mTextures.Panel.Bright = new Bordered(_texture, 256 + 64, 0, 63, 63, new Margin(16, 16, 16, 16));
+        mTextures.Panel.Dark = new Bordered(_texture, 256, 64, 63, 63, new Margin(16, 16, 16, 16));
+        mTextures.Panel.Highlight = new Bordered(_texture, 256 + 64, 64, 63, 63, new Margin(16, 16, 16, 16));
 
-        mTextures.Window.Normal = new Bordered(mTexture, 0, 0, 127, 127, new Margin(8, 32, 8, 8));
-        mTextures.Window.Inactive = new Bordered(mTexture, 128, 0, 127, 127, new Margin(8, 32, 8, 8));
+        mTextures.Window.Normal = new Bordered(_texture, 0, 0, 127, 127, new Margin(8, 32, 8, 8));
+        mTextures.Window.Inactive = new Bordered(_texture, 128, 0, 127, 127, new Margin(8, 32, 8, 8));
 
-        mTextures.CheckBox.Active_Baked.Checked = new Single(mTexture, 448, 32, 15, 15);
-        mTextures.CheckBox.Active_Baked.Normal = new Single(mTexture, 464, 32, 15, 15);
-        mTextures.CheckBox.Disabled_Baked.Normal = new Single(mTexture, 448, 48, 15, 15);
-        mTextures.CheckBox.Disabled_Baked.Normal = new Single(mTexture, 464, 48, 15, 15);
+        mTextures.CheckBox.Active_Baked.Checked = new Single(_texture, 448, 32, 15, 15);
+        mTextures.CheckBox.Active_Baked.Normal = new Single(_texture, 464, 32, 15, 15);
+        mTextures.CheckBox.Disabled_Baked.Normal = new Single(_texture, 448, 48, 15, 15);
+        mTextures.CheckBox.Disabled_Baked.Normal = new Single(_texture, 464, 48, 15, 15);
 
-        mTextures.RadioButton.Active_Baked.Checked = new Single(mTexture, 448, 64, 15, 15);
-        mTextures.RadioButton.Active_Baked.Normal = new Single(mTexture, 464, 64, 15, 15);
-        mTextures.RadioButton.Disabled_Baked.Normal = new Single(mTexture, 448, 80, 15, 15);
-        mTextures.RadioButton.Disabled_Baked.Normal = new Single(mTexture, 464, 80, 15, 15);
+        mTextures.RadioButton.Active_Baked.Checked = new Single(_texture, 448, 64, 15, 15);
+        mTextures.RadioButton.Active_Baked.Normal = new Single(_texture, 464, 64, 15, 15);
+        mTextures.RadioButton.Disabled_Baked.Normal = new Single(_texture, 448, 80, 15, 15);
+        mTextures.RadioButton.Disabled_Baked.Normal = new Single(_texture, 464, 80, 15, 15);
 
-        mTextures.TextBox.Normal = new Bordered(mTexture, 0, 150, 127, 21, Margin.Four);
-        mTextures.TextBox.Focus = new Bordered(mTexture, 0, 172, 127, 21, Margin.Four);
-        mTextures.TextBox.Disabled = new Bordered(mTexture, 0, 193, 127, 21, Margin.Four);
+        mTextures.TextBox.Normal = new Bordered(_texture, 0, 150, 127, 21, Margin.Four);
+        mTextures.TextBox.Focus = new Bordered(_texture, 0, 172, 127, 21, Margin.Four);
+        mTextures.TextBox.Disabled = new Bordered(_texture, 0, 193, 127, 21, Margin.Four);
 
-        mTextures.Menu.Strip = new Bordered(mTexture, 0, 128, 127, 21, Margin.One);
-        mTextures.Menu.BackgroundWithMargin = new Bordered(mTexture, 128, 128, 127, 63, new Margin(24, 8, 8, 8));
-        mTextures.Menu.Background = new Bordered(mTexture, 128, 192, 127, 63, Margin.Eight);
-        mTextures.Menu.Hovered = new Bordered(mTexture, 320, 320, 32, 32, Margin.Six);
-        mTextures.Menu.RightArrow = new Single(mTexture, 464, 112, 15, 15);
-        mTextures.Menu.Check = new Single(mTexture, 448, 112, 15, 15);
+        mTextures.Menu.Strip = new Bordered(_texture, 0, 128, 127, 21, Margin.One);
+        mTextures.Menu.BackgroundWithMargin = new Bordered(_texture, 128, 128, 127, 63, new Margin(24, 8, 8, 8));
+        mTextures.Menu.Background = new Bordered(_texture, 128, 192, 127, 63, Margin.Eight);
+        mTextures.Menu.Hovered = new Bordered(_texture, 320, 320, 32, 32, Margin.Six);
+        mTextures.Menu.RightArrow = new Single(_texture, 464, 112, 15, 15);
+        mTextures.Menu.Check = new Single(_texture, 448, 112, 15, 15);
 
-        mTextures.Tab.Control = new Bordered(mTexture, 0, 256, 127, 127, Margin.Eight);
-        mTextures.Tab.Bottom.Active = new Bordered(mTexture, 0, 416, 63, 31, Margin.Eight);
-        mTextures.Tab.Bottom.Inactive = new Bordered(mTexture, 0 + 128, 416, 63, 31, Margin.Eight);
-        mTextures.Tab.Top.Active = new Bordered(mTexture, 0, 384, 63, 31, Margin.Eight);
-        mTextures.Tab.Top.Inactive = new Bordered(mTexture, 0 + 128, 384, 63, 31, Margin.Eight);
-        mTextures.Tab.Left.Active = new Bordered(mTexture, 64, 384, 31, 63, Margin.Eight);
-        mTextures.Tab.Left.Inactive = new Bordered(mTexture, 64 + 128, 384, 31, 63, Margin.Eight);
-        mTextures.Tab.Right.Active = new Bordered(mTexture, 96, 384, 31, 63, Margin.Eight);
-        mTextures.Tab.Right.Inactive = new Bordered(mTexture, 96 + 128, 384, 31, 63, Margin.Eight);
-        mTextures.Tab.HeaderBar = new Bordered(mTexture, 128, 352, 127, 31, Margin.Four);
+        mTextures.Tab.Control = new Bordered(_texture, 0, 256, 127, 127, Margin.Eight);
+        mTextures.Tab.Bottom.Active = new Bordered(_texture, 0, 416, 63, 31, Margin.Eight);
+        mTextures.Tab.Bottom.Inactive = new Bordered(_texture, 0 + 128, 416, 63, 31, Margin.Eight);
+        mTextures.Tab.Top.Active = new Bordered(_texture, 0, 384, 63, 31, Margin.Eight);
+        mTextures.Tab.Top.Inactive = new Bordered(_texture, 0 + 128, 384, 63, 31, Margin.Eight);
+        mTextures.Tab.Left.Active = new Bordered(_texture, 64, 384, 31, 63, Margin.Eight);
+        mTextures.Tab.Left.Inactive = new Bordered(_texture, 64 + 128, 384, 31, 63, Margin.Eight);
+        mTextures.Tab.Right.Active = new Bordered(_texture, 96, 384, 31, 63, Margin.Eight);
+        mTextures.Tab.Right.Inactive = new Bordered(_texture, 96 + 128, 384, 31, 63, Margin.Eight);
+        mTextures.Tab.HeaderBar = new Bordered(_texture, 128, 352, 127, 31, Margin.Four);
 
-        mTextures.Window.Close = new Single(mTexture, 0, 224, 24, 24);
-        mTextures.Window.CloseHover = new Single(mTexture, 32, 224, 24, 24);
-        mTextures.Window.CloseHover = new Single(mTexture, 64, 224, 24, 24);
-        mTextures.Window.CloseHover = new Single(mTexture, 96, 224, 24, 24);
+        mTextures.Window.CloseButton.Normal = new Bordered(_texture, 0, 224, 24, 24, default);
+        mTextures.Window.CloseButton.Hovered = new Bordered(_texture, 64, 224, 24, 24, default);
+        mTextures.Window.CloseButton.Disabled = new Bordered(_texture, 32, 224, 24, 24, default);
+        mTextures.Window.CloseButton.Active = new Bordered(_texture, 96, 224, 24, 24, default);
 
-        mTextures.Scroller.TrackV = new Bordered(mTexture, 384, 208, 15, 127, Margin.Four);
-        mTextures.Scroller.ButtonVNormal = new Bordered(mTexture, 384 + 16, 208, 15, 127, Margin.Four);
-        mTextures.Scroller.ButtonVHover = new Bordered(mTexture, 384 + 32, 208, 15, 127, Margin.Four);
-        mTextures.Scroller.ButtonVDown = new Bordered(mTexture, 384 + 48, 208, 15, 127, Margin.Four);
-        mTextures.Scroller.ButtonVDisabled = new Bordered(mTexture, 384 + 64, 208, 15, 127, Margin.Four);
-        mTextures.Scroller.TrackH = new Bordered(mTexture, 384, 128, 127, 15, Margin.Four);
-        mTextures.Scroller.ButtonHNormal = new Bordered(mTexture, 384, 128 + 16, 127, 15, Margin.Four);
-        mTextures.Scroller.ButtonHHover = new Bordered(mTexture, 384, 128 + 32, 127, 15, Margin.Four);
-        mTextures.Scroller.ButtonHDown = new Bordered(mTexture, 384, 128 + 48, 127, 15, Margin.Four);
-        mTextures.Scroller.ButtonHDisabled = new Bordered(mTexture, 384, 128 + 64, 127, 15, Margin.Four);
+        mTextures.Scroller.TrackV = new Bordered(_texture, 384, 208, 15, 127, Margin.Four);
+        mTextures.Scroller.BarV.Normal = new Bordered(_texture, 384 + 16, 208, 15, 127, Margin.Four);
+        mTextures.Scroller.BarV.Hovered = new Bordered(_texture, 384 + 32, 208, 15, 127, Margin.Four);
+        mTextures.Scroller.BarV.Active = new Bordered(_texture, 384 + 48, 208, 15, 127, Margin.Four);
+        mTextures.Scroller.BarV.Disabled = new Bordered(_texture, 384 + 64, 208, 15, 127, Margin.Four);
+        mTextures.Scroller.TrackH = new Bordered(_texture, 384, 128, 127, 15, Margin.Four);
+        mTextures.Scroller.BarH.Normal = new Bordered(_texture, 384, 128 + 16, 127, 15, Margin.Four);
+        mTextures.Scroller.BarH.Hovered = new Bordered(_texture, 384, 128 + 32, 127, 15, Margin.Four);
+        mTextures.Scroller.BarH.Active = new Bordered(_texture, 384, 128 + 48, 127, 15, Margin.Four);
+        mTextures.Scroller.BarH.Disabled = new Bordered(_texture, 384, 128 + 64, 127, 15, Margin.Four);
 
         mTextures.Scroller.Button.Normal = new Bordered[4];
         mTextures.Scroller.Button.Disabled = new Bordered[4];
-        mTextures.Scroller.Button.Hover = new Bordered[4];
-        mTextures.Scroller.Button.Down = new Bordered[4];
+        mTextures.Scroller.Button.Hovered = new Bordered[4];
+        mTextures.Scroller.Button.Active = new Bordered[4];
 
-        mTextures.Tree.Background = new Bordered(mTexture, 256, 128, 127, 127, new Margin(16, 16, 16, 16));
-        mTextures.Tree.Plus = new Single(mTexture, 448, 96, 15, 15);
-        mTextures.Tree.Minus = new Single(mTexture, 464, 96, 15, 15);
+        mTextures.Tree.Background = new Bordered(_texture, 256, 128, 127, 127, new Margin(16, 16, 16, 16));
+        mTextures.Tree.Plus = new Single(_texture, 448, 96, 15, 15);
+        mTextures.Tree.Minus = new Single(_texture, 464, 96, 15, 15);
 
-        mTextures.Input.Button.Normal = new Bordered(mTexture, 480, 0, 31, 31, Margin.Eight);
-        mTextures.Input.Button.Hovered = new Bordered(mTexture, 480, 32, 31, 31, Margin.Eight);
-        mTextures.Input.Button.Disabled = new Bordered(mTexture, 480, 64, 31, 31, Margin.Eight);
-        mTextures.Input.Button.Pressed = new Bordered(mTexture, 480, 96, 31, 31, Margin.Eight);
+        mTextures.Input.Button.Normal = new Bordered(_texture, 480, 0, 31, 31, Margin.Eight);
+        mTextures.Input.Button.Hovered = new Bordered(_texture, 480, 32, 31, 31, Margin.Eight);
+        mTextures.Input.Button.Disabled = new Bordered(_texture, 480, 64, 31, 31, Margin.Eight);
+        mTextures.Input.Button.Active = new Bordered(_texture, 480, 96, 31, 31, Margin.Eight);
 
         for (var i = 0; i < 4; i++)
         {
-            mTextures.Scroller.Button.Normal[i] = new Bordered(mTexture, 464 + 0, 208 + i * 16, 15, 15, Margin.Two);
-            mTextures.Scroller.Button.Hover[i] = new Bordered(mTexture, 480, 208 + i * 16, 15, 15, Margin.Two);
-            mTextures.Scroller.Button.Down[i] = new Bordered(mTexture, 464, 272 + i * 16, 15, 15, Margin.Two);
+            mTextures.Scroller.Button.Normal[i] = new Bordered(_texture, 464 + 0, 208 + i * 16, 15, 15, Margin.Two);
+            mTextures.Scroller.Button.Hovered[i] = new Bordered(_texture, 480, 208 + i * 16, 15, 15, Margin.Two);
+            mTextures.Scroller.Button.Active[i] = new Bordered(_texture, 464, 272 + i * 16, 15, 15, Margin.Two);
             mTextures.Scroller.Button.Disabled[i] = new Bordered(
-                mTexture, 480 + 48, 272 + i * 16, 15, 15, Margin.Two
+                _texture, 480 + 48, 272 + i * 16, 15, 15, Margin.Two
             );
         }
 
-        mTextures.Input.ListBox.Background = new Bordered(mTexture, 256, 256, 63, 127, Margin.Six);
-        mTextures.Input.ListBox.Hovered = new Bordered(mTexture, 320, 320, 32, 32, Margin.Six);
-        mTextures.Input.ListBox.EvenLine = new Bordered(mTexture, 352, 256, 32, 32, Margin.Six);
-        mTextures.Input.ListBox.EvenLineSelected = new Bordered(mTexture, 320, 256, 32, 32, Margin.Six);
-        mTextures.Input.ListBox.OddLine = new Bordered(mTexture, 352, 288, 32, 32, Margin.Six);
-        mTextures.Input.ListBox.OddLineSelected = new Bordered(mTexture, 320, 288, 32, 32, Margin.Six);
+        mTextures.Input.ListBox.Background = new Bordered(_texture, 256, 256, 63, 127, Margin.Six);
+        mTextures.Input.ListBox.Hovered = new Bordered(_texture, 320, 320, 32, 32, Margin.Six);
+        mTextures.Input.ListBox.EvenLine = new Bordered(_texture, 352, 256, 32, 32, Margin.Six);
+        mTextures.Input.ListBox.EvenLineSelected = new Bordered(_texture, 320, 256, 32, 32, Margin.Six);
+        mTextures.Input.ListBox.OddLine = new Bordered(_texture, 352, 288, 32, 32, Margin.Six);
+        mTextures.Input.ListBox.OddLineSelected = new Bordered(_texture, 320, 288, 32, 32, Margin.Six);
 
-        mTextures.Input.ComboBox.Normal = new Bordered(mTexture, 384, 336, 127, 31, new Margin(8, 8, 32, 8));
-        mTextures.Input.ComboBox.Hover = new Bordered(mTexture, 384, 336 + 32, 127, 31, new Margin(8, 8, 32, 8));
-        mTextures.Input.ComboBox.Down = new Bordered(mTexture, 384, 336 + 64, 127, 31, new Margin(8, 8, 32, 8));
-        mTextures.Input.ComboBox.Disabled = new Bordered(mTexture, 384, 336 + 96, 127, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Normal = new Bordered(_texture, 385, 336, 127, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Hover = new Bordered(_texture, 385, 336 + 32, 127, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Down = new Bordered(_texture, 385, 336 + 64, 127, 31, new Margin(8, 8, 32, 8));
+        mTextures.Input.ComboBox.Disabled = new Bordered(_texture, 385, 336 + 96, 127, 31, new Margin(8, 8, 32, 8));
 
-        mTextures.Input.ComboBox.Button.Normal = new Single(mTexture, 496, 272, 15, 15);
-        mTextures.Input.ComboBox.Button.Hover = new Single(mTexture, 496, 272 + 16, 15, 15);
-        mTextures.Input.ComboBox.Button.Down = new Single(mTexture, 496, 272 + 32, 15, 15);
-        mTextures.Input.ComboBox.Button.Disabled = new Single(mTexture, 496, 272 + 48, 15, 15);
+        mTextures.Input.ComboBox.Button.Normal = new Single(_texture, 496, 272, 15, 15);
+        mTextures.Input.ComboBox.Button.Hover = new Single(_texture, 496, 272 + 16, 15, 15);
+        mTextures.Input.ComboBox.Button.Down = new Single(_texture, 496, 272 + 32, 15, 15);
+        mTextures.Input.ComboBox.Button.Disabled = new Single(_texture, 496, 272 + 48, 15, 15);
 
-        mTextures.Input.UpDown.Up.Normal = new Single(mTexture, 384, 112, 7, 7);
-        mTextures.Input.UpDown.Up.Hover = new Single(mTexture, 384 + 8, 112, 7, 7);
-        mTextures.Input.UpDown.Up.Down = new Single(mTexture, 384 + 16, 112, 7, 7);
-        mTextures.Input.UpDown.Up.Disabled = new Single(mTexture, 384 + 24, 112, 7, 7);
-        mTextures.Input.UpDown.Down.Normal = new Single(mTexture, 384, 120, 7, 7);
-        mTextures.Input.UpDown.Down.Hover = new Single(mTexture, 384 + 8, 120, 7, 7);
-        mTextures.Input.UpDown.Down.Down = new Single(mTexture, 384 + 16, 120, 7, 7);
-        mTextures.Input.UpDown.Down.Disabled = new Single(mTexture, 384 + 24, 120, 7, 7);
+        mTextures.Input.UpDown.Up.Normal = new Single(_texture, 384, 112, 7, 7);
+        mTextures.Input.UpDown.Up.Hover = new Single(_texture, 384 + 8, 112, 7, 7);
+        mTextures.Input.UpDown.Up.Down = new Single(_texture, 384 + 16, 112, 7, 7);
+        mTextures.Input.UpDown.Up.Disabled = new Single(_texture, 384 + 24, 112, 7, 7);
+        mTextures.Input.UpDown.Down.Normal = new Single(_texture, 384, 120, 7, 7);
+        mTextures.Input.UpDown.Down.Hover = new Single(_texture, 384 + 8, 120, 7, 7);
+        mTextures.Input.UpDown.Down.Down = new Single(_texture, 384 + 16, 120, 7, 7);
+        mTextures.Input.UpDown.Down.Disabled = new Single(_texture, 384 + 24, 120, 7, 7);
 
-        mTextures.ProgressBar.Back = new Bordered(mTexture, 384, 0, 31, 31, Margin.Eight);
-        mTextures.ProgressBar.Front = new Bordered(mTexture, 384 + 32, 0, 31, 31, Margin.Eight);
+        mTextures.ProgressBar.Back = new Bordered(_texture, 384, 0, 31, 31, Margin.Eight);
+        mTextures.ProgressBar.Front = new Bordered(_texture, 384 + 32, 0, 31, 31, Margin.Eight);
 
-        mTextures.Input.Slider.H.Normal = new Single(mTexture, 416, 32, 15, 15);
-        mTextures.Input.Slider.H.Hover = new Single(mTexture, 416, 32 + 16, 15, 15);
-        mTextures.Input.Slider.H.Down = new Single(mTexture, 416, 32 + 32, 15, 15);
-        mTextures.Input.Slider.H.Disabled = new Single(mTexture, 416, 32 + 48, 15, 15);
+        mTextures.Input.Slider.H.Normal = new Bordered(_texture, 416, 32, 15, 15, new Margin(7));
+        mTextures.Input.Slider.H.Hover = new Bordered(_texture, 416, 32 + 16, 15, 15, new Margin(7));
+        mTextures.Input.Slider.H.Active = new Bordered(_texture, 416, 32 + 32, 15, 15, new Margin(7));
+        mTextures.Input.Slider.H.Disabled = new Bordered(_texture, 416, 32 + 48, 15, 15, new Margin(7));
 
-        mTextures.Input.Slider.V.Normal = new Single(mTexture, 416 + 16, 32, 15, 15);
-        mTextures.Input.Slider.V.Hover = new Single(mTexture, 416 + 16, 32 + 16, 15, 15);
-        mTextures.Input.Slider.V.Down = new Single(mTexture, 416 + 16, 32 + 32, 15, 15);
-        mTextures.Input.Slider.V.Disabled = new Single(mTexture, 416 + 16, 32 + 48, 15, 15);
+        mTextures.Input.Slider.V.Normal = new Bordered(_texture, 416 + 16, 32, 15, 15, new Margin(7));
+        mTextures.Input.Slider.V.Hover = new Bordered(_texture, 416 + 16, 32 + 16, 15, 15, new Margin(7));
+        mTextures.Input.Slider.V.Active = new Bordered(_texture, 416 + 16, 32 + 32, 15, 15, new Margin(7));
+        mTextures.Input.Slider.V.Disabled = new Bordered(_texture, 416 + 16, 32 + 48, 15, 15, new Margin(7));
 
-        mTextures.CategoryList.Outer = new Bordered(mTexture, 256, 384, 63, 63, Margin.Eight);
-        mTextures.CategoryList.Inner = new Bordered(mTexture, 256 + 64, 384, 63, 63, new Margin(8, 21, 8, 8));
-        mTextures.CategoryList.Header = new Bordered(mTexture, 320, 352, 63, 31, Margin.Eight);
+        mTextures.CategoryList.Outer = new Bordered(_texture, 256, 384, 63, 63, Margin.Eight);
+        mTextures.CategoryList.Inner = new Bordered(_texture, 256 + 64, 384, 63, 63, new Margin(8, 21, 8, 8));
+        mTextures.CategoryList.Header = new Bordered(_texture, 320, 352, 63, 31, Margin.Eight);
     }
 
     #endregion
@@ -704,40 +695,32 @@ public partial class TexturedBase : Skin.Base
             return;
         }
 
-        Button.ControlState controlState = Button.ControlState.Normal;
+        ComponentState componentState = ComponentState.Normal;
         if (disabled)
         {
-            controlState = Button.ControlState.Disabled;
+            componentState = ComponentState.Disabled;
         }
         else if (depressed)
         {
-            controlState = Button.ControlState.Clicked;
+            componentState = ComponentState.Active;
         }
         else if (hovered)
         {
-            controlState = Button.ControlState.Hovered;
+            componentState = ComponentState.Hovered;
         }
 
-        var textColor = button.GetTextColor(controlState.ToLabelControlState()) ??
-                        button.GetTextColor(Label.ControlState.Normal);
-
-        if (textColor != null)
-        {
-            button.TextColorOverride = textColor;
-        }
-
-        var controlStateTexture = button.GetImage(controlState);
-        controlStateTexture ??= button.GetImage(Button.ControlState.Normal);
+        var controlStateTexture = button.GetStateTexture(componentState);
+        controlStateTexture ??= button.GetStateTexture(ComponentState.Normal);
 
         if (controlStateTexture == null)
         {
             var buttonTextureGroup = mTextures.Input.Button;
-            var target = controlState switch
+            var target = componentState switch
             {
-                Button.ControlState.Normal => buttonTextureGroup.Normal,
-                Button.ControlState.Hovered => buttonTextureGroup.Hovered,
-                Button.ControlState.Clicked => buttonTextureGroup.Pressed,
-                Button.ControlState.Disabled => buttonTextureGroup.Disabled,
+                ComponentState.Normal => buttonTextureGroup.Normal,
+                ComponentState.Hovered => buttonTextureGroup.Hovered,
+                ComponentState.Active => buttonTextureGroup.Active,
+                ComponentState.Disabled => buttonTextureGroup.Disabled,
                 _ => throw new UnreachableException(),
             };
 
@@ -799,96 +782,139 @@ public partial class TexturedBase : Skin.Base
             return;
         }
 
-        if (((Menu) control).GetTemplate() != null)
+        if (control is not Menu menu)
         {
-            var renderImg = ((Menu) control).GetTemplate();
+            return;
+        }
 
-            //Draw Top Left Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2), control.RenderColor,
-                0, 0, 2f / renderImg.Width, 2f / renderImg.Height
-            );
+        if (menu.GetTemplate() is not { } menuTemplate)
+        {
+            if (paddingDisabled)
+            {
+                mTextures.Menu.Background.Draw(Renderer, control.RenderBounds, control.RenderColor);
+            }
+            else
+            {
+                mTextures.Menu.BackgroundWithMargin.Draw(Renderer, control.RenderBounds, control.RenderColor);
+            }
 
-            //Draw Top
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width, 0,
-                (renderImg.Width - 2f) / renderImg.Width, 2f / renderImg.Height
-            );
-
-            //Draw Top Right Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width, 0, 1f,
-                2f / renderImg.Height
-            );
-
-            //Draw Left
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, 0, 2f / renderImg.Height, 2f / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            //Draw Middle
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y + 2, control.RenderBounds.Width - 4,
-                    control.RenderBounds.Height - 4
-                ), control.RenderColor, 2f / renderImg.Width, 2f / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            //Draw Right
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.Width - 2, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                2f / renderImg.Height, 1, (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            // Draw Bottom Left Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, 0, (renderImg.Height - 2f) / renderImg.Height,
-                2f / renderImg.Width, 1f
-            );
-
-            //Draw Bottom
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Bottom - 2, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width, 1f
-            );
-
-            //Draw Bottom Right Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height, 1f, 1f
-            );
 
             return;
         }
 
-        if (!paddingDisabled)
-        {
-            mTextures.Menu.BackgroundWithMargin.Draw(Renderer, control.RenderBounds, control.RenderColor);
+        //Draw Top Left Corner
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2),
+            control.RenderColor,
+            0,
+            0,
+            2f / menuTemplate.Width,
+            2f / menuTemplate.Height
+        );
 
-            return;
-        }
+        //Draw Top
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2),
+            control.RenderColor,
+            2f / menuTemplate.Width,
+            0,
+            (menuTemplate.Width - 2f) / menuTemplate.Width,
+            2f / menuTemplate.Height
+        );
 
-        mTextures.Menu.Background.Draw(Renderer, control.RenderBounds, control.RenderColor);
+        //Draw Top Right Corner
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
+            control.RenderColor,
+            (menuTemplate.Width - 2f) / menuTemplate.Width,
+            0,
+            1f,
+            2f / menuTemplate.Height
+        );
+
+        //Draw Left
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4),
+            control.RenderColor,
+            0,
+            2f / menuTemplate.Height,
+            2f / menuTemplate.Width,
+            (menuTemplate.Height - 2f) / menuTemplate.Height
+        );
+
+        //Draw Middle
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(
+                control.RenderBounds.X + 2,
+                control.RenderBounds.Y + 2,
+                control.RenderBounds.Width - 4,
+                control.RenderBounds.Height - 4
+            ),
+            control.RenderColor,
+            2f / menuTemplate.Width,
+            2f / menuTemplate.Height,
+            (menuTemplate.Width - 2f) / menuTemplate.Width,
+            (menuTemplate.Height - 2f) / menuTemplate.Height
+        );
+
+        //Draw Right
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(
+                control.RenderBounds.Width - 2,
+                control.RenderBounds.Y + 2,
+                2,
+                control.RenderBounds.Height - 4
+            ),
+            control.RenderColor,
+            (menuTemplate.Width - 2f) / menuTemplate.Width,
+            2f / menuTemplate.Height,
+            1,
+            (menuTemplate.Height - 2f) / menuTemplate.Height
+        );
+
+        // Draw Bottom Left Corner
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
+            control.RenderColor,
+            0,
+            (menuTemplate.Height - 2f) / menuTemplate.Height,
+            2f / menuTemplate.Width,
+            1f
+        );
+
+        //Draw Bottom
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(
+                control.RenderBounds.X + 2,
+                control.RenderBounds.Bottom - 2,
+                control.RenderBounds.Width - 4,
+                2
+            ),
+            control.RenderColor,
+            2f / menuTemplate.Width,
+            (menuTemplate.Height - 2f) / menuTemplate.Height,
+            (menuTemplate.Width - 2f) / menuTemplate.Width,
+            1f
+        );
+
+        //Draw Bottom Right Corner
+        Renderer.DrawTexturedRect(
+            menuTemplate,
+            new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
+            control.RenderColor,
+            (menuTemplate.Width - 2f) / menuTemplate.Width,
+            (menuTemplate.Height - 2f) / menuTemplate.Height,
+            1f,
+            1f
+        );
     }
 
     public override void DrawShadow(Control.Base control)
@@ -903,7 +929,7 @@ public partial class TexturedBase : Skin.Base
 
     public override void DrawRadioButton(Control.Base control, bool selected, bool depressed)
     {
-        if (TryGetOverrideTexture(control as CheckBox, selected, depressed, out var overrideTexture))
+        if (TryGetOverrideTexture(control as Checkbox, selected, depressed, out var overrideTexture))
         {
             Renderer.DrawColor = control.RenderColor;
             Renderer.DrawTexturedRect(overrideTexture, control.RenderBounds, control.RenderColor, 0, 0);
@@ -912,7 +938,7 @@ public partial class TexturedBase : Skin.Base
 
         if (selected)
         {
-            if (control.IsDisabled)
+            if (control.IsDisabledByTree)
             {
                 mTextures.RadioButton.Disabled_Baked.Checked.Draw(Renderer, control.RenderBounds, control.RenderColor);
             }
@@ -923,7 +949,7 @@ public partial class TexturedBase : Skin.Base
         }
         else
         {
-            if (control.IsDisabled)
+            if (control.IsDisabledByTree)
             {
                 mTextures.RadioButton.Disabled_Baked.Normal.Draw(Renderer, control.RenderBounds, control.RenderColor);
             }
@@ -934,16 +960,16 @@ public partial class TexturedBase : Skin.Base
         }
     }
 
-    protected bool TryGetOverrideTexture(CheckBox control, bool selected, bool pressed, out GameTexture overrideTexture)
+    protected bool TryGetOverrideTexture(Checkbox control, bool selected, bool pressed, out IGameTexture overrideTexture)
     {
-        CheckBox.ControlState controlState = CheckBox.ControlState.Normal;
+        Checkbox.ControlState controlState = Checkbox.ControlState.Normal;
         if (selected)
         {
-            controlState = control.IsDisabled ? CheckBox.ControlState.CheckedDisabled : CheckBox.ControlState.CheckedNormal;
+            controlState = control.IsDisabledByTree ? Checkbox.ControlState.CheckedDisabled : Checkbox.ControlState.CheckedNormal;
         }
-        else if (control.IsDisabled)
+        else if (control.IsDisabledByTree)
         {
-            controlState = CheckBox.ControlState.Disabled;
+            controlState = Checkbox.ControlState.Disabled;
         }
 
         overrideTexture = control.GetImage(controlState);
@@ -952,7 +978,7 @@ public partial class TexturedBase : Skin.Base
 
     public override void DrawCheckBox(Control.Base control, bool selected, bool depressed)
     {
-        if (TryGetOverrideTexture(control as CheckBox, selected, depressed, out var overrideTexture))
+        if (TryGetOverrideTexture(control as Checkbox, selected, depressed, out var overrideTexture))
         {
             Renderer.DrawColor = control.RenderColor;
             Renderer.DrawTexturedRect(overrideTexture, control.RenderBounds, control.RenderColor, 0, 0);
@@ -961,7 +987,7 @@ public partial class TexturedBase : Skin.Base
 
         if (selected)
         {
-            if (control.IsDisabled)
+            if (control.IsDisabledByTree)
             {
                 mTextures.CheckBox.Disabled_Baked.Checked.Draw(Renderer, control.RenderBounds, control.RenderColor);
             }
@@ -972,7 +998,7 @@ public partial class TexturedBase : Skin.Base
         }
         else
         {
-            if (control.IsDisabled)
+            if (control.IsDisabledByTree)
             {
                 mTextures.CheckBox.Disabled_Baked.Normal.Draw(Renderer, control.RenderBounds, control.RenderColor);
             }
@@ -1020,7 +1046,7 @@ public partial class TexturedBase : Skin.Base
 
     public override void DrawTextBox(Control.Base control)
     {
-        if (control.IsDisabled)
+        if (control.IsDisabledByTree)
         {
             mTextures.TextBox.Disabled.Draw(Renderer, control.RenderBounds, control.RenderColor);
 
@@ -1077,41 +1103,42 @@ public partial class TexturedBase : Skin.Base
 
     private void DrawActiveTabButton(Control.Base control, Pos dir)
     {
-        if (dir == Pos.Top)
+        switch (dir)
         {
-            mTextures.Tab.Top.Active.Draw(
-                Renderer, control.RenderBounds.Add(new Rectangle(0, 0, 0, 8)), control.RenderColor
-            );
-
-            return;
+            case Pos.Top:
+                mTextures.Tab.Top.Active.Draw(
+                    Renderer,
+                    control.RenderBounds.Add(new Rectangle(0, 0, 0, 0)),
+                    control.RenderColor
+                );
+                return;
+            case Pos.Left:
+                mTextures.Tab.Left.Active.Draw(
+                    Renderer,
+                    control.RenderBounds.Add(new Rectangle(0, 0, 0, 0)),
+                    control.RenderColor
+                );
+                return;
+            case Pos.Bottom:
+                mTextures.Tab.Bottom.Active.Draw(
+                    Renderer,
+                    control.RenderBounds.Add(new Rectangle(0, 0, 0, 0)),
+                    control.RenderColor
+                );
+                return;
+            case Pos.Right:
+                mTextures.Tab.Right.Active.Draw(
+                    Renderer,
+                    control.RenderBounds.Add(new Rectangle(0, 0, 0, 0)),
+                    control.RenderColor
+                );
+                return;
         }
+    }
 
-        if (dir == Pos.Left)
-        {
-            mTextures.Tab.Left.Active.Draw(
-                Renderer, control.RenderBounds.Add(new Rectangle(0, 0, 8, 0)), control.RenderColor
-            );
-
-            return;
-        }
-
-        if (dir == Pos.Bottom)
-        {
-            mTextures.Tab.Bottom.Active.Draw(
-                Renderer, control.RenderBounds.Add(new Rectangle(0, -8, 0, 8)), control.RenderColor
-            );
-
-            return;
-        }
-
-        if (dir == Pos.Right)
-        {
-            mTextures.Tab.Right.Active.Draw(
-                Renderer, control.RenderBounds.Add(new Rectangle(-8, 0, 8, 0)), control.RenderColor
-            );
-
-            return;
-        }
+    public override void DrawPanel(Panel panel)
+    {
+        mTextures.Panel.Control.Draw(Renderer, panel.RenderBounds, panel.RenderColor);
     }
 
     public override void DrawTabControl(Control.Base control)
@@ -1126,7 +1153,7 @@ public partial class TexturedBase : Skin.Base
 
     public override void DrawWindow(Control.Base control, int topHeight, bool inFocus)
     {
-        GameTexture renderImg = null;
+        IGameTexture renderImg = null;
         if (((WindowControl) control).GetImage(Control.WindowControl.ControlState.Active) != null)
         {
             renderImg = ((WindowControl) control).GetImage(Control.WindowControl.ControlState.Active);
@@ -1169,263 +1196,226 @@ public partial class TexturedBase : Skin.Base
             return;
         }
 
-        if (((ScrollBar) control).GetTemplate() != null)
+        if (control is not ScrollBar scrollbar)
         {
-            var renderImg = ((ScrollBar) control).GetTemplate();
-            Renderer.DrawColor = control.RenderColor;
+            return;
+        }
 
-            //Draw Top Left Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2), control.RenderColor,
-                0, 0, 2f / renderImg.Width, 2f / renderImg.Height
-            );
-
-            //Draw Top
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width, 0,
-                (renderImg.Width - 2f) / renderImg.Width, 2f / renderImg.Height
-            );
-
-            //Draw Top Right Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width, 0, 1f,
-                2f / renderImg.Height
-            );
-
-            //Draw Left
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, 0, 2f / renderImg.Height, 2f / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            //Draw Middle
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y + 2, control.RenderBounds.Width - 4,
-                    control.RenderBounds.Height - 4
-                ), control.RenderColor, 2f / renderImg.Width, 2f / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            //Draw Right
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.Width - 2, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                2f / renderImg.Height, 1, (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            // Draw Bottom Left Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, 0, (renderImg.Height - 2f) / renderImg.Height,
-                2f / renderImg.Width, 1f
-            );
-
-            //Draw Bottom
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Bottom - 2, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width, 1f
-            );
-
-            //Draw Bottom Right Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height, 1f, 1f
-            );
+        if (scrollbar.GetTemplate() is not { } renderImg)
+        {
+            if (horizontal)
+            {
+                mTextures.Scroller.TrackH.Draw(Renderer, control.RenderBounds, control.RenderColor);
+            }
+            else
+            {
+                mTextures.Scroller.TrackV.Draw(Renderer, control.RenderBounds, control.RenderColor);
+            }
 
             return;
         }
 
-        if (horizontal)
-        {
-            mTextures.Scroller.TrackH.Draw(Renderer, control.RenderBounds, control.RenderColor);
-        }
-        else
-        {
-            mTextures.Scroller.TrackV.Draw(Renderer, control.RenderBounds, control.RenderColor);
-        }
+        Renderer.DrawColor = control.RenderColor;
+
+        //Draw Top Left Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2),
+            control.RenderColor,
+            0,
+            0,
+            2f / renderImg.Width,
+            2f / renderImg.Height
+        );
+
+        //Draw Top
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2),
+            control.RenderColor,
+            2f / renderImg.Width,
+            0,
+            (renderImg.Width - 2f) / renderImg.Width,
+            2f / renderImg.Height
+        );
+
+        //Draw Top Right Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
+            control.RenderColor,
+            (renderImg.Width - 2f) / renderImg.Width,
+            0,
+            1f,
+            2f / renderImg.Height
+        );
+
+        //Draw Left
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4),
+            control.RenderColor,
+            0,
+            2f / renderImg.Height,
+            2f / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height
+        );
+
+        //Draw Middle
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(
+                control.RenderBounds.X + 2,
+                control.RenderBounds.Y + 2,
+                control.RenderBounds.Width - 4,
+                control.RenderBounds.Height - 4
+            ),
+            control.RenderColor,
+            2f / renderImg.Width,
+            2f / renderImg.Height,
+            (renderImg.Width - 2f) / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height
+        );
+
+        //Draw Right
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(
+                control.RenderBounds.Width - 2,
+                control.RenderBounds.Y + 2,
+                2,
+                control.RenderBounds.Height - 4
+            ),
+            control.RenderColor,
+            (renderImg.Width - 2f) / renderImg.Width,
+            2f / renderImg.Height,
+            1,
+            (renderImg.Height - 2f) / renderImg.Height
+        );
+
+        // Draw Bottom Left Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
+            control.RenderColor,
+            0,
+            (renderImg.Height - 2f) / renderImg.Height,
+            2f / renderImg.Width,
+            1f
+        );
+
+        //Draw Bottom
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(
+                control.RenderBounds.X + 2,
+                control.RenderBounds.Bottom - 2,
+                control.RenderBounds.Width - 4,
+                2
+            ),
+            control.RenderColor,
+            2f / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height,
+            (renderImg.Width - 2f) / renderImg.Width,
+            1f
+        );
+
+        //Draw Bottom Right Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
+            control.RenderColor,
+            (renderImg.Width - 2f) / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height,
+            1f,
+            1f
+        );
     }
 
-    public override void DrawScrollBarBar(Control.Base control, bool depressed, bool hovered, bool horizontal)
+    public override void DrawScrollBarBar(ScrollBarBar scrollBarBar)
     {
-        GameTexture renderImg = null;
-        if (control.IsDisabled && ((ScrollBarBar) control).GetImage(Dragger.ControlState.Disabled) != null)
+        IGameTexture? renderImg = scrollBarBar.GetImage(ComponentState.Normal);
+        if (scrollBarBar.IsDisabledByTree)
         {
-            renderImg = ((ScrollBarBar) control).GetImage(Dragger.ControlState.Disabled);
+            renderImg = scrollBarBar.GetImage(ComponentState.Disabled);
         }
-        else if (depressed && ((ScrollBarBar) control).GetImage(Dragger.ControlState.Clicked) != null)
+        else if (scrollBarBar.IsActive)
         {
-            renderImg = ((ScrollBarBar) control).GetImage(Dragger.ControlState.Clicked);
+            renderImg = scrollBarBar.GetImage(ComponentState.Active);
         }
-        else if (hovered && ((ScrollBarBar) control).GetImage(Dragger.ControlState.Hovered) != null)
+        else if (scrollBarBar.IsHovered)
         {
-            renderImg = ((ScrollBarBar) control).GetImage(Dragger.ControlState.Hovered);
-        }
-        else if (((ScrollBarBar) control).GetImage(Dragger.ControlState.Normal) != null)
-        {
-            renderImg = ((ScrollBarBar) control).GetImage(Dragger.ControlState.Normal);
+            renderImg = scrollBarBar.GetImage(ComponentState.Hovered);
         }
 
-        if (!horizontal)
+        if (renderImg == null)
         {
-            if (renderImg != null)
+            var buttonSource = scrollBarBar.IsHorizontal ? mTextures.Scroller.BarH : mTextures.Scroller.BarV;
+            var stateSource = buttonSource.Normal;
+            if (scrollBarBar.IsDisabledByTree)
             {
-                Renderer.DrawColor = control.RenderColor;
-
-                //Draw Top Left Corner
-                Renderer.DrawTexturedRect(
-                    renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2),
-                    control.RenderColor, 0, 0, 2f / renderImg.Width, 2f / renderImg.Height
-                );
-
-                //Draw Top
-                Renderer.DrawTexturedRect(
-                    renderImg,
-                    new Rectangle(
-                        control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2
-                    ), control.RenderColor, 2f / renderImg.Width, 0,
-                    (renderImg.Width - 2f) / renderImg.Width, 2f / renderImg.Height
-                );
-
-                //Draw Top Right Corner
-                Renderer.DrawTexturedRect(
-                    renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
-                    control.RenderColor, (renderImg.Width - 2f) / renderImg.Width, 0, 1f,
-                    2f / renderImg.Height
-                );
-
-                //Draw Left
-                Renderer.DrawTexturedRect(
-                    renderImg,
-                    new Rectangle(
-                        control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                    ), control.RenderColor, 0, 2f / renderImg.Height, 2f / renderImg.Width,
-                    (renderImg.Height - 2f) / renderImg.Height
-                );
-
-                //Draw Middle
-                Renderer.DrawTexturedRect(
-                    renderImg,
-                    new Rectangle(
-                        control.RenderBounds.X + 2, control.RenderBounds.Y + 2, control.RenderBounds.Width - 4,
-                        control.RenderBounds.Height - 4
-                    ), control.RenderColor, 2f / renderImg.Width, 2f / renderImg.Height,
-                    (renderImg.Width - 2f) / renderImg.Width,
-                    (renderImg.Height - 2f) / renderImg.Height
-                );
-
-                //Draw Right
-                Renderer.DrawTexturedRect(
-                    renderImg,
-                    new Rectangle(
-                        control.RenderBounds.Width - 2, control.RenderBounds.Y + 2, 2,
-                        control.RenderBounds.Height - 4
-                    ), control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                    2f / renderImg.Height, 1, (renderImg.Height - 2f) / renderImg.Height
-                );
-
-                // Draw Bottom Left Corner
-                Renderer.DrawTexturedRect(
-                    renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
-                    control.RenderColor, 0, (renderImg.Height - 2f) / renderImg.Height,
-                    2f / renderImg.Width, 1f
-                );
-
-                //Draw Bottom
-                Renderer.DrawTexturedRect(
-                    renderImg,
-                    new Rectangle(
-                        control.RenderBounds.X + 2, control.RenderBounds.Bottom - 2, control.RenderBounds.Width - 4,
-                        2
-                    ), control.RenderColor, 2f / renderImg.Width,
-                    (renderImg.Height - 2f) / renderImg.Height,
-                    (renderImg.Width - 2f) / renderImg.Width, 1f
-                );
-
-                //Draw Bottom Right Corner
-                Renderer.DrawTexturedRect(
-                    renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
-                    control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                    (renderImg.Height - 2f) / renderImg.Height, 1f, 1f
-                );
-
-                return;
+                stateSource = buttonSource.Disabled;
+            }
+            else if (scrollBarBar.IsActive)
+            {
+                stateSource = buttonSource.Active;
+            }
+            else if (scrollBarBar.IsHovered)
+            {
+                stateSource = buttonSource.Hovered;
             }
 
-            if (control.IsDisabled)
-            {
-                mTextures.Scroller.ButtonVDisabled.Draw(Renderer, control.RenderBounds, control.RenderColor);
-
-                return;
-            }
-
-            if (depressed)
-            {
-                mTextures.Scroller.ButtonVDown.Draw(Renderer, control.RenderBounds, control.RenderColor);
-
-                return;
-            }
-
-            if (hovered)
-            {
-                mTextures.Scroller.ButtonVHover.Draw(Renderer, control.RenderBounds, control.RenderColor);
-
-                return;
-            }
-
-            mTextures.Scroller.ButtonVNormal.Draw(Renderer, control.RenderBounds, control.RenderColor);
-
+            stateSource.Draw(Renderer, scrollBarBar.RenderBounds, scrollBarBar.RenderColor);
             return;
         }
 
-        if (renderImg != null)
-        {
-            Renderer.DrawColor = control.RenderColor;
+        Renderer.DrawColor = scrollBarBar.RenderColor;
 
+
+
+        if (scrollBarBar.IsVertical)
+        {
             //Draw Top Left Corner
             Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2), control.RenderColor,
-                0, 0, 2f / renderImg.Width, 2f / renderImg.Height
+                renderImg,
+                new Rectangle(scrollBarBar.RenderBounds.X, scrollBarBar.RenderBounds.Y, 2, 2),
+                scrollBarBar.RenderColor,
+                0,
+                0,
+                2f / renderImg.Width,
+                2f / renderImg.Height
             );
 
             //Draw Top
             Renderer.DrawTexturedRect(
                 renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width, 0,
-                (renderImg.Width - 2f) / renderImg.Width, 2f / renderImg.Height
+                new Rectangle(scrollBarBar.RenderBounds.X + 2, scrollBarBar.RenderBounds.Y, scrollBarBar.RenderBounds.Width - 4, 2),
+                scrollBarBar.RenderColor,
+                2f / renderImg.Width,
+                0,
+                (renderImg.Width - 2f) / renderImg.Width,
+                2f / renderImg.Height
             );
 
             //Draw Top Right Corner
             Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width, 0, 1f,
+                renderImg,
+                new Rectangle(scrollBarBar.RenderBounds.Right - 2, scrollBarBar.RenderBounds.Y, 2, 2),
+                scrollBarBar.RenderColor,
+                (renderImg.Width - 2f) / renderImg.Width,
+                0,
+                1f,
                 2f / renderImg.Height
             );
 
             //Draw Left
             Renderer.DrawTexturedRect(
                 renderImg,
-                new Rectangle(
-                    control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, 0, 2f / renderImg.Height, 2f / renderImg.Width,
+                new Rectangle(scrollBarBar.RenderBounds.X, scrollBarBar.RenderBounds.Y + 2, 2, scrollBarBar.RenderBounds.Height - 4),
+                scrollBarBar.RenderColor,
+                0,
+                2f / renderImg.Height,
+                2f / renderImg.Width,
                 (renderImg.Height - 2f) / renderImg.Height
             );
 
@@ -1433,9 +1423,14 @@ public partial class TexturedBase : Skin.Base
             Renderer.DrawTexturedRect(
                 renderImg,
                 new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y + 2, control.RenderBounds.Width - 4,
-                    control.RenderBounds.Height - 4
-                ), control.RenderColor, 2f / renderImg.Width, 2f / renderImg.Height,
+                    scrollBarBar.RenderBounds.X + 2,
+                    scrollBarBar.RenderBounds.Y + 2,
+                    scrollBarBar.RenderBounds.Width - 4,
+                    scrollBarBar.RenderBounds.Height - 4
+                ),
+                scrollBarBar.RenderColor,
+                2f / renderImg.Width,
+                2f / renderImg.Height,
                 (renderImg.Width - 2f) / renderImg.Width,
                 (renderImg.Height - 2f) / renderImg.Height
             );
@@ -1444,60 +1439,172 @@ public partial class TexturedBase : Skin.Base
             Renderer.DrawTexturedRect(
                 renderImg,
                 new Rectangle(
-                    control.RenderBounds.Width - 2, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                2f / renderImg.Height, 1, (renderImg.Height - 2f) / renderImg.Height
+                    scrollBarBar.RenderBounds.Width - 2,
+                    scrollBarBar.RenderBounds.Y + 2,
+                    2,
+                    scrollBarBar.RenderBounds.Height - 4
+                ),
+                scrollBarBar.RenderColor,
+                (renderImg.Width - 2f) / renderImg.Width,
+                2f / renderImg.Height,
+                1,
+                (renderImg.Height - 2f) / renderImg.Height
             );
 
             // Draw Bottom Left Corner
             Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, 0, (renderImg.Height - 2f) / renderImg.Height,
-                2f / renderImg.Width, 1f
+                renderImg,
+                new Rectangle(scrollBarBar.RenderBounds.X, scrollBarBar.RenderBounds.Bottom - 2, 2, 2),
+                scrollBarBar.RenderColor,
+                0,
+                (renderImg.Height - 2f) / renderImg.Height,
+                2f / renderImg.Width,
+                1f
             );
 
             //Draw Bottom
             Renderer.DrawTexturedRect(
                 renderImg,
                 new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Bottom - 2, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width,
+                    scrollBarBar.RenderBounds.X + 2,
+                    scrollBarBar.RenderBounds.Bottom - 2,
+                    scrollBarBar.RenderBounds.Width - 4,
+                    2
+                ),
+                scrollBarBar.RenderColor,
+                2f / renderImg.Width,
                 (renderImg.Height - 2f) / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width, 1f
+                (renderImg.Width - 2f) / renderImg.Width,
+                1f
             );
 
             //Draw Bottom Right Corner
             Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height, 1f, 1f
+                renderImg,
+                new Rectangle(scrollBarBar.RenderBounds.Right - 2, scrollBarBar.RenderBounds.Bottom - 2, 2, 2),
+                scrollBarBar.RenderColor,
+                (renderImg.Width - 2f) / renderImg.Width,
+                (renderImg.Height - 2f) / renderImg.Height,
+                1f,
+                1f
             );
 
             return;
         }
 
-        if (control.IsDisabled)
-        {
-            mTextures.Scroller.ButtonHDisabled.Draw(Renderer, control.RenderBounds, control.RenderColor);
+        //Draw Top Left Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(scrollBarBar.RenderBounds.X, scrollBarBar.RenderBounds.Y, 2, 2),
+            scrollBarBar.RenderColor,
+            0,
+            0,
+            2f / renderImg.Width,
+            2f / renderImg.Height
+        );
 
-            return;
-        }
+        //Draw Top
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(scrollBarBar.RenderBounds.X + 2, scrollBarBar.RenderBounds.Y, scrollBarBar.RenderBounds.Width - 4, 2),
+            scrollBarBar.RenderColor,
+            2f / renderImg.Width,
+            0,
+            (renderImg.Width - 2f) / renderImg.Width,
+            2f / renderImg.Height
+        );
 
-        if (depressed)
-        {
-            mTextures.Scroller.ButtonHDown.Draw(Renderer, control.RenderBounds, control.RenderColor);
+        //Draw Top Right Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(scrollBarBar.RenderBounds.Right - 2, scrollBarBar.RenderBounds.Y, 2, 2),
+            scrollBarBar.RenderColor,
+            (renderImg.Width - 2f) / renderImg.Width,
+            0,
+            1f,
+            2f / renderImg.Height
+        );
 
-            return;
-        }
+        //Draw Left
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(scrollBarBar.RenderBounds.X, scrollBarBar.RenderBounds.Y + 2, 2, scrollBarBar.RenderBounds.Height - 4),
+            scrollBarBar.RenderColor,
+            0,
+            2f / renderImg.Height,
+            2f / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height
+        );
 
-        if (hovered)
-        {
-            mTextures.Scroller.ButtonHHover.Draw(Renderer, control.RenderBounds, control.RenderColor);
+        //Draw Middle
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(
+                scrollBarBar.RenderBounds.X + 2,
+                scrollBarBar.RenderBounds.Y + 2,
+                scrollBarBar.RenderBounds.Width - 4,
+                scrollBarBar.RenderBounds.Height - 4
+            ),
+            scrollBarBar.RenderColor,
+            2f / renderImg.Width,
+            2f / renderImg.Height,
+            (renderImg.Width - 2f) / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height
+        );
 
-            return;
-        }
+        //Draw Right
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(
+                scrollBarBar.RenderBounds.Width - 2,
+                scrollBarBar.RenderBounds.Y + 2,
+                2,
+                scrollBarBar.RenderBounds.Height - 4
+            ),
+            scrollBarBar.RenderColor,
+            (renderImg.Width - 2f) / renderImg.Width,
+            2f / renderImg.Height,
+            1,
+            (renderImg.Height - 2f) / renderImg.Height
+        );
 
-        mTextures.Scroller.ButtonHNormal.Draw(Renderer, control.RenderBounds, control.RenderColor);
+        // Draw Bottom Left Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(scrollBarBar.RenderBounds.X, scrollBarBar.RenderBounds.Bottom - 2, 2, 2),
+            scrollBarBar.RenderColor,
+            0,
+            (renderImg.Height - 2f) / renderImg.Height,
+            2f / renderImg.Width,
+            1f
+        );
+
+        //Draw Bottom
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(
+                scrollBarBar.RenderBounds.X + 2,
+                scrollBarBar.RenderBounds.Bottom - 2,
+                scrollBarBar.RenderBounds.Width - 4,
+                2
+            ),
+            scrollBarBar.RenderColor,
+            2f / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height,
+            (renderImg.Width - 2f) / renderImg.Width,
+            1f
+        );
+
+        //Draw Bottom Right Corner
+        Renderer.DrawTexturedRect(
+            renderImg,
+            new Rectangle(scrollBarBar.RenderBounds.Right - 2, scrollBarBar.RenderBounds.Bottom - 2, 2, 2),
+            scrollBarBar.RenderColor,
+            (renderImg.Width - 2f) / renderImg.Width,
+            (renderImg.Height - 2f) / renderImg.Height,
+            1f,
+            1f
+        );
     }
 
     public override void DrawProgressBar(Control.Base control, bool horizontal, float progress)
@@ -1563,6 +1670,93 @@ public partial class TexturedBase : Skin.Base
         mTextures.Input.ListBox.OddLine.Draw(Renderer, control.RenderBounds, control.RenderColor);
     }
 
+    public void DrawSliderNotches(
+        Rectangle rect,
+        double[]? notches,
+        int numNotches,
+        float thickness,
+        float notchLength,
+        Orientation orientation
+    )
+    {
+        if (numNotches == 0 && notches is not { Length: > 0 })
+        {
+            return;
+        }
+
+        var positionLimit = orientation switch
+        {
+            Orientation.LeftToRight => rect.Width,
+            Orientation.RightToLeft => rect.Width,
+            Orientation.TopToBottom => rect.Height,
+            Orientation.BottomToTop => rect.Height,
+            _ => throw Exceptions.UnreachableInvalidEnum(orientation),
+        };
+
+        Rectangle notchBaseRect = default;
+        notchBaseRect.X = rect.X;
+        notchBaseRect.Y = rect.Y;
+        switch (orientation)
+        {
+            case Orientation.LeftToRight:
+            case Orientation.RightToLeft:
+                notchBaseRect.Width = (int)thickness;
+                notchBaseRect.Height = (int)(notchLength + thickness);
+                break;
+            case Orientation.TopToBottom:
+            case Orientation.BottomToTop:
+                notchBaseRect.Width = (int)(notchLength + thickness);
+                notchBaseRect.Height = (int)thickness;
+                break;
+            default:
+                throw Exceptions.UnreachableInvalidEnum(orientation);
+        }
+
+        if (notches == null)
+        {
+            var spacing = positionLimit / (float) numNotches;
+
+            for (var notchIndex = 0; notchIndex <= numNotches; ++notchIndex)
+            {
+                Renderer.DrawFilledRect(
+                    orientation is Orientation.LeftToRight or Orientation.RightToLeft
+                        ? notchBaseRect with
+                        {
+                            X = (int)(notchBaseRect.X + spacing * notchIndex),
+                        }
+                        : notchBaseRect with
+                        {
+                            Y = (int)(notchBaseRect.Y + spacing * notchIndex),
+                        }
+                );
+            }
+
+            return;
+        }
+
+        var notchMin = notches.Min();
+        var notchMax = notches.Max();
+        var notchRange = notchMax - notchMin;
+        if (notchRange == 0)
+        {
+            notchRange = 1;
+        }
+
+        var notchPositions = notches.Select(notch => positionLimit * (notch - notchMin) / notchRange).ToArray();
+        foreach (var notchPosition in notchPositions)
+        {
+            Rectangle notchRect = orientation switch
+            {
+                Orientation.LeftToRight => notchBaseRect with { X = (int)(notchBaseRect.X + notchPosition) },
+                Orientation.RightToLeft => notchBaseRect with { X = (int)(notchBaseRect.X + positionLimit - notchPosition) },
+                Orientation.TopToBottom => notchBaseRect with { Y = (int)(notchBaseRect.Y + notchPosition) },
+                Orientation.BottomToTop => notchBaseRect with { Y = (int)(notchBaseRect.Y + positionLimit - notchPosition) },
+                _ => throw Exceptions.UnreachableInvalidEnum(orientation),
+            };
+            Renderer.DrawFilledRect(notchRect);
+        }
+    }
+
     public void DrawSliderNotchesH(Rectangle rect, double[] notches, int numNotches, float thickness, float notchLength)
     {
         if (numNotches == 0)
@@ -1610,13 +1804,17 @@ public partial class TexturedBase : Skin.Base
         }
     }
 
-    public override void DrawSlider(Control.Base control, bool horizontal, double[] notches, int numNotches, int barSize)
+    public override void DrawSlider(Control.Base control, bool horizontal, double[]? notches, int numNotches, int barSize)
     {
-        if (((Slider) control).GetImage() != null)
+        if (control is not Slider slider)
         {
-            var renderImg = ((Slider) control).GetImage();
-            var rect = control.RenderBounds;
-            Renderer.DrawColor = control.RenderColor;
+            return;
+        }
+
+        var rect = control.RenderBounds;
+
+        if (slider.BackgroundImage is {} backgroundTexture)
+        {
             if (horizontal)
             {
                 //rect.X += (int) (barSize * 0.5);
@@ -1625,25 +1823,28 @@ public partial class TexturedBase : Skin.Base
                 //rect.Height = 1;
                 //DrawSliderNotchesH(rect, numNotches, barSize * 0.5f);
                 //Renderer.DrawFilledRect(rect);
-                Renderer.DrawColor = control.RenderColor;
-                Renderer.DrawTexturedRect(renderImg, rect, control.RenderColor);
-
-                return;
+            }
+            else
+            {
+                //rect.Y += (int) (barSize * 0.5);
+                //rect.Height -= barSize;
+                //rect.X += (int) (rect.Width * 0.5 - 1);
+                //rect.Width = 1;
+                //DrawSliderNotchesV(rect, numNotches, barSize * 0.4f);
+                //Renderer.DrawFilledRect(rect);
             }
 
-            //rect.Y += (int) (barSize * 0.5);
-            //rect.Height -= barSize;
-            //rect.X += (int) (rect.Width * 0.5 - 1);
-            //rect.Width = 1;
-            //DrawSliderNotchesV(rect, numNotches, barSize * 0.4f);
-            //Renderer.DrawFilledRect(rect);
             Renderer.DrawColor = control.RenderColor;
-            Renderer.DrawTexturedRect(renderImg, rect, control.RenderColor);
+            Renderer.DrawTexturedRect(backgroundTexture, rect, control.RenderColor);
+
+            if (control.DrawDebugOutlines)
+            {
+                DrawRectStroke(rect, Color.Yellow);
+            }
         }
         else
         {
-            var rect = control.RenderBounds;
-            Renderer.DrawColor = control.RenderColor;
+            Renderer.DrawColor = control.IsDisabled ? Colors.Button.Disabled : control.RenderColor;
 
             if (horizontal)
             {
@@ -1652,17 +1853,73 @@ public partial class TexturedBase : Skin.Base
                 rect.Y += (int) (rect.Height * 0.5 - 1);
                 rect.Height = 1;
                 DrawSliderNotchesH(rect, notches, numNotches, rect.Height, barSize * 0.5f);
-                Renderer.DrawFilledRect(rect);
-
-                return;
+            }
+            else
+            {
+                rect.Y += (int) (barSize * 0.5);
+                rect.Height -= barSize;
+                rect.X += (int) (rect.Width * 0.5 - 1);
+                rect.Width = 1;
+                DrawSliderNotchesV(rect, numNotches, barSize * 0.4f);
             }
 
-            rect.Y += (int) (barSize * 0.5);
-            rect.Height -= barSize;
-            rect.X += (int) (rect.Width * 0.5 - 1);
-            rect.Width = 1;
-            DrawSliderNotchesV(rect, numNotches, barSize * 0.4f);
             Renderer.DrawFilledRect(rect);
+        }
+    }
+
+    public override void DrawSlider(Slider slider, Orientation orientation, double[]? notches, int numNotches, int barSize)
+    {
+        var bounds = slider.RenderBounds;
+        var renderColor = slider.RenderColor;
+
+        if (slider.BackgroundImage is {} backgroundTexture)
+        {
+            Renderer.DrawColor = renderColor;
+
+            // TODO: Orientation
+
+            Renderer.DrawTexturedRect(backgroundTexture, bounds, renderColor);
+
+            if (slider.DrawDebugOutlines)
+            {
+                DrawRectStroke(bounds, Color.Yellow);
+            }
+        }
+        else
+        {
+            if (slider.IsDisabledByTree)
+            {
+                renderColor = Colors.Button.Disabled;
+            }
+
+            Renderer.DrawColor = renderColor;
+
+            float thickness;
+            switch (orientation)
+            {
+                case Orientation.LeftToRight:
+                case Orientation.RightToLeft:
+                    bounds.X += (int) (barSize * 0.5);
+                    bounds.Width -= barSize;
+                    bounds.Y += (int) (bounds.Height * 0.5 - 1);
+                    bounds.Height = 1;
+                    thickness = bounds.Height;
+                    break;
+                case Orientation.TopToBottom:
+                case Orientation.BottomToTop:
+                    bounds.Y += (int) (barSize * 0.5);
+                    bounds.Height -= barSize;
+                    bounds.X += (int) (bounds.Width * 0.5 - 1);
+                    bounds.Width = 1;
+                    thickness = bounds.Width;
+                    break;
+                default:
+                    throw Exceptions.UnreachableInvalidEnum(orientation);
+            }
+
+            DrawSliderNotches(bounds, notches, numNotches, thickness, barSize * 0.5f, orientation);
+
+            Renderer.DrawFilledRect(bounds);
         }
     }
 
@@ -1673,7 +1930,7 @@ public partial class TexturedBase : Skin.Base
             return;
         }
 
-        if (control.IsDisabled)
+        if (control.IsDisabledByTree)
         {
             mTextures.Input.ComboBox.Disabled.Draw(Renderer, control.RenderBounds, control.RenderColor);
 
@@ -1852,23 +2109,23 @@ public partial class TexturedBase : Skin.Base
             i = 3;
         }
 
-        GameTexture renderImg = null;
+        IGameTexture renderImg = null;
 
-        if (disabled && button.GetImage(Button.ControlState.Disabled) != null)
+        if (disabled && button.GetStateTexture(ComponentState.Disabled) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Disabled);
+            renderImg = button.GetStateTexture(ComponentState.Disabled);
         }
-        else if (depressed && button.GetImage(Button.ControlState.Clicked) != null)
+        else if (depressed && button.GetStateTexture(ComponentState.Active) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Clicked);
+            renderImg = button.GetStateTexture(ComponentState.Active);
         }
-        else if (hovered && button.GetImage(Button.ControlState.Hovered) != null)
+        else if (hovered && button.GetStateTexture(ComponentState.Hovered) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Hovered);
+            renderImg = button.GetStateTexture(ComponentState.Hovered);
         }
-        else if (button.GetImage(Button.ControlState.Normal) != null)
+        else if (button.GetStateTexture(ComponentState.Normal) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Normal);
+            renderImg = button.GetStateTexture(ComponentState.Normal);
         }
 
         if (renderImg != null)
@@ -1888,14 +2145,14 @@ public partial class TexturedBase : Skin.Base
 
         if (depressed)
         {
-            mTextures.Scroller.Button.Down[i].Draw(Renderer, button.RenderBounds, button.RenderColor);
+            mTextures.Scroller.Button.Active[i].Draw(Renderer, button.RenderBounds, button.RenderColor);
 
             return;
         }
 
         if (hovered)
         {
-            mTextures.Scroller.Button.Hover[i].Draw(Renderer, button.RenderBounds, button.RenderColor);
+            mTextures.Scroller.Button.Hovered[i].Draw(Renderer, button.RenderBounds, button.RenderColor);
 
             return;
         }
@@ -1933,7 +2190,7 @@ public partial class TexturedBase : Skin.Base
     {
         if (up)
         {
-            if (control.IsDisabled)
+            if (control.IsDisabledByTree)
             {
                 mTextures.Input.UpDown.Up.Disabled.DrawCenter(Renderer, control.RenderBounds, control.RenderColor);
 
@@ -1959,7 +2216,7 @@ public partial class TexturedBase : Skin.Base
             return;
         }
 
-        if (control.IsDisabled)
+        if (control.IsDisabledByTree)
         {
             mTextures.Input.UpDown.Down.Disabled.DrawCenter(Renderer, control.RenderBounds, control.RenderColor);
 
@@ -2011,6 +2268,7 @@ public partial class TexturedBase : Skin.Base
         Control.Base ctrl,
         bool open,
         bool selected,
+        int treeNodeHeight,
         int labelHeight,
         int labelWidth,
         int halfWay,
@@ -2020,12 +2278,10 @@ public partial class TexturedBase : Skin.Base
     {
         if (selected)
         {
-            mTextures.Selection.Draw(
-                Renderer, new Rectangle(17, 0, labelWidth + 2, labelHeight - 1), ctrl.RenderColor
-            );
+            mTextures.Selection.Draw(Renderer, new Rectangle(16, 0, labelWidth + 4, labelHeight), ctrl.RenderColor);
         }
 
-        base.DrawTreeNode(ctrl, open, selected, labelHeight, labelWidth, halfWay, lastBranch, isRoot);
+        base.DrawTreeNode(ctrl, open, selected, treeNodeHeight, labelHeight, labelWidth, halfWay, lastBranch, isRoot);
     }
 
     public override void DrawColorDisplay(Control.Base control, Color color)
@@ -2071,138 +2327,100 @@ public partial class TexturedBase : Skin.Base
         Renderer.DrawFilledRect(rect);
     }
 
-    public override void DrawWindowCloseButton(Control.Base control, bool depressed, bool hovered, bool disabled)
+    public override void DrawWindowCloseButton(CloseButton closeButton, bool depressed, bool hovered, bool disabled)
     {
-        if (!(control is Button button))
+        IGameTexture renderImg = null;
+        if (disabled && closeButton.GetStateTexture(ComponentState.Disabled) != null)
         {
-            return;
+            renderImg = closeButton.GetStateTexture(ComponentState.Disabled);
         }
-
-        GameTexture renderImg = null;
-        if (disabled && button.GetImage(Button.ControlState.Disabled) != null)
+        else if (depressed && closeButton.GetStateTexture(ComponentState.Active) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Disabled);
+            renderImg = closeButton.GetStateTexture(ComponentState.Active);
         }
-        else if (depressed && button.GetImage(Button.ControlState.Clicked) != null)
+        else if (hovered && closeButton.GetStateTexture(ComponentState.Hovered) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Clicked);
+            renderImg = closeButton.GetStateTexture(ComponentState.Hovered);
         }
-        else if (hovered && button.GetImage(Button.ControlState.Hovered) != null)
+        else if (closeButton.GetStateTexture(ComponentState.Normal) != null)
         {
-            renderImg = button.GetImage(Button.ControlState.Hovered);
-        }
-        else if (button.GetImage(Button.ControlState.Normal) != null)
-        {
-            renderImg = button.GetImage(Button.ControlState.Normal);
+            renderImg = closeButton.GetStateTexture(ComponentState.Normal);
         }
 
         if (renderImg != null)
         {
-            Renderer.DrawColor = button.RenderColor;
-            Renderer.DrawTexturedRect(renderImg, button.RenderBounds, button.RenderColor);
+            Renderer.DrawColor = closeButton.RenderColor;
+            Renderer.DrawTexturedRect(renderImg, closeButton.RenderBounds, closeButton.RenderColor);
 
             return;
         }
 
         if (disabled)
         {
-            mTextures.Window.CloseDisabled.Draw(Renderer, button.RenderBounds);
+            mTextures.Window.CloseButton.Disabled.Draw(Renderer, closeButton.RenderBounds, closeButton.RenderColor);
 
             return;
         }
 
         if (depressed)
         {
-            mTextures.Window.CloseDown.Draw(Renderer, button.RenderBounds);
+            mTextures.Window.CloseButton.Active.Draw(Renderer, closeButton.RenderBounds, closeButton.RenderColor);
 
             return;
         }
 
         if (hovered)
         {
-            mTextures.Window.CloseHover.Draw(Renderer, button.RenderBounds);
+            mTextures.Window.CloseButton.Hovered.Draw(Renderer, closeButton.RenderBounds, closeButton.RenderColor);
 
             return;
         }
 
-        mTextures.Window.Close.Draw(Renderer, button.RenderBounds);
+        mTextures.Window.CloseButton.Normal.Draw(Renderer, closeButton.RenderBounds, closeButton.RenderColor);
     }
 
-    public override void DrawSliderButton(Control.Base control, bool depressed, bool horizontal)
+    public override void DrawSliderButton(SliderBar sliderBar)
     {
-        GameTexture renderImg = null;
-        renderImg = ((Dragger) control).GetImage(Dragger.ControlState.Normal);
-        if (control.IsDisabled && ((Dragger) control).GetImage(Dragger.ControlState.Disabled) != null)
+        var overrideTexture = sliderBar.GetImage(ComponentState.Normal);
+        if (sliderBar.IsDisabledByTree)
         {
-            renderImg = ((Dragger) control).GetImage(Dragger.ControlState.Disabled);
+            overrideTexture = sliderBar.GetImage(ComponentState.Disabled);
         }
-        else if (depressed && ((Dragger) control).GetImage(Dragger.ControlState.Clicked) != null)
+        else if (sliderBar.IsActive)
         {
-            renderImg = ((Dragger) control).GetImage(Dragger.ControlState.Clicked);
+            overrideTexture = sliderBar.GetImage(ComponentState.Active);
         }
-        else if (control.IsHovered && ((Dragger) control).GetImage(Dragger.ControlState.Hovered) != null)
+        else if (sliderBar.IsHovered)
         {
-            renderImg = ((Dragger) control).GetImage(Dragger.ControlState.Hovered);
+            overrideTexture = sliderBar.GetImage(ComponentState.Hovered);
         }
 
-        if (renderImg != null)
+        if (overrideTexture != null)
         {
-            Renderer.DrawColor = control.RenderColor;
-            Renderer.DrawTexturedRect(renderImg, control.RenderBounds, control.RenderColor);
-
+            Renderer.DrawColor = sliderBar.RenderColor;
+            Renderer.DrawTexturedRect(overrideTexture, sliderBar.RenderBounds, sliderBar.RenderColor);
             return;
         }
 
-        if (!horizontal)
+        var textureSource = sliderBar.Orientation is Orientation.LeftToRight or Orientation.RightToLeft
+            ? mTextures.Input.Slider.H
+            : mTextures.Input.Slider.V;
+
+        var stateSource = textureSource.Normal;
+        if (sliderBar.IsDisabledByTree)
         {
-            if (control.IsDisabled)
-            {
-                mTextures.Input.Slider.V.Disabled.DrawCenter(Renderer, control.RenderBounds);
-
-                return;
-            }
-
-            if (depressed)
-            {
-                mTextures.Input.Slider.V.Down.DrawCenter(Renderer, control.RenderBounds);
-
-                return;
-            }
-
-            if (control.IsHovered)
-            {
-                mTextures.Input.Slider.V.Hover.DrawCenter(Renderer, control.RenderBounds);
-
-                return;
-            }
-
-            mTextures.Input.Slider.V.Normal.DrawCenter(Renderer, control.RenderBounds);
-
-            return;
+            stateSource = textureSource.Disabled;
+        }
+        else if (sliderBar.IsActive)
+        {
+            stateSource = textureSource.Active;
+        }
+        else if (sliderBar.IsHovered)
+        {
+            stateSource = textureSource.Hover;
         }
 
-        if (control.IsDisabled)
-        {
-            mTextures.Input.Slider.H.Disabled.DrawCenter(Renderer, control.RenderBounds);
-
-            return;
-        }
-
-        if (depressed)
-        {
-            mTextures.Input.Slider.H.Down.DrawCenter(Renderer, control.RenderBounds);
-
-            return;
-        }
-
-        if (control.IsHovered)
-        {
-            mTextures.Input.Slider.H.Hover.DrawCenter(Renderer, control.RenderBounds);
-
-            return;
-        }
-
-        mTextures.Input.Slider.H.Normal.DrawCenter(Renderer, control.RenderBounds);
+        stateSource.Draw(Renderer, sliderBar.RenderBounds, sliderBar.RenderColor);
     }
 
     public override void DrawCategoryHolder(Control.Base control)
@@ -2224,88 +2442,131 @@ public partial class TexturedBase : Skin.Base
 
     public override void DrawLabel(Control.Base control)
     {
-        if (((Label) control).GetTemplate() != null)
+        if (control is not Label label)
         {
-            var renderImg = ((Label) control).GetTemplate();
-            Renderer.DrawColor = control.RenderColor;
-
-            //Draw Top Left Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2), control.RenderColor,
-                0, 0, 2f / renderImg.Width, 2f / renderImg.Height
-            );
-
-            //Draw Top
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width, 0,
-                (renderImg.Width - 2f) / renderImg.Width, 2f / renderImg.Height
-            );
-
-            //Draw Top Right Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width, 0, 1f,
-                2f / renderImg.Height
-            );
-
-            //Draw Left
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, 0, 2f / renderImg.Height, 2f / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            //Draw Middle
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Y + 2, control.RenderBounds.Width - 4,
-                    control.RenderBounds.Height - 4
-                ), control.RenderColor, 2f / renderImg.Width, 2f / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            //Draw Right
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.Width - 2, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4
-                ), control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                2f / renderImg.Height, 1, (renderImg.Height - 2f) / renderImg.Height
-            );
-
-            // Draw Bottom Left Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, 0, (renderImg.Height - 2f) / renderImg.Height,
-                2f / renderImg.Width, 1f
-            );
-
-            //Draw Bottom
-            Renderer.DrawTexturedRect(
-                renderImg,
-                new Rectangle(
-                    control.RenderBounds.X + 2, control.RenderBounds.Bottom - 2, control.RenderBounds.Width - 4, 2
-                ), control.RenderColor, 2f / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height,
-                (renderImg.Width - 2f) / renderImg.Width, 1f
-            );
-
-            //Draw Bottom Right Corner
-            Renderer.DrawTexturedRect(
-                renderImg, new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
-                control.RenderColor, (renderImg.Width - 2f) / renderImg.Width,
-                (renderImg.Height - 2f) / renderImg.Height, 1f, 1f
-            );
-
             return;
         }
+
+        if (label.GetTemplate() is not { } templateTexture)
+        {
+            return;
+        }
+
+        Renderer.DrawColor = control.RenderColor;
+
+        //Draw Top Left Corner
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Y, 2, 2),
+            control.RenderColor,
+            0,
+            0,
+            2f / templateTexture.Width,
+            2f / templateTexture.Height
+        );
+
+        //Draw Top
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(control.RenderBounds.X + 2, control.RenderBounds.Y, control.RenderBounds.Width - 4, 2),
+            control.RenderColor,
+            2f / templateTexture.Width,
+            0,
+            (templateTexture.Width - 2f) / templateTexture.Width,
+            2f / templateTexture.Height
+        );
+
+        //Draw Top Right Corner
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Y, 2, 2),
+            control.RenderColor,
+            (templateTexture.Width - 2f) / templateTexture.Width,
+            0,
+            1f,
+            2f / templateTexture.Height
+        );
+
+        //Draw Left
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Y + 2, 2, control.RenderBounds.Height - 4),
+            control.RenderColor,
+            0,
+            2f / templateTexture.Height,
+            2f / templateTexture.Width,
+            (templateTexture.Height - 2f) / templateTexture.Height
+        );
+
+        //Draw Middle
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(
+                control.RenderBounds.X + 2,
+                control.RenderBounds.Y + 2,
+                control.RenderBounds.Width - 4,
+                control.RenderBounds.Height - 4
+            ),
+            control.RenderColor,
+            2f / templateTexture.Width,
+            2f / templateTexture.Height,
+            (templateTexture.Width - 2f) / templateTexture.Width,
+            (templateTexture.Height - 2f) / templateTexture.Height
+        );
+
+        //Draw Right
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(
+                control.RenderBounds.Width - 2,
+                control.RenderBounds.Y + 2,
+                2,
+                control.RenderBounds.Height - 4
+            ),
+            control.RenderColor,
+            (templateTexture.Width - 2f) / templateTexture.Width,
+            2f / templateTexture.Height,
+            1,
+            (templateTexture.Height - 2f) / templateTexture.Height
+        );
+
+        // Draw Bottom Left Corner
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(control.RenderBounds.X, control.RenderBounds.Bottom - 2, 2, 2),
+            control.RenderColor,
+            0,
+            (templateTexture.Height - 2f) / templateTexture.Height,
+            2f / templateTexture.Width,
+            1f
+        );
+
+        //Draw Bottom
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(
+                control.RenderBounds.X + 2,
+                control.RenderBounds.Bottom - 2,
+                control.RenderBounds.Width - 4,
+                2
+            ),
+            control.RenderColor,
+            2f / templateTexture.Width,
+            (templateTexture.Height - 2f) / templateTexture.Height,
+            (templateTexture.Width - 2f) / templateTexture.Width,
+            1f
+        );
+
+        //Draw Bottom Right Corner
+        Renderer.DrawTexturedRect(
+            templateTexture,
+            new Rectangle(control.RenderBounds.Right - 2, control.RenderBounds.Bottom - 2, 2, 2),
+            control.RenderColor,
+            (templateTexture.Width - 2f) / templateTexture.Width,
+            (templateTexture.Height - 2f) / templateTexture.Height,
+            1f,
+            1f
+        );
     }
 
     #endregion

@@ -115,7 +115,8 @@ namespace Intersect.Server.Web.Controllers.Api.V1
             limit = Math.Max(Math.Min(limit, pageSize), 1);
 
             _ = Sort.From(sortBy, sortDirection);
-            IEnumerable<Player> enumerable = Globals.OnlineList ?? new List<Player>();
+            var connectedPlayers = Player.OnlinePlayers;
+            IEnumerable<Player> enumerable = connectedPlayers;
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -155,7 +156,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
 
         [HttpGet("online/count")]
         [ProducesResponseType(typeof(OnlineCountResponseBody), (int)HttpStatusCode.OK, ContentTypes.Json)]
-        public IActionResult OnlineCount() => Ok(new OnlineCountResponseBody(Globals.OnlineList?.Count ?? 0));
+        public IActionResult OnlineCount() => Ok(new OnlineCountResponseBody(Player.OnlinePlayers.Count));
 
         #endregion
 
@@ -244,7 +245,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
             }
 
             player.Name = change.Name;
-            if (player.Online)
+            if (player.IsOnline)
             {
                 PacketSender.SendEntityDataToProximity(player);
             }
@@ -286,7 +287,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
             player.ClassId = change.Id;
             player.RecalculateStatsAndPoints();
             player.UnequipInvalidItems();
-            if (player.Online)
+            if (player.IsOnline)
             {
                 PacketSender.SendEntityDataToProximity(player);
             }
@@ -317,7 +318,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
             }
 
             player.SetLevel(change.Level, true);
-            if (player.Online)
+            if (player.IsOnline)
             {
                 PacketSender.SendEntityDataToProximity(player);
             }
@@ -976,11 +977,12 @@ namespace Intersect.Server.Web.Controllers.Api.V1
             pageInfo.Page = Math.Max(pageInfo.Page, 0);
             pageInfo.PageSize = Math.Max(Math.Min(pageInfo.PageSize, 100), 5);
 
-            var entries = Globals.OnlineList?.Skip(pageInfo.Page * pageInfo.PageSize).Take(pageInfo.PageSize).ToList();
+            var connectedPlayers = Player.OnlinePlayers;
+            var entries = connectedPlayers.Skip(pageInfo.Page * pageInfo.PageSize).Take(pageInfo.PageSize).ToList();
 
             return new DataPage<Player>
             {
-                Total = Globals.OnlineList?.Count ?? 0,
+                Total = connectedPlayers.Count,
                 Page = pageInfo.Page,
                 PageSize = pageInfo.PageSize,
                 Count = entries?.Count ?? 0,

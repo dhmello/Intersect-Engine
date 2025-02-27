@@ -1,5 +1,7 @@
 using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
+using Intersect.Client.Framework.Gwen.Control;
+using Intersect.Client.Framework.Gwen.ControlInternal;
 
 #if DEBUG || DIAGNOSTIC
 #endif
@@ -20,7 +22,7 @@ public partial class Base : IDisposable
     /// </summary>
     public SkinColors Colors;
 
-    protected GameFont mDefaultFont;
+    protected IFont mDefaultFont;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="Base" /> class.
@@ -35,11 +37,13 @@ public partial class Base : IDisposable
     /// <summary>
     ///     Default font to use when rendering text if none specified.
     /// </summary>
-    public GameFont DefaultFont
+    public IFont DefaultFont
     {
         get => mDefaultFont;
         set => mDefaultFont = value;
     }
+
+    public int DefaultFontSize { get; set; }
 
     /// <summary>
     ///     Renderer used.
@@ -57,13 +61,17 @@ public partial class Base : IDisposable
 #if DIAGNOSTIC
     ~Base()
     {
-        Log.Debug($"IDisposable object finalized: {GetType()}");
+        ApplicationContext.Context.Value?.Logger.LogDebug($"IDisposable object finalized: {GetType()}");
     }
 #endif
 
     #region UI elements
 
     public virtual void DrawButton(Control.Base control, bool depressed, bool hovered, bool disabled, bool focused)
+    {
+    }
+
+    public virtual void DrawPanel(Panel panel)
     {
     }
 
@@ -119,7 +127,7 @@ public partial class Base : IDisposable
     {
     }
 
-    public virtual void DrawWindowCloseButton(Control.Base control, bool depressed, bool hovered, bool disabled)
+    public virtual void DrawWindowCloseButton(CloseButton closeButton, bool depressed, bool hovered, bool disabled)
     {
     }
 
@@ -135,7 +143,7 @@ public partial class Base : IDisposable
     {
     }
 
-    public virtual void DrawScrollBarBar(Control.Base control, bool depressed, bool hovered, bool horizontal)
+    public virtual void DrawScrollBarBar(ScrollBarBar scrollBarBar)
     {
     }
 
@@ -165,11 +173,25 @@ public partial class Base : IDisposable
     {
     }
 
-    public virtual void DrawSlider(Control.Base control, bool horizontal, double[] notches, int numNotches, int barSize)
+    public virtual void DrawSlider(Control.Base control, bool horizontal, double[]? notches, int numNotches, int barSize)
     {
     }
 
-    public virtual void DrawSliderButton(Control.Base control, bool depressed, bool horizontal)
+    public virtual void DrawSlider(
+        Slider slider,
+        Orientation orientation,
+        double[]? notches,
+        int numNotches,
+        int barSize
+    ) => DrawSlider(
+        slider,
+        orientation is Orientation.LeftToRight or Orientation.RightToLeft,
+        notches,
+        numNotches,
+        barSize
+    );
+
+    public virtual void DrawSliderButton(SliderBar sliderBar)
     {
     }
 
@@ -214,32 +236,65 @@ public partial class Base : IDisposable
             return;
         }
 
-        mRenderer.DrawColor = control.PaddingOutlineColor;
-        var inner = new Rectangle(
-            control.Bounds.Left + control.Padding.Left, control.Bounds.Top + control.Padding.Top,
-            control.Bounds.Width - control.Padding.Right - control.Padding.Left,
-            control.Bounds.Height - control.Padding.Bottom - control.Padding.Top
-        );
+        var margin = control.Margin;
+        if (margin != default)
+        {
+            var marginRect = new Rectangle(
+                control.Bounds.Left - margin.Left,
+                control.Bounds.Top - margin.Top,
+                control.Bounds.Width + margin.Right + margin.Left,
+                control.Bounds.Height + margin.Bottom + margin.Top
+            );
 
-        mRenderer.DrawLinedRect(inner);
+            DrawRectStroke(marginRect, control.MarginOutlineColor);
+        }
 
-        mRenderer.DrawColor = control.MarginOutlineColor;
-        var outer = new Rectangle(
-            control.Bounds.Left - control.Margin.Left, control.Bounds.Top - control.Margin.Top,
-            control.Bounds.Width + control.Margin.Right + control.Margin.Left,
-            control.Bounds.Height + control.Margin.Bottom + control.Margin.Top
-        );
+        var padding = control.Padding;
+        if (padding != default)
+        {
+            var color = control.PaddingOutlineColor;
+            if (control is ITextContainer textContainer)
+            {
+                color = textContainer.TextPaddingDebugColor ?? DefaultTextPaddingDebugColor;
+            }
 
-        mRenderer.DrawLinedRect(outer);
+            var paddingRect = new Rectangle(
+                control.Bounds.Left + padding.Left,
+                control.Bounds.Top + padding.Top,
+                control.Bounds.Width - padding.Right - padding.Left,
+                control.Bounds.Height - padding.Bottom - padding.Top
+            );
 
-        mRenderer.DrawColor = control.BoundsOutlineColor;
-        mRenderer.DrawLinedRect(control.Bounds);
+            DrawRectStroke(paddingRect, color);
+        }
+
+        DrawRectStroke(control.Bounds, control.BoundsOutlineColor);
+    }
+
+    public static Color DefaultTextPaddingDebugColor = Color.FromHex("79b5d2", Color.White);
+
+    public virtual void DrawRectStroke(Rectangle rect, Color color) => DrawRect(rect, color, filled: false);
+
+    public virtual void DrawRectFill(Rectangle rect, Color color) => DrawRect(rect, color, filled: true);
+
+    public virtual void DrawRect(Rectangle rect, Color color, bool filled)
+    {
+        mRenderer.DrawColor = color;
+        if (filled)
+        {
+            mRenderer.DrawFilledRect(rect);
+        }
+        else
+        {
+            mRenderer.DrawLinedRect(rect);
+        }
     }
 
     public virtual void DrawTreeNode(
         Control.Base ctrl,
         bool open,
         bool selected,
+        int treeNodeHeight,
         int labelHeight,
         int labelWidth,
         int halfWay,

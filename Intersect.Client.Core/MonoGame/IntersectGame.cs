@@ -1,10 +1,8 @@
 using Intersect.Client.Core;
-using Intersect.Client.Core.Controls;
 using Intersect.Client.Framework.Gwen.Input;
 using Intersect.Client.Framework.Gwen.Renderer;
 using Intersect.Client.Framework.Input;
 using Intersect.Client.General;
-using Intersect.Client.Interface.Game;
 using Intersect.Client.Localization;
 using Intersect.Client.MonoGame.File_Management;
 using Intersect.Client.MonoGame.Graphics;
@@ -12,21 +10,23 @@ using Intersect.Client.MonoGame.Input;
 using Intersect.Client.MonoGame.Network;
 using Intersect.Configuration;
 using Intersect.Updater;
-
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System.Diagnostics;
 using System.Reflection;
-using HarmonyLib;
 using Intersect.Client.Framework.Database;
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.ThirdParty;
 using Intersect.Utilities;
-
 using MainMenu = Intersect.Client.Interface.Menu.MainMenu;
-using Intersect.Logging;
 using Intersect.Client.Interface.Shared;
 using Intersect.Client.MonoGame.NativeInterop;
+using Intersect.Client.MonoGame.NativeInterop.OpenGL;
+using Intersect.Core;
+using Intersect.Framework.Core;
+using Intersect.Framework.SystemInformation;
+using Microsoft.Extensions.Logging;
+using Exception = System.Exception;
 
 namespace Intersect.Client.MonoGame;
 
@@ -76,7 +76,7 @@ internal partial class IntersectGame : Game
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error occurred loading strings for client");
             throw;
         }
 
@@ -95,12 +95,10 @@ internal partial class IntersectGame : Game
             args.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = 8;
         };
 
-        ClientConfiguration.LoadAndSave(ClientConfiguration.DefaultPath);
-
         Content.RootDirectory = string.Empty;
         IsMouseVisible = true;
-        Globals.ContentManager = new MonoContentManager(Log.Default);
-        Globals.Database = new JsonDatabase(Log.Default);
+        Globals.ContentManager = new MonoContentManager();
+        Globals.Database = new JsonDatabase();
 
         // Load configuration.
         Globals.Database.LoadPreferences();
@@ -119,7 +117,6 @@ internal partial class IntersectGame : Game
 
         Interface.Interface.GwenRenderer = new IntersectRenderer(null, Core.Graphics.Renderer);
         Interface.Interface.GwenInput = new IntersectInput();
-        Controls.Init();
 
         // Windows
         Window.Position = new Microsoft.Xna.Framework.Point(
@@ -159,6 +156,8 @@ internal partial class IntersectGame : Game
     protected override void Initialize()
     {
         base.Initialize();
+
+        PlatformStatistics.GPUStatisticsProvider = GL.CreateGPUStatisticsProvider();
 
         if (mUpdater != null)
         {
@@ -207,6 +206,8 @@ internal partial class IntersectGame : Game
         PostStartupAction();
     }
 
+    private TimeSpan _elapsedSincePlatformStatisticsRefresh;
+
     /// <summary>
     ///     Allows the game to run logic such as updating the world,
     ///     checking for collisions, gathering input, and playing audio.
@@ -214,6 +215,13 @@ internal partial class IntersectGame : Game
     /// <param name="gameTime">Provides a snapshot of timing values.</param>
     protected override void Update(GameTime gameTime)
     {
+        _elapsedSincePlatformStatisticsRefresh += gameTime.ElapsedGameTime;
+        if (_elapsedSincePlatformStatisticsRefresh.TotalSeconds > 1)
+        {
+            _elapsedSincePlatformStatisticsRefresh = default;
+            PlatformStatistics.Refresh();
+        }
+
         if (mUpdater != null)
         {
             if (mUpdater.CheckUpdaterContentLoaded())
@@ -335,7 +343,7 @@ internal partial class IntersectGame : Game
 
     protected override void OnExiting(object sender, EventArgs args)
     {
-        Log.Info("System window closing (due to user interaction most likely).");
+        ApplicationContext.Context.Value?.Logger.LogInformation("System window closing (due to user interaction most likely).");
 
         if (Globals.Me != null && Globals.Me.CombatTimer > Timing.Global?.Milliseconds)
         {
@@ -364,8 +372,8 @@ internal partial class IntersectGame : Game
                 _ = new InputBox(
                     title: Strings.Combat.WarningTitle,
                     prompt: Strings.Combat.WarningCharacterSelect,
-                    inputType: InputBox.InputType.YesNo,
-                    onSuccess: (s, e) =>
+                    inputType: InputType.YesNo,
+                    onSubmit: (s, e) =>
                     {
                         if (Globals.Me != null)
                         {
@@ -386,14 +394,39 @@ internal partial class IntersectGame : Game
         {
             mUpdater?.Stop();
         }
-        catch
+        catch (Exception exception)
         {
+            ApplicationContext.Context.Value?.Logger.LogWarning(
+                exception,
+                "Exception thrown while stopping the updater on game close"
+            );
         }
 
-        //Just close if we don't need to show a combat warning
+        try
+        {
+            Interface.Interface.DestroyGwen();
+        }
+        catch (Exception exception)
+        {
+            ApplicationContext.Context.Value?.Logger.LogWarning(
+                exception,
+                "Exception thrown while destroying GWEN on game close"
+            );
+        }
+
+        try
+        {
+            Networking.Network.Close("quitting");
+        }
+        catch (Exception exception)
+        {
+            ApplicationContext.Context.Value?.Logger.LogWarning(
+                exception,
+                "Exception thrown while closing the network on game close"
+            );
+        }
+
         base.OnExiting(sender, args);
-        Networking.Network.Close("quitting");
-        Dispose();
     }
 
     private void DrawUpdater()
@@ -538,7 +571,14 @@ internal partial class IntersectGame : Game
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);
+        try
+        {
+            base.Dispose(disposing);
+        }
+        catch (NullReferenceException)
+        {
+            throw;
+        }
 
         if (!disposing)
         {
@@ -561,33 +601,51 @@ internal partial class IntersectGame : Game
         {
             try
             {
-                var assemblyMonoGameFramework = AppDomain.CurrentDomain.GetAssemblies()
-                    .FirstOrDefault(assembly => assembly.FullName?.StartsWith("MonoGame.Framework") ?? false);
-                var typeInternalSdl = assemblyMonoGameFramework?.GetType("Sdl");
-                var methodSdlInit = typeInternalSdl?.GetMethod("Init");
-
-                var harmonyPatch = new Harmony(typeof(MonoGameRunner).Assembly.FullName ?? "Intersect.Client.Core");
-                harmonyPatch.Patch(methodSdlInit, postfix: SymbolExtensions.GetMethodInfo(() => SdlInitPost()));
+                DoSdlInit(12832);
             }
             catch (Exception exception)
             {
-                Log.Warn(exception, "Error occurred when trying to apply Harmony patch, this is not a fatal error");
+                ApplicationContext.Context.Value?.Logger.LogWarning(
+                    exception,
+                    "Error occurred while trying to initialize SDL"
+                );
             }
 
             using var game = new IntersectGame(context, postStartupAction);
-            game.Run();
+            try
+            {
+                game.Run();
+            }
+            catch (Exception exception)
+            {
+                context.Logger.LogCritical(exception, "Game is crashing due to an exception");
+                throw;
+            }
         }
 
-        private static void SdlInitPost()
+        private delegate void SdlInit(int flags);
+
+        private static void DoSdlInit(int flags)
         {
             if (PlatformHelper.CurrentPlatform != Platform.Linux)
             {
                 return;
             }
 
+            var assemblyMonoGameFramework = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(assembly => assembly.FullName?.StartsWith("MonoGame.Framework") ?? false);
+            var typeInternalSdl = assemblyMonoGameFramework?.GetType("Sdl");
+            var methodSdlInit = typeInternalSdl?.GetMethod("Init");
+            var delegateSdlInit = methodSdlInit?.CreateDelegate<SdlInit>();
+            if (delegateSdlInit == null)
+            {
+                throw new InvalidOperationException("Missing Sdl.Init() from MonoGame");
+            }
+            delegateSdlInit(flags);
+
             if (!Sdl2.SDL_SetHint(Sdl2.SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, false))
             {
-                Log.Warn("Failed to set X11 Compositor hint");
+                ApplicationContext.Context.Value?.Logger.LogWarning("Failed to set X11 Compositor hint");
             }
         }
     }

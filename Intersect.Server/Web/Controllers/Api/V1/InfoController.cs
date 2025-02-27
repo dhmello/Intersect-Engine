@@ -1,7 +1,12 @@
 using System.Net;
+using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core;
+using Intersect.Server.Core;
+using Intersect.Server.Entities;
 using Intersect.Server.General;
 using Intersect.Server.Metrics;
+using Intersect.Server.Networking;
 using Intersect.Server.Web.Http;
 using Intersect.Server.Web.Types;
 using Intersect.Server.Web.Types.Info;
@@ -18,7 +23,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
         [HttpGet]
         [AllowAnonymous]
         [ProducesResponseType(typeof(InfoResponseBody), (int)HttpStatusCode.OK, ContentTypes.Json)]
-        public IActionResult Default() => Ok(new InfoResponseBody(Options.Instance.GameName, Options.ServerPort));
+        public IActionResult Default() => Ok(new InfoResponseBody(Options.Instance.GameName, Options.Instance.ServerPort));
 
         [HttpGet("authorized")]
         [Authorize]
@@ -35,7 +40,18 @@ namespace Intersect.Server.Web.Controllers.Api.V1
 
         [HttpGet("stats")]
         [ProducesResponseType(typeof(InfoStatsResponseBody), (int)HttpStatusCode.OK, ContentTypes.Json)]
-        public IActionResult Stats() => Ok(new InfoStatsResponseBody(Timing.Global.Milliseconds, Globals.Cps, Globals.Clients?.Count, Globals.OnlineList?.Count));
+        public IActionResult Stats()
+        {
+            var cyclesPerSecond = ApplicationContext.GetContext<IServerContext>()?.LogicService.CyclesPerSecond ?? -1;
+            return Ok(
+                new InfoStatsResponseBody(
+                    Timing.Global.Milliseconds,
+                    cyclesPerSecond,
+                    Client.Instances?.Count,
+                    Player.OnlinePlayers.Count
+                )
+            );
+        }
 
         [HttpGet("metrics")]
         [ProducesResponseType(typeof(StatusMessageResponseBody), (int)HttpStatusCode.NotFound, ContentTypes.Json)]

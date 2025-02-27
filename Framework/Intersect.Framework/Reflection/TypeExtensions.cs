@@ -55,6 +55,22 @@ public static partial class TypeExtensions
             .ToArray();
     }
 
+    public static bool IsEnumerable(this Type type) => typeof(IEnumerable<>).ExtendedBy(type);
+
+    public static bool IsEnumerable<TValue>(this Type type) => typeof(IEnumerable<TValue>).ExtendedBy(type);
+
+    public static bool IsIntegral(this Type type) =>
+        type == typeof(int) ||
+        type == typeof(long) ||
+        type == typeof(short) ||
+        type == typeof(byte) ||
+        type == typeof(uint) ||
+        type == typeof(ulong) ||
+        type == typeof(ushort) ||
+        type == typeof(sbyte);
+
+    public static bool IsFloatingPoint(this Type type) => type == typeof(float) || type == typeof(double);
+
     public static bool IsOwnProperty(this Type type, PropertyInfo propertyInfo) =>
         !propertyInfo.IsPropertyDeclaredInBaseTypeOrInterface(type);
 
@@ -167,18 +183,40 @@ public static partial class TypeExtensions
             return baseType.IsAssignableFrom(childType);
         }
 
+        if (childType.IsGenericType)
+        {
+            if (baseType.MakeGenericType(childType.GenericTypeArguments).IsAssignableFrom(childType))
+            {
+                return true;
+            }
+        }
+
+        if (baseType.IsInterface)
+        {
+            return false;
+        }
+
         var currentType = childType;
         while (currentType != default)
         {
             if (currentType.IsGenericType)
             {
-                if (currentType.GetGenericTypeDefinition() == baseType)
+                var currentTypeGenericTypeDefinition = currentType.GetGenericTypeDefinition();
+                if (currentType == currentTypeGenericTypeDefinition)
+                {
+                    break;
+                }
+
+                currentType = currentTypeGenericTypeDefinition;
+                if (currentType == baseType)
                 {
                     return true;
                 }
             }
-
-            currentType = currentType.BaseType;
+            else
+            {
+                currentType = currentType.BaseType;
+            }
         }
 
         return false;
@@ -199,12 +237,16 @@ public static partial class TypeExtensions
         if (abstractType is { IsAbstract: false, IsInterface: false })
         {
             throw new ArgumentException(
-                string.Format(ReflectionStrings.TypeExtensions_FindConcreteType_ExpectedAbstractOrInterface, abstractType.FullName),
+                string.Format(
+                    ReflectionStrings.TypeExtensions_FindConcreteType_ExpectedAbstractOrInterface,
+                    abstractType.FullName
+                ),
                 nameof(abstractType)
             );
         }
 
-        var assembliesToCheck = allLoadedAssemblies ? AppDomain.CurrentDomain.GetAssemblies()
+        var assembliesToCheck = allLoadedAssemblies
+            ? AppDomain.CurrentDomain.GetAssemblies()
             : [abstractType.Assembly];
         var validAssembliesToCheck = assembliesToCheck.Where(assembly => !assembly.IsDynamic);
         var allTypes = validAssembliesToCheck.SelectMany(
@@ -268,7 +310,10 @@ public static partial class TypeExtensions
         if (genericTypeDefinition is { IsGenericTypeDefinition: false })
         {
             throw new ArgumentException(
-                string.Format(ReflectionStrings.TypeExtensions_FindGenericTypeParameters_NotValidGenericTypeDefinition, genericTypeDefinition.FullName),
+                string.Format(
+                    ReflectionStrings.TypeExtensions_FindGenericTypeParameters_NotValidGenericTypeDefinition,
+                    genericTypeDefinition.FullName
+                ),
                 nameof(genericTypeDefinition)
             );
         }
@@ -451,10 +496,69 @@ public static partial class TypeExtensions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static string GetName(this Type type, bool qualified = false) => qualified ? type.GetQualifiedName() : type.Name;
+    public static string GetName(this Type type, bool qualified = false) =>
+        qualified ? type.GetQualifiedName() : type.Name;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string GetQualifiedName(this Type type) => type.FullName ?? type.Name;
+
+    public static IEnumerable<object> GetValues(this Type type, bool excludeIgnored = false)
+    {
+        if (!type.IsEnum)
+        {
+            throw new ArgumentException($"Expected an enum but received {type.GetName(qualified: true)}", nameof(type));
+        }
+
+        var enumValues = Enum.GetValues(type);
+        var values = enumValues.OfType<Enum>().Distinct().ToArray();
+
+        // ReSharper disable once InvertIf
+        if (excludeIgnored)
+        {
+            var ignoredValues = type.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(field => field.FieldType == type && field.IsIgnored())
+                .Select(field => field.GetValue(null))
+                .OfType<Enum>()
+                .ToHashSet();
+            values = values.Where(value => !ignoredValues.Contains(value)).ToArray();
+        }
+
+        return values;
+    }
+
+    public static IEnumerable<TEnum> GetValues<TEnum>(this Type type, bool excludeIgnored = false) where TEnum : struct, Enum
+    {
+        if (typeof(TEnum) != type)
+        {
+            throw new ArgumentException(
+                $"The generic type argument {typeof(TEnum).GetName(qualified: true)} does not match the argument {type.GetName(qualified: true)}",
+                nameof(type)
+            );
+        }
+
+        if (!type.IsEnum)
+        {
+            throw new ArgumentException($"Expected an enum but received {type.GetName(qualified: true)}", nameof(type));
+        }
+
+        var values = Enum.GetValues<TEnum>();
+
+        // ReSharper disable once InvertIf
+        if (excludeIgnored)
+        {
+            var ignoredValues = type.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(field => field.FieldType == type && field.IsIgnored())
+                .Select(field => field.GetValue(null))
+                .OfType<Enum>()
+                .ToHashSet();
+            values = values.Where(value => !ignoredValues.Contains(value)).ToArray();
+        }
+
+        return values;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsBitflags(this Type type) => type.IsEnum && type.GetCustomAttribute<FlagsAttribute>() != null;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsConcrete(this Type type) => type is { IsInterface: false, IsAbstract: false, IsClass: true };

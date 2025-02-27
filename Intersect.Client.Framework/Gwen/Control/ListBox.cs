@@ -1,10 +1,9 @@
 using System.Text.RegularExpressions;
-
 using Intersect.Client.Framework.File_Management;
+using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Gwen.Control.EventArguments;
 using Intersect.Client.Framework.Gwen.Control.Layout;
-
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.Control;
@@ -16,13 +15,20 @@ namespace Intersect.Client.Framework.Gwen.Control;
 public partial class ListBox : ScrollControl
 {
 
-    private readonly List<ListBoxRow> mSelectedRows;
+    private readonly List<ListBoxRow> mSelectedRows = [];
 
-    private readonly Table mTable;
+    private readonly Table _table;
+    public string? FontName
+    {
+        get => _table.Font?.Name;
+        set => _table.Font = GameContentManager.Current.GetFont(value);
+    }
 
-    private GameFont mFont;
-
-    private string mFontInfo;
+    public int FontSize
+    {
+        get => _table.FontSize;
+        set => _table.FontSize = value;
+    }
 
     private bool mIsToggle;
 
@@ -39,32 +45,33 @@ public partial class ListBox : ScrollControl
 
     private bool mSizeToContents;
 
-    private Color mTextColor;
-
-    private Color mTextColorOverride;
+    private Color? _textColor;
+    private Color? _textColorOverride;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ListBox" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public ListBox(Base parent, string name = "") : base(parent, name)
+    /// <param name="name"></param>
+    public ListBox(Base parent, string? name = default) : base(parent: parent, name: name)
     {
-        mSelectedRows = new List<ListBoxRow>();
-
-        MouseInputEnabled = true;
-        EnableScroll(false, true);
-        AutoHideBars = true;
         Margin = Margin.One;
+        MouseInputEnabled = true;
 
-        mTextColor = Color.White;
-        mTextColorOverride = Color.Transparent;
+        _textColor = Color.White;
+        _textColorOverride = Color.Transparent;
 
-        mTable = new Table(this)
+        _table = new Table(this)
         {
+            AutoSizeToContentHeightOnChildResize = true,
+            AutoSizeToContentWidthOnChildResize = true,
+            ColumnCount = 1,
+            ColumnWidths = [null],
             Dock = Pos.Fill,
-            ColumnCount = 1
+            FitRowHeightToContents = true,
+            FontSize = 10,
         };
-        mTable.BoundsChanged += TableResized;
+        _table.BoundsChanged += TableResized;
 
         mMultiSelect = false;
         mIsToggle = false;
@@ -98,14 +105,14 @@ public partial class ListBox : ScrollControl
     /// <summary>
     ///     Number of rows in the list box.
     /// </summary>
-    public int RowCount => mTable.RowCount;
+    public int RowCount => _table.RowCount;
 
     /// <summary>
     ///     Returns specific row of the ListBox.
     /// </summary>
     /// <param name="index">Row index.</param>
     /// <returns>Row at the specified index.</returns>
-    public ListBoxRow this[int index] => mTable[index] as ListBoxRow;
+    public ListBoxRow this[int index] => _table[index] as ListBoxRow;
 
     /// <summary>
     ///     List of selected rows.
@@ -140,7 +147,7 @@ public partial class ListBox : ScrollControl
         }
         set
         {
-            if (mTable.Children.Contains(value))
+            if (_table.Children.Contains(value))
             {
                 if (AllowMultiSelect)
                 {
@@ -167,7 +174,7 @@ public partial class ListBox : ScrollControl
                 return -1;
             }
 
-            return mTable.GetRowIndex(selected);
+            return _table.GetRowIndex(selected);
         }
         set => SelectRow(value);
     }
@@ -177,10 +184,10 @@ public partial class ListBox : ScrollControl
     /// </summary>
     public int ColumnCount
     {
-        get => mTable.ColumnCount;
+        get => _table.ColumnCount;
         set
         {
-            mTable.ColumnCount = value;
+            _table.ColumnCount = value;
             Invalidate();
         }
     }
@@ -195,49 +202,71 @@ public partial class ListBox : ScrollControl
     /// </summary>
     public event GwenEventHandler<ItemSelectedEventArgs> RowUnselected;
 
-    public Color TextColor
+    public Color? TextColor
     {
-        get => mTextColor;
-        set => SetAndDoIfChanged(ref mTextColor, value, () =>
+        get => _textColor;
+        set => SetAndDoIfChanged(ref _textColor, value, SetTextColor);
+    }
+
+    private static void SetTextColor(Base @this, Color? value)
+    {
+        foreach (var colorableText in @this.Children.OfType<IColorableText>())
         {
-            foreach (IColorableText colorableText in Children)
-            {
-                colorableText.TextColor = value;
-            }
-        });
+            colorableText.TextColor = value;
+        }
     }
 
-    public Color TextColorOverride
+    public Color? TextColorOverride
     {
-        get => mTextColorOverride;
-        set => SetAndDoIfChanged(ref mTextColorOverride, value, () =>
+        get => _textColorOverride;
+        set => SetAndDoIfChanged(ref _textColorOverride, value, SetTextColorOverride);
+    }
+
+    private static void SetTextColorOverride(Base @this, Color? value)
+    {
+        foreach (var colorableText in @this.Children.OfType<IColorableText>())
         {
-            foreach (IColorableText colorableText in Children)
-            {
-                colorableText.TextColorOverride = value;
-            }
-        });
+            colorableText.TextColorOverride = value;
+        }
     }
 
-    public override JObject GetJson(bool isRoot = default)
+    public Point CellSpacing
     {
-        var obj = base.GetJson(isRoot);
-        obj.Add("SizeToContents", mSizeToContents);
-        obj.Add("MultiSelect", AllowMultiSelect);
-        obj.Add("IsToggle", IsToggle);
-        obj.Add("Font", mFontInfo);
-        obj.Add("ItemHoverSound", mItemHoverSound);
-        obj.Add("ItemClickSound", mItemClickSound);
-        obj.Add("ItemRightClickSound", mItemRightClickSound);
-        obj.Add(nameof(TextColor), TextColor.ToString());
-        obj.Add(nameof(TextColorOverride), TextColorOverride.ToString());
-
-        return base.FixJson(obj);
+        get => _table.CellSpacing;
+        set => _table.CellSpacing = value;
     }
 
-    public override void LoadJson(JToken obj, bool isRoot = default)
+    public override JObject? GetJson(bool isRoot = false, bool onlySerializeIfNotEmpty = false)
     {
-        base.LoadJson(obj);
+        var serializedProperties = base.GetJson(isRoot, onlySerializeIfNotEmpty);
+        if (serializedProperties is null)
+        {
+            return null;
+        }
+
+        serializedProperties.Add("SizeToContents", mSizeToContents);
+        serializedProperties.Add("MultiSelect", AllowMultiSelect);
+        serializedProperties.Add("IsToggle", IsToggle);
+        serializedProperties.Add(nameof(FontName), FontName);
+        serializedProperties.Add(nameof(FontSize), FontSize);
+        serializedProperties.Add("ItemHoverSound", mItemHoverSound);
+        serializedProperties.Add("ItemClickSound", mItemClickSound);
+        serializedProperties.Add("ItemRightClickSound", mItemRightClickSound);
+        serializedProperties.Add(nameof(TextColor), TextColor.ToString());
+        serializedProperties.Add(nameof(TextColorOverride), TextColorOverride.ToString());
+
+        return base.FixJson(serializedProperties);
+    }
+
+    public override void LoadJson(JToken token, bool isRoot = default)
+    {
+        base.LoadJson(token, isRoot);
+
+        if (token is not JObject obj)
+        {
+            return;
+        }
+
         if (obj["SizeToContents"] != null)
         {
             mSizeToContents = (bool)obj["SizeToContents"];
@@ -271,8 +300,20 @@ public partial class ListBox : ScrollControl
         if (obj["Font"] != null && obj["Font"].Type != JTokenType.Null)
         {
             var fontArr = ((string)obj["Font"]).Split(',');
-            mFontInfo = (string)obj["Font"];
-            mFont = GameContentManager.Current.GetFont(fontArr[0], int.Parse(fontArr[1]));
+            FontSize = int.Parse(fontArr[1]);
+            FontName = fontArr[0];
+        }
+
+        if (obj.TryGetValue(nameof(FontName), out var tokenFontName) &&
+            tokenFontName is JValue { Type: JTokenType.String } valueFontName)
+        {
+            FontName = valueFontName.Value<string>();
+        }
+
+        if (obj.TryGetValue(nameof(FontSize), out var tokenFontSize) &&
+            tokenFontSize is JValue { Type: JTokenType.Integer } valueFontSize)
+        {
+            FontSize = valueFontSize.Value<int>();
         }
 
         if (obj[nameof(TextColor)] != null)
@@ -285,16 +326,14 @@ public partial class ListBox : ScrollControl
             TextColorOverride = Color.FromString((string)obj[nameof(TextColorOverride)]);
         }
 
-        foreach (var itm in mTable.Children)
+        foreach (var itm in _table.Children)
         {
             var row = (ListBoxRow)itm;
             row.HoverSound = mItemHoverSound;
             row.ClickSound = mItemClickSound;
             row.RightClickSound = mItemRightClickSound;
-            if (mFont != null)
-            {
-                row.SetTextFont(mFont);
-            }
+            row.Font = _table.Font ?? row.Font;
+            row.FontSize = FontSize;
         }
     }
 
@@ -305,12 +344,12 @@ public partial class ListBox : ScrollControl
     /// <param name="clearOthers">Determines whether to deselect previously selected rows.</param>
     public void SelectRow(int index, bool clearOthers = false)
     {
-        if (index < 0 || index >= mTable.RowCount)
+        if (index < 0 || index >= _table.RowCount)
         {
             return;
         }
 
-        SelectRow(mTable.Children[index], clearOthers);
+        SelectRow(_table.Children[index], clearOthers);
     }
 
     /// <summary>
@@ -320,7 +359,7 @@ public partial class ListBox : ScrollControl
     /// <param name="clearOthers">Determines whether to deselect previously selected rows.</param>
     public void SelectRows(string rowText, bool clearOthers = false)
     {
-        var rows = mTable.Children.OfType<ListBoxRow>().Where(x => x.Text == rowText);
+        var rows = _table.Children.OfType<ListBoxRow>().Where(x => x.Text == rowText);
         foreach (var row in rows)
         {
             SelectRow(row, clearOthers);
@@ -339,7 +378,7 @@ public partial class ListBox : ScrollControl
         bool clearOthers = false
     )
     {
-        var rows = mTable.Children.OfType<ListBoxRow>().Where(x => Regex.IsMatch(x.Text, pattern));
+        var rows = _table.Children.OfType<ListBoxRow>().Where(x => Regex.IsMatch(x.Text, pattern));
         foreach (var row in rows)
         {
             SelectRow(row, clearOthers);
@@ -379,7 +418,7 @@ public partial class ListBox : ScrollControl
     /// <param name="idx">Row index.</param>
     public void RemoveAllRows()
     {
-        mTable.DeleteAllChildren();
+        _table.DeleteAllChildren();
     }
 
     /// <summary>
@@ -388,30 +427,11 @@ public partial class ListBox : ScrollControl
     /// <param name="idx">Row index.</param>
     public void RemoveRow(int idx)
     {
-        mTable.RemoveRow(idx); // this calls Dispose()
-        mTable.DoSizeToContents();
+        _table.RemoveRow(idx); // this calls Dispose()
+        _table.DoSizeToContents();
     }
 
-    /// <summary>
-    ///     Adds a new row.
-    /// </summary>
-    /// <param name="label">Row text.</param>
-    /// <returns>Newly created control.</returns>
-    public ListBoxRow AddRow(string label)
-    {
-        return AddRow(label, String.Empty);
-    }
-
-    /// <summary>
-    ///     Adds a new row.
-    /// </summary>
-    /// <param name="label">Row text.</param>
-    /// <param name="name">Internal control name.</param>
-    /// <returns>Newly created control.</returns>
-    public ListBoxRow AddRow(string label, string name)
-    {
-        return AddRow(label, name, null);
-    }
+    public ListBoxRow AddRow(string label, object? userData) => AddRow(label: label, name: null, userData: userData);
 
     /// <summary>
     ///     Adds a new row.
@@ -420,33 +440,44 @@ public partial class ListBox : ScrollControl
     /// <param name="name">Internal control name.</param>
     /// <param name="userData">User data for newly created row</param>
     /// <returns>Newly created control.</returns>
-    public ListBoxRow AddRow(string label, string name, Object userData)
+    public ListBoxRow AddRow(string label, string? name = null, object? userData = null)
     {
-        var row = new ListBoxRow(this, ColumnCount)
+        var computedColumnWidths = _table.ComputedColumnWidths;
+        ListBoxRow row = new(parent: this, columns: ColumnCount, columnWidths: computedColumnWidths)
         {
             ClickSound = mItemClickSound,
+            FontSize = FontSize,
             HoverSound = mItemHoverSound,
             Name = name,
             RightClickSound = mItemRightClickSound,
             TextColor = TextColor,
             TextColorOverride = TextColorOverride,
-            UserData = userData
+            UserData = userData,
+            Width = InnerWidth,
         };
-        mTable.AddRow(row);
+        _table.AddRow(row);
 
         row.SetCellText(0, label);
 
         row.Selected += OnRowSelected;
 
-        if (mFont != null)
-        {
-            row.SetTextFont(mFont);
-        }
+        row.Font = _table.Font ?? row.Font;
 
-        mTable.SizeToContents(Width);
-        mTable.DoSizeToContents();
+        _table.FitContents(Width);
 
         return row;
+    }
+
+    protected override void OnSizeChanged(Point oldSize, Point newSize)
+    {
+        base.OnSizeChanged(oldSize, newSize);
+
+        if (oldSize.X == newSize.X)
+        {
+            return;
+        }
+
+        _table.Width = InnerWidth;
     }
 
     /// <summary>
@@ -456,7 +487,7 @@ public partial class ListBox : ScrollControl
     /// <param name="width">Column width.</param>
     public void SetColumnWidth(int column, int width)
     {
-        mTable.SetColumnWidth(column, width);
+        _table.SetColumnWidth(column, width);
         Invalidate();
     }
 
@@ -534,29 +565,18 @@ public partial class ListBox : ScrollControl
     public virtual void Clear()
     {
         UnselectAll();
-        mTable.RemoveAll();
+        _table.RemoveAll();
     }
 
     public void SizeToContents()
     {
         mSizeToContents = true;
 
-        // docking interferes with autosizing so we disable it until sizing is done
-        mOldDock = mTable.Dock;
-        mTable.Dock = Pos.None;
-        mTable.SizeToContents(0); // autosize without constraints
+        _table.FitContents();
     }
 
-    private void TableResized(Base control, EventArgs args)
-    {
-        if (mSizeToContents)
-        {
-            SetSize(mTable.Width, mTable.Height);
-            mSizeToContents = false;
-            mTable.Dock = mOldDock;
-            Invalidate();
-        }
-    }
+    private void TableResized(Base control, ValueChangedEventArgs<Rectangle> args) =>
+        _table.SizeToChildren(resizeX: false, resizeY: true);
 
     /// <summary>
     ///     Selects the first menu item with the given text it finds.
@@ -565,7 +585,7 @@ public partial class ListBox : ScrollControl
     /// <param name="label">The label to look for, this is what is shown to the user.</param>
     public void SelectByText(string text)
     {
-        foreach (ListBoxRow item in mTable.Children)
+        foreach (ListBoxRow item in _table.Children)
         {
             if (item.Text == text)
             {
@@ -583,7 +603,7 @@ public partial class ListBox : ScrollControl
     /// <param name="name">The internal name to look for. To select by what is displayed to the user, use "SelectByText".</param>
     public void SelectByName(string name)
     {
-        foreach (ListBoxRow item in mTable.Children)
+        foreach (ListBoxRow item in _table.Children)
         {
             if (item.Name == name)
             {
@@ -604,7 +624,7 @@ public partial class ListBox : ScrollControl
     /// </param>
     public void SelectByUserData(object userdata)
     {
-        foreach (ListBoxRow item in mTable.Children)
+        foreach (ListBoxRow item in _table.Children)
         {
             if (userdata == null)
             {
@@ -626,7 +646,7 @@ public partial class ListBox : ScrollControl
 
     public ScrollBar GetVerticalScrollBar()
     {
-        return base.mVerticalScrollBar;
+        return base.VerticalScrollBar;
     }
 
 }

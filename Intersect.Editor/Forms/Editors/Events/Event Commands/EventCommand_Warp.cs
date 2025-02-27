@@ -1,5 +1,4 @@
 using DarkUI.Controls;
-
 using Intersect.Editor.Localization;
 using Intersect.Enums;
 using Intersect.GameObjects.Events.Commands;
@@ -37,8 +36,8 @@ public partial class EventCommandWarp : UserControl
             cmbMap.SelectedIndex = 0;
         }
 
-        scrlX.Maximum = Options.MapWidth - 1;
-        scrlY.Maximum = Options.MapHeight - 1;
+        scrlX.Maximum = Options.Instance.Map.MapWidth - 1;
+        scrlY.Maximum = Options.Instance.Map.MapHeight - 1;
         scrlX.Value = mMyCommand.X;
         scrlY.Value = mMyCommand.Y;
         lblX.Text = Strings.Warping.x.ToString(scrlX.Value);

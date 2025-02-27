@@ -1,6 +1,8 @@
 using Intersect.Client.Entities.Events;
+using Intersect.Client.Framework.Gwen.Control;
+using Intersect.Client.Framework.Gwen.Control.EventArguments;
+using Intersect.Client.Framework.Gwen.Control.EventArguments.InputSubmissionEvent;
 using Intersect.Client.General;
-using Intersect.Client.Interface.Game;
 using Intersect.Client.Interface.Shared;
 using Intersect.Client.Maps;
 using Intersect.Enums;
@@ -104,7 +106,7 @@ public static partial class PacketSender
 
     public static void SendMove()
     {
-        Network.SendPacket(new MovePacket(Globals.Me.MapId, Globals.Me.X, Globals.Me.Y, Globals.Me.Dir));
+        Network.SendPacket(new MovePacket(Globals.Me.MapId, Globals.Me.X, Globals.Me.Y, Globals.Me.DirectionFacing));
     }
 
     public static void SendChatMsg(string msg, byte channel)
@@ -143,20 +145,36 @@ public static partial class PacketSender
         Network.SendPacket(new EventResponsePacket(ed.EventId, response));
     }
 
-    public static void SendEventInputVariable(object? sender, EventArgs e)
+    public static void SendEventInputVariable(Base sender, InputSubmissionEventArgs args)
     {
-        if (sender is InputBox inputBox && inputBox.UserData is Guid eventId)
+        if (sender is not InputBox { UserData: Guid eventId })
         {
-            Network.SendPacket(new EventInputVariablePacket(eventId, inputBox.BooleanValue, (int)inputBox.Value, inputBox.TextValue));
+            return;
         }
+
+        var booleanValue = args.Value is BooleanSubmissionValue booleanSubmissionValue
+            ? booleanSubmissionValue.Value
+            : default;
+
+        var numericalValue = args.Value is NumericalSubmissionValue numericalSubmissionValue
+            ? (int)numericalSubmissionValue.Value
+            : default;
+
+        var stringValue = args.Value is StringSubmissionValue stringSubmissionValue
+            ? stringSubmissionValue.Value
+            : default;
+
+        Network.SendPacket(new EventInputVariablePacket(eventId, booleanValue, numericalValue, stringValue));
     }
 
     public static void SendEventInputVariableCancel(object? sender, EventArgs e)
     {
-        if (sender is InputBox inputBox && inputBox.UserData is Guid eventId)
+        if (sender is not InputBox { UserData: Guid eventId } inputBox)
         {
-            Network.SendPacket(new EventInputVariablePacket(eventId, inputBox.BooleanValue, (int)inputBox.Value, inputBox.TextValue, true));
+            return;
         }
+
+        Network.SendPacket(new EventInputVariablePacket(eventId, default, default, default, true));
     }
 
     public static void SendCreateAccount(string username, string password, string email)
@@ -201,7 +219,7 @@ public static partial class PacketSender
 
     public static void SendUseSpell(int slot, Guid targetId)
     {
-        Network.SendPacket(new UseSpellPacket(slot, targetId));
+        Network.SendPacket(new UseSpellPacket(slot, targetId, Globals.ShouldSoftRetargetOnSelfCast));
     }
 
     public static void SendUnequipItem(int slot)

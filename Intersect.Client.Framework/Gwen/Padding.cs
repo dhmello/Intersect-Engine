@@ -8,14 +8,13 @@ namespace Intersect.Client.Framework.Gwen;
 /// </summary>
 public partial struct Padding : IEquatable<Padding>
 {
+    public int Top;
 
-    public readonly int Top;
+    public int Bottom;
 
-    public readonly int Bottom;
+    public int Left;
 
-    public readonly int Left;
-
-    public readonly int Right;
+    public int Right;
 
     // common values
     public static Padding Zero = new Padding(0, 0, 0, 0);
@@ -24,11 +23,19 @@ public partial struct Padding : IEquatable<Padding>
 
     public static Padding Two = new Padding(2, 2, 2, 2);
 
+    public static Padding TwoV = new Padding(0, 2);
+
     public static Padding Three = new Padding(3, 3, 3, 3);
 
     public static Padding Four = new Padding(4, 4, 4, 4);
 
     public static Padding Five = new Padding(5, 5, 5, 5);
+
+    public static Padding FourH = new(4, 0);
+
+    public Padding(int size) : this(size, size, size, size) { }
+
+    public Padding(int horizontal, int vertical) : this(horizontal, vertical, horizontal, vertical) { }
 
     public Padding(int left, int top, int right, int bottom)
     {
@@ -42,6 +49,39 @@ public partial struct Padding : IEquatable<Padding>
     {
         return other.Top == Top && other.Bottom == Bottom && other.Left == Left && other.Right == Right;
     }
+
+    public static Padding operator +(Padding lhs, Padding rhs) => new(
+        lhs.Left + rhs.Left,
+        lhs.Top + rhs.Top,
+        lhs.Right + rhs.Right,
+        lhs.Bottom + rhs.Bottom
+    );
+
+    public static Padding operator -(Padding lhs, Padding rhs) => new(
+        lhs.Left - rhs.Left,
+        lhs.Top - rhs.Top,
+        lhs.Right - rhs.Right,
+        lhs.Bottom - rhs.Bottom
+    );
+
+    public static Padding operator *(Padding lhs, int rhs) => new(
+        lhs.Left * rhs,
+        lhs.Top * rhs,
+        lhs.Right * rhs,
+        lhs.Bottom * rhs
+    );
+
+    public static Padding operator /(Padding lhs, int rhs) => new(
+        lhs.Left / rhs,
+        lhs.Top / rhs,
+        lhs.Right / rhs,
+        lhs.Bottom / rhs
+    );
+
+    public static Point operator +(Point point, Padding padding) => new(
+        point.X + padding.Left + padding.Right,
+        point.Y + padding.Top + padding.Bottom
+    );
 
     public static bool operator ==(Padding lhs, Padding rhs)
     {
@@ -85,31 +125,24 @@ public partial struct Padding : IEquatable<Padding>
 
     public static string ToString(Padding pad) => pad.ToString();
 
-    public static Padding FromString(string str)
+    public static Padding FromString(string rawPadding)
     {
-        if (string.IsNullOrEmpty(str))
+        if (string.IsNullOrEmpty(rawPadding))
         {
-            return Zero;
+            return default;
         }
 
-        var parts = str.Split(',').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToArray();
-        switch (parts.Length)
+        var parts = rawPadding.Split(',')
+            .Select(rawPart => int.TryParse(rawPart, CultureInfo.InvariantCulture, out var part) ? part : 0)
+            .ToArray();
+
+        return parts.Length switch
         {
-            case 1:
-                return new Padding(parts[0], parts[0], parts[0], parts[0]);
-
-            case 2:
-                return new Padding(parts[0], parts[1], parts[0], parts[1]);
-
-            case 3:
-                return new Padding(parts[0], parts[1], parts[0], parts[2]);
-
-            case 4:
-                return new Padding(parts[0], parts[1], parts[2], parts[3]);
-
-            default:
-                throw new ArgumentException($"Expected 1-4 comma-separated numbers, receive {parts.Length}.", nameof(str));
-        }
+            < 1 => new Padding(),
+            1 => new Padding(parts[0]),
+            2 => new Padding(parts[0], parts[1], parts[0], parts[1]),
+            3 => new Padding(parts[0], parts[1], parts[2], parts[1]),
+            _ => new Padding(parts[0], parts[1], parts[2], parts[3]),
+        };
     }
-
 }

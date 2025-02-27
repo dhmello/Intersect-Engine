@@ -1,45 +1,53 @@
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Gwen.Control.EventArguments;
-
+using Intersect.Framework.Eventing;
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.Control;
 
-
 /// <summary>
 ///     CheckBox with label.
 /// </summary>
-public partial class LabeledCheckBox : Base
+public partial class LabeledCheckBox : Base, IAutoSizeToContents, ICheckbox, ITextContainer
 {
+    private readonly Checkbox _checkbox;
 
-    private readonly CheckBox mCheckBox;
-
-    private readonly Label mLabel;
+    private readonly Label _label;
+    private bool _autoSizeToContents;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="LabeledCheckBox" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public LabeledCheckBox(Base parent, string name = "") : base(parent, name)
+    /// <param name="name"></param>
+    public LabeledCheckBox(Base parent, string? name = default) : base(parent: parent, name: name)
     {
-        _ = SetSize(200, 19);
+        Size = new Point(208, 26);
 
-        mCheckBox = new CheckBox(this)
+        _checkbox = new Checkbox(this, name: nameof(_checkbox))
         {
             InheritParentEnablementProperties = true,
-            Dock = Pos.Left,
+            Dock = Pos.Left | Pos.CenterV,
             Margin = new Margin(0, 2, 2, 2),
-            IsTabable = false
+            IsTabable = false,
         };
-        mCheckBox.CheckChanged += OnCheckChanged;
+        _checkbox.CheckChanged += OnCheckChanged;
 
-        mLabel = new Label(this)
+        _label = new Label(this, name: nameof(_label))
         {
+            Alignment = [Alignments.CenterV],
+            AutoSizeToContents = true,
+            Dock = Pos.Fill | Pos.CenterV,
             InheritParentEnablementProperties = true,
-            Dock = Pos.Fill,
-            IsTabable = false
+            IsTabable = false,
+            Padding = new Padding(2/*, 0, 0, 0*/),
+            TextAlign = Pos.CenterV | Pos.Left,
         };
-        mLabel.Clicked += delegate (Base control, ClickedEventArgs args) { mCheckBox.Press(control); };
+        _label.Clicked += delegate(Base control, MouseButtonState _)
+        {
+            _label.ProcessAlignments();
+            _checkbox.Press(control);
+        };
 
         IsTabable = false;
     }
@@ -49,108 +57,142 @@ public partial class LabeledCheckBox : Base
     /// </summary>
     public bool IsChecked
     {
-        get => mCheckBox.IsChecked;
-        set => mCheckBox.IsChecked = value;
+        get => _checkbox.IsChecked;
+        set => _checkbox.IsChecked = value;
+    }
+
+    public IFont? Font
+    {
+        get => _label.Font;
+        set => _label.Font = value;
+    }
+
+    public string? FontName
+    {
+        get => _label.FontName;
+        set => _label.FontName = value;
+    }
+
+    public int FontSize
+    {
+        get => _label.FontSize;
+        set => _label.FontSize = value;
+    }
+
+    public Color? TextColor
+    {
+        get => _label.TextColor;
+        set => _label.TextColor = value;
+    }
+
+    public Color? TextColorOverride
+    {
+        get => _label.TextColor;
+        set => _label.TextColorOverride = value;
+    }
+
+    public override string? TooltipText
+    {
+        get => _label.TooltipText;
+        set => _label.TooltipText = value;
+    }
+
+    public override string? TooltipBackgroundName
+    {
+        get => _label.TooltipBackgroundName;
+        set => _label.TooltipBackgroundName = value;
+    }
+
+    public override string? TooltipFontName
+    {
+        get => _label.TooltipFontName;
+        set => _label.TooltipFontName = value;
+    }
+
+    public override int TooltipFontSize
+    {
+        get => _label.TooltipFontSize;
+        set => _label.TooltipFontSize = value;
+    }
+
+    public override Color? TooltipTextColor
+    {
+        get => _label.TooltipTextColor;
+        set => _label.TooltipTextColor = value;
     }
 
     /// <summary>
     ///     Label text.
     /// </summary>
-    public string Text
+    public string? Text
     {
-        get => mLabel.Text;
-        set => mLabel.Text = value;
+        get => _label.Text;
+        set => _label.Text = value;
     }
+
+    public Color? TextPaddingDebugColor { get; set; }
 
     /// <summary>
     ///     Invoked when the control has been checked.
     /// </summary>
-    public event GwenEventHandler<EventArgs> Checked;
+    public event EventHandler<ICheckbox, EventArgs>? Checked;
 
     /// <summary>
     ///     Invoked when the control has been unchecked.
     /// </summary>
-    public event GwenEventHandler<EventArgs> UnChecked;
+    public event EventHandler<ICheckbox, EventArgs>? Unchecked;
 
     /// <summary>
     ///     Invoked when the control's check has been changed.
     /// </summary>
-    public event GwenEventHandler<EventArgs> CheckChanged;
-
-    public override JObject GetJson(bool isRoot = default)
-    {
-        var obj = base.GetJson(isRoot);
-        obj.Add("Label", mLabel.GetJson());
-        obj.Add("Checkbox", mCheckBox.GetJson());
-
-        return base.FixJson(obj);
-    }
-
-    public override void LoadJson(JToken obj, bool isRoot = default)
-    {
-        base.LoadJson(obj);
-        if (obj["Label"] != null)
-        {
-            mLabel.Dock = Pos.None;
-            mLabel.LoadJson(obj["Label"]);
-        }
-
-        if (obj["Checkbox"] != null)
-        {
-            mCheckBox.Dock = Pos.None;
-            mCheckBox.LoadJson(obj["Checkbox"]);
-        }
-    }
+    public event EventHandler<ICheckbox, ValueChangedEventArgs<bool>>? CheckChanged;
 
     /// <summary>
     ///     Handler for CheckChanged event.
     /// </summary>
-    protected virtual void OnCheckChanged(Base control, EventArgs args)
+    protected virtual void OnCheckChanged(ICheckbox sender, ValueChangedEventArgs<bool> args)
     {
-        if (mCheckBox.IsChecked)
+        if (_checkbox.IsChecked)
         {
-            if (Checked != null)
-            {
-                Checked.Invoke(this, EventArgs.Empty);
-            }
+            Checked?.Invoke(this, EventArgs.Empty);
         }
         else
         {
-            if (UnChecked != null)
-            {
-                UnChecked.Invoke(this, EventArgs.Empty);
-            }
+            Unchecked?.Invoke(this, EventArgs.Empty);
         }
 
-        if (CheckChanged != null)
-        {
-            CheckChanged.Invoke(this, EventArgs.Empty);
-        }
+        CheckChanged?.Invoke(this, args);
+    }
+
+    public override Point GetChildrenSize()
+    {
+        var childrenSize = base.GetChildrenSize();
+        return childrenSize;
     }
 
     public void SetCheckSize(int w, int h)
     {
-        mCheckBox.SetSize(w, h);
+        _checkbox.SetSize(w, h);
     }
 
-    public void SetImage(GameTexture texture, string fileName, CheckBox.ControlState state)
+    public void SetImage(IGameTexture texture, string fileName, Checkbox.ControlState state)
     {
-        mCheckBox.SetImage(texture, fileName, state);
+        _checkbox.SetImage(texture, fileName, state);
     }
 
-    public void SetTextColor(Color clr, Label.ControlState state)
+    public void SetTextColor(Color clr, ComponentState state)
     {
-        mLabel.SetTextColor(clr, state);
+        _label.SetTextColor(clr, state);
     }
 
     public void SetLabelDistance(int dist)
     {
-        mCheckBox.Margin = new Margin(0, 2, dist, 2);
+        _checkbox.Margin = new Margin(0, 2, dist, 2);
     }
 
-    public void SetFont(GameFont font)
+    public void SetFont(IFont font)
     {
-        mLabel.Font = font;
+        _label.Font = font;
     }
 
     /// <summary>
@@ -165,10 +207,31 @@ public partial class LabeledCheckBox : Base
         base.OnKeySpace(down);
         if (!down)
         {
-            mCheckBox.IsChecked = !mCheckBox.IsChecked;
+            _checkbox.IsChecked = !_checkbox.IsChecked;
         }
 
         return true;
     }
 
+    public bool AutoSizeToContents
+    {
+        get => _autoSizeToContents;
+        set => SetAndDoIfChanged(ref _autoSizeToContents, value, InvalidateAutoSizeToContents);
+    }
+
+    private void InvalidateAutoSizeToContents(bool oldValue, bool newValue)
+    {
+        _label.AutoSizeToContents = newValue;
+        Invalidate();
+    }
+
+    protected override void Layout(Skin.Base skin)
+    {
+        if (_autoSizeToContents)
+        {
+            SizeToChildren();
+        }
+
+        base.Layout(skin);
+    }
 }

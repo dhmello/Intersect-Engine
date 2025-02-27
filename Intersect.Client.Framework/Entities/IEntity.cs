@@ -1,3 +1,4 @@
+using System.Numerics;
 using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Items;
@@ -19,13 +20,13 @@ public interface IEntity : IDisposable
     string Sprite { get; }
     string TransformedSprite { get; }
     string Face { get; }
-    GameTexture? Texture { get; }
+    IGameTexture? Texture { get; }
     Color Color { get; }
     FloatRect WorldPos { get; }
     float OffsetX { get; }
     float OffsetY { get; }
-    Pointf Center { get; }
-    Pointf Origin { get; }
+    Vector2 Center { get; }
+    Vector2 Origin { get; }
     bool IsMoving { get; }
     bool IsStealthed { get; }
     bool IsBlocking { get; }
@@ -35,14 +36,14 @@ public interface IEntity : IDisposable
     bool InView { get; }
     IMapInstance? MapInstance { get; }
     Guid MapId { get; }
-    Direction Dir { get; }
+    Direction DirectionFacing { get; }
     byte X { get; }
     byte Y { get; }
     byte Z { get; }
     int Level { get; }
-    IReadOnlyList<int> Stats { get; }
-    IReadOnlyList<long> Vitals { get; }
-    IReadOnlyList<long> MaxVitals { get; }
+    IReadOnlyDictionary<Stat, int> Stats { get; }
+    IReadOnlyDictionary<Vital, long> Vitals { get; }
+    IReadOnlyDictionary<Vital, long> MaxVitals { get; }
     IReadOnlyList<IItem> Items { get; }
     IReadOnlyList<int> EquipmentSlots { get; }
     IReadOnlyList<Guid> Spells { get; }
@@ -52,4 +53,8 @@ public interface IEntity : IDisposable
     void AddChatBubble(string text);
     float GetLabelLocation(LabelType type);
     float GetTop(int overrideHeight = 0);
+
+    long ShieldSize { get; }
+
+    bool IsDisposed { get; }
 }

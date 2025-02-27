@@ -1,7 +1,9 @@
+using Intersect.Core;
 using Intersect.Enums;
-using Intersect.Logging;
+using Intersect.Framework.Core;
 using Intersect.Server.Networking;
 using Intersect.Utilities;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Server.Entities.Combat;
 
@@ -16,7 +18,7 @@ public partial class Dash
     public int Range;
 
     public Dash(
-        Entity en,
+        Entity entity,
         int range,
         Direction direction,
         bool blockPass = false,
@@ -26,20 +28,30 @@ public partial class Dash
     )
     {
         Direction = direction;
-        Facing = en.Dir;
+        Facing = entity.Dir;
 
-        CalculateRange(en, range, blockPass, activeResourcePass, deadResourcePass, zdimensionPass);
+        CalculateRange(entity, range, blockPass, activeResourcePass, deadResourcePass, zdimensionPass);
         if (Range <= 0)
         {
             return;
         } //Remove dash instance if no where to dash
 
+        var endX = entity.X;
+        var endY = entity.Y;
+
+        var dashLengthMilliseconds = (int)(Options.Instance.Combat.MaxDashSpeed);// * (Range / 10f));
+        var dashEndMilliseconds = Timing.Global.Milliseconds + dashLengthMilliseconds;
+        entity.MoveTimer = dashEndMilliseconds;
+
         PacketSender.SendEntityDash(
-            en, en.MapId, (byte) en.X, (byte) en.Y, (int) (Options.MaxDashSpeed * (Range / 10f)),
+            entity,
+            entity.MapId,
+            endX,
+            endY,
+            dashEndMilliseconds,
+            dashLengthMilliseconds,
             Direction == Facing ? Direction : Direction.None
         );
-
-        en.MoveTimer = Timing.Global.Milliseconds + Options.MaxDashSpeed;
     }
 
     public void CalculateRange(
@@ -54,11 +66,12 @@ public partial class Dash
         Range = 0;
         if (en == default)
         {
-            Log.Error(
+            ApplicationContext.Context.Value?.Logger.LogError(
                 new ArgumentNullException(
                     nameof(en),
                     "Entity was null when calling CalcuateRange(), this isn't supported."
-                )
+                ),
+                "Error calculating range"
             );
             return;
         }
@@ -72,7 +85,7 @@ public partial class Dash
                 {
                     case MovementBlockerType.OutOfBounds:
                         return;
-                    
+
                     case MovementBlockerType.MapAttribute:
                         if (!blockPass)
                         {
@@ -80,7 +93,7 @@ public partial class Dash
                         }
 
                         break;
-                    
+
                     case MovementBlockerType.ZDimension:
                         if (!zDimensionPass)
                         {
@@ -88,7 +101,7 @@ public partial class Dash
                         }
 
                         break;
-                    
+
                     case MovementBlockerType.Entity:
                         switch (blockingEntityType)
                         {

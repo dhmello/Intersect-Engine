@@ -1,8 +1,9 @@
-﻿using Intersect.Client.Framework.File_Management;
+using Intersect.Client.Framework.File_Management;
+using Intersect.Client.Framework.GenericClasses;
 using Intersect.Client.Framework.Graphics;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.Framework.Gwen.Input;
-
+using Intersect.Client.Framework.Input;
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.ControlInternal;
@@ -13,109 +14,85 @@ namespace Intersect.Client.Framework.Gwen.ControlInternal;
 /// </summary>
 public partial class Dragger : Base
 {
-
-    public enum ControlState
-    {
-
-        Normal = 0,
-
-        Hovered,
-
-        Clicked,
-
-        Disabled,
-
-    }
-
-    private GameTexture mClickedImage;
-
-    private string mClickedImageFilename;
-
-    private GameTexture mDisabledImage;
-
-    private string mDisabledImageFilename;
-
-    protected bool mHeld;
-
     protected Point mHoldPos;
 
-    private GameTexture mHoverImage;
-
-    private string mHoverImageFilename;
-
     //Sound Effects
-    private string mHoverSound;
+    private readonly Dictionary<ButtonSoundState, string> _stateSoundNames = [];
+    private DateTime _ignoreMouseUpSoundsUntil;
 
-    private string mMouseDownSound;
+    private IGameTexture? mClickedImage;
+    private string? mClickedImageFilename;
+    private IGameTexture? mDisabledImage;
+    private string? mDisabledImageFilename;
+    private IGameTexture? mHoverImage;
+    private string? mHoverImageFilename;
+    private IGameTexture? mNormalImage;
+    private string? mNormalImageFilename;
 
-    private string mMouseUpSound;
-
-    private GameTexture mNormalImage;
-
-    private string mNormalImageFilename;
-
-    protected Base mTarget;
+    protected Base? _target;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="Dragger" /> class.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public Dragger(Base parent, string name = "") : base(parent, name)
+    /// <param name="name"></param>
+    public Dragger(Base parent, string? name = default) : base(parent, name)
     {
         MouseInputEnabled = true;
-        mHeld = false;
+        KeepFocusOnMouseExit = true;
     }
 
     internal Base Target
     {
-        get => mTarget;
-        set => mTarget = value;
+        get => _target;
+        set => _target = value;
     }
-
-    /// <summary>
-    ///     Indicates if the control is being dragged.
-    /// </summary>
-    public bool IsHeld => mHeld;
 
     /// <summary>
     ///     Event invoked when the control position has been changed.
     /// </summary>
-    public event GwenEventHandler<EventArgs> Dragged;
+    public event GwenEventHandler<EventArgs>? Dragged;
 
-    /// <summary>
-    ///     Handler invoked on mouse click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    /// <param name="down">If set to <c>true</c> mouse button is down.</param>
-    protected override void OnMouseClickedLeft(int x, int y, bool down, bool automated = false)
+    protected override void OnMouseEntered()
     {
-        if (null == mTarget)
+        base.OnMouseEntered();
+
+        if (ShouldDrawHover && _stateSoundNames.TryGetValue(ButtonSoundState.Hover, out var value))
+        {
+            PlaySound(value);
+        }
+    }
+
+    protected override void OnMouseDown(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        base.OnMouseDown(mouseButton, mousePosition, userAction);
+
+        // ApplicationContext.Context.Value?.Logger.LogTrace("OnMouseDown {NodeName}", CanonicalName);
+
+        if (_target is null)
         {
             return;
         }
 
-        if (down)
+        if (userAction && _stateSoundNames.TryGetValue(ButtonSoundState.MouseDown, out var value))
         {
-            mHeld = true;
-
-            //Play Mouse Down Sound
-            if (!automated)
-            {
-                base.PlaySound(mMouseDownSound);
-            }
-
-            mHoldPos = mTarget.CanvasPosToLocal(new Point(x, y));
-            InputHandler.MouseFocus = this;
+            PlaySound(value);
         }
-        else
+
+        mHoldPos = _target.CanvasPosToLocal(mousePosition);
+        InputHandler.MouseFocus = this;
+    }
+
+    protected override void OnMouseUp(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        base.OnMouseUp(mouseButton, mousePosition, userAction);
+
+        if (userAction && _stateSoundNames.TryGetValue(ButtonSoundState.MouseUp, out var value))
         {
-            mHeld = false;
-
-            //Play Mouse Up Sound
-            base.PlaySound(mMouseUpSound);
-            InputHandler.MouseFocus = null;
+            PlaySound(value);
         }
+
+        InputHandler.MouseFocus = null;
     }
 
     /// <summary>
@@ -127,30 +104,43 @@ public partial class Dragger : Base
     /// <param name="dy">Y change.</param>
     protected override void OnMouseMoved(int x, int y, int dx, int dy)
     {
-        if (null == mTarget)
+        if (null == _target)
         {
             return;
         }
 
-        if (!mHeld)
+        if (!IsActive)
         {
+            // ApplicationContext.Context.Value?.Logger.LogTrace(
+            //     "Ignoring MouseMoved because this node isn't active ({NodeName})",
+            //     CanonicalName
+            // );
             return;
         }
 
-        var p = new Point(x - mHoldPos.X, y - mHoldPos.Y);
-
-        // Translate to parent
-        if (mTarget.Parent != null)
+        Point position = new(x - mHoldPos.X, y - mHoldPos.Y);
+        if (_target.Parent is { } parent)
         {
-            p = mTarget.Parent.CanvasPosToLocal(p);
+            position = parent.ToLocal(position.X, position.Y);
         }
 
-        //m_Target->SetPosition( p.x, p.y );
-        mTarget.MoveTo(p.X, p.Y);
-        if (Dragged != null)
-        {
-            Dragged.Invoke(this, EventArgs.Empty);
-        }
+        // StackTrace stackTrace = new(fNeedFileInfo: true);
+        // ApplicationContext.Context.Value?.Logger.LogTrace(
+        //     "Moving {ComponentIdentifier} due to\n{StackPath}",
+        //     QualifiedName,
+        //     string.Join(
+        //         "\n",
+        //         stackTrace.GetFrames()
+        //             .Select(frame => (frame, method: frame.GetMethod()))
+        //             .Where(pair => pair.method != null)
+        //             .Select(pair => (frame: pair.frame, method: pair.method!))
+        //             .TakeWhile(pair => pair.method.DeclaringType != typeof(InputHandler))
+        //             .Select(pair => $"\t{pair.method.GetFullName()} {pair.frame.GetFileName()}:{pair.frame.GetFileLineNumber()}")
+        //     )
+        // );
+
+        _target.MoveTo(position.X, position.Y);
+        Dragged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -161,29 +151,53 @@ public partial class Dragger : Base
     {
     }
 
-    public override JObject GetJson(bool isRoot = default)
+    public override void Invalidate()
     {
-        var obj = base.GetJson(isRoot);
-        obj.Add("NormalImage", GetImageFilename(ControlState.Normal));
-        obj.Add("HoveredImage", GetImageFilename(ControlState.Hovered));
-        obj.Add("ClickedImage", GetImageFilename(ControlState.Clicked));
-        obj.Add("DisabledImage", GetImageFilename(ControlState.Disabled));
-        obj.Add("HoverSound", mHoverSound);
-        obj.Add("MouseUpSound", mMouseUpSound);
-        obj.Add("MouseDownSound", mMouseDownSound);
-
-        return base.FixJson(obj);
+        base.Invalidate();
     }
 
-    public override void LoadJson(JToken obj, bool isRoot = default)
+    protected override void Layout(Skin.Base skin)
     {
-        base.LoadJson(obj);
+        base.Layout(skin);
+    }
+
+    protected override void OnBoundsChanged(Rectangle oldBounds, Rectangle newBounds)
+    {
+        base.OnBoundsChanged(oldBounds, newBounds);
+    }
+
+    public override JObject? GetJson(bool isRoot = false, bool onlySerializeIfNotEmpty = false)
+    {
+        var serializedProperties = base.GetJson(isRoot, onlySerializeIfNotEmpty);
+        if (serializedProperties is null)
+        {
+            return null;
+        }
+
+        serializedProperties.Add("NormalImage", GetImageFilename(ComponentState.Normal));
+        serializedProperties.Add("HoveredImage", GetImageFilename(ComponentState.Hovered));
+        serializedProperties.Add("ClickedImage", GetImageFilename(ComponentState.Active));
+        serializedProperties.Add("DisabledImage", GetImageFilename(ComponentState.Disabled));
+        serializedProperties.Add(nameof(_stateSoundNames), JObject.FromObject(_stateSoundNames));
+
+        return base.FixJson(serializedProperties);
+    }
+
+    public override void LoadJson(JToken token, bool isRoot = default)
+    {
+        base.LoadJson(token, isRoot);
+
+        if (token is not JObject obj)
+        {
+            return;
+        }
+
         if (obj["NormalImage"] != null)
         {
             SetImage(
                 GameContentManager.Current.GetTexture(
                     Framework.Content.TextureType.Gui, (string) obj["NormalImage"]
-                ), (string) obj["NormalImage"], ControlState.Normal
+                ), (string) obj["NormalImage"], ComponentState.Normal
             );
         }
 
@@ -192,7 +206,7 @@ public partial class Dragger : Base
             SetImage(
                 GameContentManager.Current.GetTexture(
                     Framework.Content.TextureType.Gui, (string) obj["HoveredImage"]
-                ), (string) obj["HoveredImage"], ControlState.Hovered
+                ), (string) obj["HoveredImage"], ComponentState.Hovered
             );
         }
 
@@ -201,7 +215,7 @@ public partial class Dragger : Base
             SetImage(
                 GameContentManager.Current.GetTexture(
                     Framework.Content.TextureType.Gui, (string) obj["ClickedImage"]
-                ), (string) obj["ClickedImage"], ControlState.Clicked
+                ), (string) obj["ClickedImage"], ComponentState.Active
             );
         }
 
@@ -210,56 +224,82 @@ public partial class Dragger : Base
             SetImage(
                 GameContentManager.Current.GetTexture(
                     Framework.Content.TextureType.Gui, (string) obj["DisabledImage"]
-                ), (string) obj["DisabledImage"], ControlState.Disabled
+                ), (string) obj["DisabledImage"], ComponentState.Disabled
             );
         }
 
-        if (obj["HoverSound"] != null)
+        if (obj.TryGetValue(nameof(_stateSoundNames), out var tokenStateSoundNames) && tokenStateSoundNames is JObject valueStateSoundNames)
         {
-            mHoverSound = (string) obj["HoverSound"];
-        }
+            foreach (var (propertyName, propertyValueToken) in valueStateSoundNames)
+            {
+                if (!Enum.TryParse(propertyName, out ButtonSoundState buttonSoundState) ||
+                    buttonSoundState == ButtonSoundState.None)
+                {
+                    continue;
+                }
 
-        if (obj["MouseUpSound"] != null)
-        {
-            mMouseUpSound = (string) obj["MouseUpSound"];
-        }
+                if (propertyValueToken is not JValue { Type: JTokenType.String } valuePropertyValue)
+                {
+                    continue;
+                }
 
-        if (obj["MouseDownSound"] != null)
-        {
-            mMouseDownSound = (string) obj["MouseDownSound"];
+                var stringPropertyValue = valuePropertyValue.Value<string>()?.Trim();
+                if (stringPropertyValue is { Length: > 0 })
+                {
+                    _stateSoundNames[buttonSoundState] = stringPropertyValue;
+                }
+                else
+                {
+                    _stateSoundNames.Remove(buttonSoundState);
+                }
+            }
         }
     }
 
-    public string GetMouseUpSound()
+    public void SetSound(ButtonSoundState state, string? soundName)
     {
-        return mMouseUpSound;
+        soundName = soundName?.Trim();
+        if (string.IsNullOrEmpty(soundName))
+        {
+            _stateSoundNames.Remove(state);
+        }
+        else
+        {
+            _stateSoundNames[state] = soundName;
+        }
+    }
+
+    public string? GetMouseUpSound()
+    {
+        _ = _stateSoundNames.TryGetValue(ButtonSoundState.MouseUp, out var value);
+        return value;
     }
 
     /// <summary>
     ///     Sets the button's image.
     /// </summary>
     /// <param name="textureName">Texture name. Null to remove.</param>
-    public virtual void SetImage(GameTexture texture, string fileName, ControlState state)
+    public virtual void SetImage(IGameTexture? texture, string? name, ComponentState state)
     {
         switch (state)
         {
-            case ControlState.Normal:
-                mNormalImageFilename = fileName;
+            case ComponentState.Normal:
+                mNormalImageFilename = name;
                 mNormalImage = texture;
 
                 break;
-            case ControlState.Hovered:
-                mHoverImageFilename = fileName;
+            case ComponentState.Hovered:
+                mHoverImageFilename = name;
                 mHoverImage = texture;
 
                 break;
-            case ControlState.Clicked:
-                mClickedImageFilename = fileName;
+            case ComponentState.Active:
+                mClickedImageFilename = name;
                 mClickedImage = texture;
 
                 break;
-            case ControlState.Disabled:
-                mDisabledImageFilename = fileName;
+            case ComponentState.Disabled:
+                mDisabledImageFilename = name;
                 mDisabledImage = texture;
 
                 break;
@@ -268,56 +308,88 @@ public partial class Dragger : Base
         }
     }
 
-    public virtual GameTexture GetImage(ControlState state)
+    public virtual IGameTexture? GetImage(ComponentState state)
     {
         switch (state)
         {
-            case ControlState.Normal:
+            case ComponentState.Normal:
                 return mNormalImage;
-            case ControlState.Hovered:
+            case ComponentState.Hovered:
                 return mHoverImage;
-            case ControlState.Clicked:
+            case ComponentState.Active:
                 return mClickedImage;
-            case ControlState.Disabled:
+            case ComponentState.Disabled:
                 return mDisabledImage;
             default:
                 return null;
         }
     }
 
-    public virtual string GetImageFilename(ControlState state)
+    public virtual string GetImageFilename(ComponentState state)
     {
         switch (state)
         {
-            case ControlState.Normal:
+            case ComponentState.Normal:
                 return mNormalImageFilename;
-            case ControlState.Hovered:
+            case ComponentState.Hovered:
                 return mHoverImageFilename;
-            case ControlState.Clicked:
+            case ComponentState.Active:
                 return mClickedImageFilename;
-            case ControlState.Disabled:
+            case ComponentState.Disabled:
                 return mDisabledImageFilename;
             default:
                 return null;
         }
     }
 
-    protected override void OnMouseEntered()
+    public void PlaySound(ButtonSoundState soundState)
     {
-        base.OnMouseEntered();
-
-        //Play Mouse Entered Sound
-        if (ShouldDrawHover)
+        if (soundState == ButtonSoundState.MouseUp)
         {
-            base.PlaySound(mHoverSound);
+            if (_ignoreMouseUpSoundsUntil > DateTime.UtcNow)
+            {
+                return;
+            }
+        }
+
+        if (!_stateSoundNames.TryGetValue(soundState, out var soundName))
+        {
+            return;
+        }
+
+        if (!base.PlaySound(soundName))
+        {
+            return;
+        }
+
+        if (soundState == ButtonSoundState.MouseDown)
+        {
+            _ignoreMouseUpSoundsUntil = DateTime.UtcNow.AddMilliseconds(200);
         }
     }
 
     public void ClearSounds()
     {
-        mHoverSound = string.Empty;
-        mMouseDownSound = string.Empty;
-        mMouseUpSound = string.Empty;
+        _stateSoundNames.Clear();
     }
 
+    public void SetSound(string sound, ButtonSoundState state)
+    {
+        switch (state)
+        {
+            case ButtonSoundState.None:
+                break;
+            case ButtonSoundState.Hover:
+                _stateSoundNames[ButtonSoundState.Hover] = sound;
+                break;
+            case ButtonSoundState.MouseDown:
+                _stateSoundNames[ButtonSoundState.MouseDown] = sound;
+                break;
+            case ButtonSoundState.MouseUp:
+                _stateSoundNames[ButtonSoundState.MouseUp] = sound;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(state), state, null);
+        }
+    }
 }

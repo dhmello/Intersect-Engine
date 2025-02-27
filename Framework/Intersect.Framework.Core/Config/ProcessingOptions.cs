@@ -1,14 +1,16 @@
 using System.Runtime.Serialization;
+using Intersect.Framework.Annotations;
 
 namespace Intersect.Config;
 
 /// <summary>
 /// Thread count and timing options for game processing.
 /// </summary>
+[RequiresRestart]
 public partial class ProcessingOptions
 {
     /// <summary>
-    /// Determined whether or not the server logic thread sleeps after each sloop by default
+    /// If the server logic thread sleeps after each loop iteration by default.
     /// </summary>
     public bool CpsLock { get; set; } = true;
 
@@ -175,7 +177,7 @@ public partial class ProcessingOptions
             throw new InvalidOperationException("Player save interval is too low and would cause performance issues, consider raising.");
         }
 
-        if (StaleCooldownRemovalTimer < 100) 
+        if (StaleCooldownRemovalTimer < 100)
         {
             throw new InvalidOperationException("StaleCooldownRemovalTimer is too low, value should be at least 100ms to avoid running this check every server tick.");
         }

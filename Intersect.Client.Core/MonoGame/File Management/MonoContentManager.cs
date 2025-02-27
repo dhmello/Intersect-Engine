@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Intersect.Client.Framework.Content;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.GenericClasses;
@@ -6,8 +7,8 @@ using Intersect.Client.Localization;
 using Intersect.Client.MonoGame.Audio;
 using Intersect.Compression;
 using Intersect.Configuration;
-using Intersect.Logging;
-
+using Intersect.Core;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.MonoGame.File_Management;
@@ -16,13 +17,13 @@ namespace Intersect.Client.MonoGame.File_Management;
 public partial class MonoContentManager : GameContentManager
 {
 
-    public MonoContentManager(ILogger logger) : base(logger)
+    public MonoContentManager()
     {
         var rootPath = Path.GetFullPath(ClientConfiguration.ResourcesDirectory);
 
         if (!Directory.Exists(rootPath))
         {
-            Log.Error(Strings.Errors.ResourcesNotFound);
+            ApplicationContext.Context.Value?.Logger.LogError(Strings.Errors.ResourcesNotFound);
 
             Environment.Exit(1);
         }
@@ -52,14 +53,18 @@ public partial class MonoContentManager : GameContentManager
 
         foreach (var t in tilesetnames)
         {
-            var realFilename = tilesetFiles.FirstOrDefault(file => t.Equals(file, StringComparison.InvariantCultureIgnoreCase)) ?? string.Empty;
+            var realFilename = tilesetFiles.FirstOrDefault(file => t.Equals(file, StringComparison.InvariantCultureIgnoreCase)) ?? t;
             if (!string.IsNullOrWhiteSpace(t) &&
                 (!string.IsNullOrWhiteSpace(realFilename) ||
-                 GameTexturePacks.GetFrame(Path.Combine(ClientConfiguration.ResourcesDirectory, "tilesets", t.ToLower())) != null) &&
+                 AtlasReference.TryGet(Path.Combine(ClientConfiguration.ResourcesDirectory, "tilesets", t.ToLower()), out _) != null) &&
                 !mTilesetDict.ContainsKey(t.ToLower()))
             {
                 mTilesetDict.Add(
-                    t.ToLower(), Core.Graphics.Renderer.LoadTexture(Path.Combine(ClientConfiguration.ResourcesDirectory, "tilesets", t), Path.Combine(ClientConfiguration.ResourcesDirectory, "tilesets", realFilename))
+                    t.ToLower(),
+                    Core.Graphics.Renderer.LoadTexture(
+                        Path.Combine(ClientConfiguration.ResourcesDirectory, "tilesets", t),
+                        Path.Combine(ClientConfiguration.ResourcesDirectory, "tilesets", realFilename)
+                    )
                 );
             }
         }
@@ -90,7 +95,7 @@ public partial class MonoContentManager : GameContentManager
                 {
                     foreach (var frame in frames)
                     {
-                        var filename = frame["filename"].ToString();
+                        var assetName = frame["filename"].ToString();
                         var sourceRect = new Rectangle(
                             int.Parse(frame["frame"]["x"].ToString()), int.Parse(frame["frame"]["y"].ToString()),
                             int.Parse(frame["frame"]["w"].ToString()), int.Parse(frame["frame"]["h"].ToString())
@@ -104,9 +109,7 @@ public partial class MonoContentManager : GameContentManager
                             int.Parse(frame["spriteSourceSize"]["h"].ToString())
                         );
 
-                        GameTexturePacks.AddFrame(
-                            new GameTexturePackFrame(filename, sourceRect, rotated, sourceSize, platformText)
-                        );
+                        AtlasReference.Add(new AtlasReference(assetName, sourceRect, rotated, sourceSize, platformText));
                     }
                 }
             }
@@ -134,16 +137,13 @@ public partial class MonoContentManager : GameContentManager
             }
         }
 
-        var packItems = GameTexturePacks.GetFolderFrames(directory);
-        if (packItems != null)
+        var packItems = AtlasReference.GetAllFor(directory);
+        foreach (var itm in packItems)
         {
-            foreach (var itm in packItems)
+            var filename = Path.GetFileName(itm.Name.ToLower().Replace("\\", "/"));
+            if (!dict.ContainsKey(filename))
             {
-                var filename = Path.GetFileName(itm.Filename.ToLower().Replace("\\", "/"));
-                if (!dict.ContainsKey(filename))
-                {
-                    dict.Add(filename, Core.Graphics.Renderer.LoadTexture(Path.Combine(dir, filename), Path.Combine(dir, Path.Combine(dir, filename))));
-                }
+                dict.Add(filename, Core.Graphics.Renderer.LoadTexture(Path.Combine(dir, filename), Path.Combine(dir, Path.Combine(dir, filename))));
             }
         }
     }
@@ -206,21 +206,88 @@ public partial class MonoContentManager : GameContentManager
     public override void LoadFonts()
     {
         mFontDict.Clear();
-        var dir = Path.Combine(ClientConfiguration.ResourcesDirectory, "fonts");
-        if (!Directory.Exists(dir))
+
+        var assetDirectory = Path.Combine(ClientConfiguration.ResourcesDirectory, "fonts");
+        if (!Directory.Exists(assetDirectory))
         {
-            Directory.CreateDirectory(dir);
+            Directory.CreateDirectory(assetDirectory);
         }
 
-        var items = Directory.GetFiles(dir, "*.xnb");
-        for (var i = 0; i < items.Length; i++)
+        var fileInfos = Directory.GetFiles(assetDirectory, "*.xnb")
+            .Select(filePath => new FileInfo(filePath))
+            .ToArray();
+        Dictionary<string, Dictionary<int, FileInfo>> discoveredFontFiles = [];
+        foreach (var fileInfo in fileInfos)
         {
-            var filename = items[i].Replace(dir, "").TrimStart(Path.DirectorySeparatorChar).ToLower();
-            var font = Core.Graphics.Renderer.LoadFont(Path.Combine(dir, filename));
-            if (mFontDict.IndexOf(font) == -1)
+            var rawName = Path.GetFileNameWithoutExtension(fileInfo.Name);
+            var sizeSeparatorIndex = rawName.LastIndexOf(',');
+            if (sizeSeparatorIndex < 1)
             {
-                mFontDict.Add(font);
+                sizeSeparatorIndex = rawName.LastIndexOf('_');
             }
+
+            if (sizeSeparatorIndex < 1)
+            {
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "Ignoring invalid font file name: '{FileName}' located at {FilePath}",
+                    fileInfo.Name,
+                    fileInfo.FullName
+                );
+                continue;
+            }
+
+            var rawSize = rawName[(sizeSeparatorIndex + 1)..];
+            if (!int.TryParse(rawSize, out var size))
+            {
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "Font size '{Size}' in font file name '{FileName}' is not a valid integer",
+                    rawSize,
+                    rawName
+                );
+                continue;
+            }
+
+            if (size < 1)
+            {
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "Font size '{Size}' in font file name '{FileName}' must be greater than or equal to 1",
+                    size,
+                    rawName
+                );
+                continue;
+            }
+
+            var fontName = rawName[..sizeSeparatorIndex].Trim().ToLowerInvariant();
+            if (!discoveredFontFiles.TryGetValue(fontName, out var fontFamilyCollection))
+            {
+                fontFamilyCollection = [];
+                discoveredFontFiles[fontName] = fontFamilyCollection;
+            }
+
+            if (fontFamilyCollection.TryGetValue(size, out var originalFileInfo))
+            {
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "A font file for size {Size} already exists for the font family {Family}, the first one is located at {OriginalPath} and this one is located at {CurrentPath}",
+                    size,
+                    fontName,
+                    originalFileInfo.FullName,
+                    fileInfo.FullName
+                );
+                continue;
+            }
+
+            fontFamilyCollection[size] = fileInfo;
+        }
+
+        foreach (var (fontName, fontSourcesBySize) in discoveredFontFiles)
+        {
+            var font = Core.Graphics.Renderer.LoadFont(fontName, fontSourcesBySize);
+            if (mFontDict.TryAdd(fontName, font))
+            {
+                continue;
+            }
+
+            throw new UnreachableException();
         }
     }
 
@@ -330,42 +397,42 @@ public partial class MonoContentManager : GameContentManager
     /// <inheritdoc />
     protected override TAsset Load<TAsset>(
         Dictionary<string, IAsset> lookup,
-        ContentTypes contentType,
+        ContentType contentType,
         string name,
         Func<Stream> createStream
     )
     {
         switch (contentType)
         {
-            case ContentTypes.Animation:
-            case ContentTypes.Entity:
-            case ContentTypes.Face:
-            case ContentTypes.Fog:
-            case ContentTypes.Image:
-            case ContentTypes.Interface:
-            case ContentTypes.Item:
-            case ContentTypes.Miscellaneous:
-            case ContentTypes.Paperdoll:
-            case ContentTypes.Resource:
-            case ContentTypes.Spell:
-            case ContentTypes.TexturePack:
-            case ContentTypes.TileSet:
-                var asset = Core.Graphics.Renderer.LoadTexture(name, createStream) as TAsset;
+            case ContentType.Animation:
+            case ContentType.Entity:
+            case ContentType.Face:
+            case ContentType.Fog:
+            case ContentType.Image:
+            case ContentType.Interface:
+            case ContentType.Item:
+            case ContentType.Miscellaneous:
+            case ContentType.Paperdoll:
+            case ContentType.Resource:
+            case ContentType.Spell:
+            case ContentType.TextureAtlas:
+            case ContentType.Tileset:
+                var asset = Core.Graphics.Renderer.CreateTextureFromStreamFactory(name, createStream) as TAsset;
                 lookup?.Add(name, asset);
                 return asset;
 
-            case ContentTypes.Font:
+            case ContentType.Font:
                 throw new NotImplementedException();
 
-            case ContentTypes.Shader:
+            case ContentType.Shader:
                 throw new NotImplementedException();
 
-            case ContentTypes.Music:
+            case ContentType.Music:
                 var music = new MonoMusicSource(createStream) as TAsset;
                 lookup?.Add(RemoveExtension(name), music);
                 return music;
 
-            case ContentTypes.Sound:
+            case ContentType.Sound:
                 var sound = new MonoSoundSource(createStream, name) as TAsset;
                 lookup?.Add(RemoveExtension(name), sound);
                 return sound;

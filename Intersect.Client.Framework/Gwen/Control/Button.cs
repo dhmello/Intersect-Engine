@@ -1,74 +1,26 @@
 using Intersect.Client.Framework.Content;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.Graphics;
+using Intersect.Client.Framework.Gwen.ControlInternal;
 using Intersect.Client.Framework.Gwen.Input;
-
+using Intersect.Client.Framework.Input;
+using Intersect.Core;
+using Intersect.Framework.Reflection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
 namespace Intersect.Client.Framework.Gwen.Control;
-
-public static class ButtonControlStateExtensions
-{
-    public static Label.ControlState ToLabelControlState(this Button.ControlState controlState)
-    {
-        return controlState switch
-        {
-            Button.ControlState.Normal => Label.ControlState.Normal,
-            Button.ControlState.Hovered => Label.ControlState.Hovered,
-            Button.ControlState.Clicked => Label.ControlState.Clicked,
-            Button.ControlState.Disabled => Label.ControlState.Disabled,
-            _ => throw new ArgumentOutOfRangeException(nameof(controlState), controlState, null),
-        };
-    }
-}
 
 /// <summary>
 ///     Button control.
 /// </summary>
 public partial class Button : Label
 {
-
-    public enum ControlState
-    {
-
-        Normal = 0,
-
-        Hovered,
-
-        Clicked,
-
-        Disabled,
-
-    }
-
     private bool mCenterImage;
 
-    private GameTexture mClickedImage;
-
-    private string mClickedImageFilename;
-
-    protected string mClickSound;
-
-    private bool mDepressed;
-
-    private GameTexture mDisabledImage;
-
-    private string mDisabledImageFilename;
-
-    private GameTexture mHoverImage;
-
-    private string mHoverImageFilename;
-
-    //Sound Effects
-    protected string mHoverSound;
-
-    protected string mMouseDownSound;
-
-    protected string mMouseUpSound;
-
-    private GameTexture mNormalImage;
-
-    private string mNormalImageFilename;
+    private readonly Dictionary<ButtonSoundState, string> _stateSoundNames = [];
+    private readonly Dictionary<ComponentState, IGameTexture> _stateTextures = [];
+    private readonly Dictionary<ComponentState, string> _stateTextureNames = [];
 
     private bool mToggle;
 
@@ -78,32 +30,23 @@ public partial class Button : Label
     ///     Control constructor.
     /// </summary>
     /// <param name="parent">Parent control.</param>
-    public Button(Base parent, string name = default, bool disableText = false) : base(parent, name, disableText)
+    /// <param name="name"></param>
+    /// <param name="disableText"></param>
+    public Button(Base parent, string? name = default, bool disableText = false) : base(
+        parent: parent,
+        name: name,
+        disableText: disableText
+    )
     {
         AutoSizeToContents = false;
-        SetSize(100, 20);
         MouseInputEnabled = true;
-        Alignment = Pos.Center;
-        TextPadding = new Padding(3, 3, 3, 3);
-        Name = name;
-    }
+        TextAlign = Pos.Center;
+        Size = new Point(100, 20);
+        Padding = new Padding(3, 3, 3, 3);
 
-    /// <summary>
-    ///     Indicates whether the button is depressed.
-    /// </summary>
-    public bool IsDepressed
-    {
-        get => mDepressed;
-        set
-        {
-            if (mDepressed == value)
-            {
-                return;
-            }
-
-            mDepressed = value;
-            Redraw();
-        }
+        SetSound(ButtonSoundState.Hover, "octave-tap-resonant.wav");
+        SetSound(ButtonSoundState.MouseDown, "octave-tap-warm.wav");
+        SetSound(ButtonSoundState.MouseUp, "octave-tap-warm.wav");
     }
 
     /// <summary>
@@ -160,89 +103,85 @@ public partial class Button : Label
     }
 
     /// <summary>
-    ///     Invoked when the button is pressed.
-    /// </summary>
-    public event GwenEventHandler<EventArgs> Pressed;
-
-    /// <summary>
-    ///     Invoked when the button is released.
-    /// </summary>
-    public event GwenEventHandler<EventArgs> Released;
-
-    /// <summary>
     ///     Invoked when the button's toggle state has changed.
     /// </summary>
-    public event GwenEventHandler<EventArgs> Toggled;
+    public event GwenEventHandler<EventArgs>? Toggled;
 
     /// <summary>
     ///     Invoked when the button's toggle state has changed to On.
     /// </summary>
-    public event GwenEventHandler<EventArgs> ToggledOn;
+    public event GwenEventHandler<EventArgs>? ToggledOn;
 
     /// <summary>
     ///     Invoked when the button's toggle state has changed to Off.
     /// </summary>
-    public event GwenEventHandler<EventArgs> ToggledOff;
+    public event GwenEventHandler<EventArgs>? ToggledOff;
 
-    public override JObject GetJson(bool isRoot = default)
+    public override JObject? GetJson(bool isRoot = false, bool onlySerializeIfNotEmpty = false)
     {
-        var obj = base.GetJson(isRoot);
-        if (this.GetType() != typeof(CheckBox))
+        var serializedProperties = base.GetJson(isRoot, onlySerializeIfNotEmpty);
+        if (serializedProperties is null)
         {
-            obj.Add("NormalImage", GetImageFilename(ControlState.Normal));
-            obj.Add("HoveredImage", GetImageFilename(ControlState.Hovered));
-            obj.Add("ClickedImage", GetImageFilename(ControlState.Clicked));
-            obj.Add("DisabledImage", GetImageFilename(ControlState.Disabled));
+            return null;
         }
 
-        obj.Add("CenterImage", mCenterImage);
-        if (this.GetType() != typeof(ComboBox))
+        if (this is not Checkbox)
         {
-            obj.Add("HoverSound", mHoverSound);
-            obj.Add("MouseUpSound", mMouseUpSound);
-            obj.Add("MouseDownSound", mMouseDownSound);
-            obj.Add("ClickSound", mClickSound);
+            serializedProperties.Add("NormalImage", GetStateTextureName(ComponentState.Normal));
+            serializedProperties.Add("HoveredImage", GetStateTextureName(ComponentState.Hovered));
+            serializedProperties.Add("ClickedImage", GetStateTextureName(ComponentState.Active));
+            serializedProperties.Add("DisabledImage", GetStateTextureName(ComponentState.Disabled));
         }
 
-        return base.FixJson(obj);
+        serializedProperties.Add(nameof(_stateSoundNames), JObject.FromObject(_stateSoundNames));
+
+        serializedProperties.Add("CenterImage", mCenterImage);
+
+        return base.FixJson(serializedProperties);
     }
 
-    public override void LoadJson(JToken obj, bool isRoot = default)
+    public override void LoadJson(JToken token, bool isRoot = default)
     {
-        base.LoadJson(obj);
+        base.LoadJson(token, isRoot);
+
+        if (token is not JObject obj)
+        {
+            return;
+        }
+
         if (obj["NormalImage"] != null)
         {
-            SetImage(
-                GameContentManager.Current.GetTexture(
-                    Framework.Content.TextureType.Gui, (string)obj["NormalImage"]
-                ), (string)obj["NormalImage"], ControlState.Normal
+            SetStateTexture(
+                GameContentManager.Current.GetTexture(TextureType.Gui, (string)obj["NormalImage"]),
+                (string)obj["NormalImage"],
+                ComponentState.Normal
             );
         }
 
         if (obj["HoveredImage"] != null)
         {
-            SetImage(
-                GameContentManager.Current.GetTexture(
-                    Framework.Content.TextureType.Gui, (string)obj["HoveredImage"]
-                ), (string)obj["HoveredImage"], ControlState.Hovered
+            SetStateTexture(
+                GameContentManager.Current.GetTexture(TextureType.Gui, (string)obj["HoveredImage"]),
+                (string)obj["HoveredImage"],
+                ComponentState.Hovered
             );
         }
 
         if (obj["ClickedImage"] != null)
         {
-            SetImage(
-                GameContentManager.Current.GetTexture(
-                    Framework.Content.TextureType.Gui, (string)obj["ClickedImage"]
-                ), (string)obj["ClickedImage"], ControlState.Clicked
+            SetStateTexture(
+                GameContentManager.Current.GetTexture(TextureType.Gui, (string)obj["ClickedImage"]),
+                (string)obj["ClickedImage"],
+                ComponentState.Active
             );
         }
 
         if (obj["DisabledImage"] != null)
         {
-            SetImage(
-                GameContentManager.Current.GetTexture(
-                    Framework.Content.TextureType.Gui, (string)obj["DisabledImage"]
-                ), (string)obj["DisabledImage"], ControlState.Disabled
+            SetStateTexture(
+                GameContentManager.Current.GetTexture(TextureType.Gui, (string)obj["DisabledImage"]),
+                (string)obj["DisabledImage"],
+                ComponentState.Disabled
             );
         }
 
@@ -251,46 +190,60 @@ public partial class Button : Label
             mCenterImage = (bool)obj["CenterImage"];
         }
 
-        if (this.GetType() != typeof(ComboBox) && this.GetType() != typeof(CheckBox))
+        if (obj.TryGetValue(nameof(_stateSoundNames), out var tokenStateSoundNames) && tokenStateSoundNames is JObject valueStateSoundNames)
         {
-            if (obj["HoverSound"] != null)
+            foreach (var (propertyName, propertyValueToken) in valueStateSoundNames)
             {
-                mHoverSound = (string)obj["HoverSound"];
-            }
+                if (!Enum.TryParse(propertyName, out ButtonSoundState buttonSoundState) ||
+                    buttonSoundState == ButtonSoundState.None)
+                {
+                    continue;
+                }
 
-            if (obj["MouseUpSound"] != null)
-            {
-                mMouseUpSound = (string)obj["MouseUpSound"];
-            }
+                if (propertyValueToken is not JValue { Type: JTokenType.String } valuePropertyValue)
+                {
+                    continue;
+                }
 
-            if (obj["MouseDownSound"] != null)
-            {
-                mMouseDownSound = (string)obj["MouseDownSound"];
-            }
-
-            if (obj["ClickSound"] != null)
-            {
-                mClickSound = (string)obj["ClickSound"];
+                var stringPropertyValue = valuePropertyValue.Value<string>()?.Trim();
+                if (stringPropertyValue is { Length: > 0 })
+                {
+                    _stateSoundNames[buttonSoundState] = stringPropertyValue;
+                }
+                else
+                {
+                    _stateSoundNames.Remove(buttonSoundState);
+                }
             }
         }
     }
 
-    public void PlayHoverSound()
-    {
-        base.PlaySound(mHoverSound);
-    }
+    private DateTime _ignoreMouseUpSoundsUntil;
 
-    public void PlayClickSound()
+    public void PlaySound(ButtonSoundState soundState)
     {
-        base.PlaySound(mClickSound);
-    }
+        if (soundState == ButtonSoundState.MouseUp)
+        {
+            if (_ignoreMouseUpSoundsUntil > DateTime.UtcNow)
+            {
+                return;
+            }
+        }
 
-    public void ClearSounds()
-    {
-        mMouseUpSound = string.Empty;
-        mMouseDownSound = string.Empty;
-        mHoverSound = string.Empty;
-        mClickSound = string.Empty;
+        if (!_stateSoundNames.TryGetValue(soundState, out var soundName))
+        {
+            return;
+        }
+
+        if (!base.PlaySound(soundName))
+        {
+            return;
+        }
+
+        if (soundState == ButtonSoundState.MouseDown)
+        {
+            _ignoreMouseUpSoundsUntil = DateTime.UtcNow.AddMilliseconds(200);
+        }
     }
 
     /// <summary>
@@ -304,10 +257,7 @@ public partial class Button : Label
     /// <summary>
     ///     "Clicks" the button.
     /// </summary>
-    public virtual void Press(Base control = null)
-    {
-        OnClicked(0, 0);
-    }
+    public virtual void Press(Base? control = null) => OnMouseClicked(default, default);
 
     /// <summary>
     ///     Renders the control using specified skin.
@@ -319,7 +269,7 @@ public partial class Button : Label
 
         if (ShouldDrawBackground)
         {
-            var drawDepressed = IsDepressed && IsHovered;
+            var drawDepressed = IsActive && IsHovered;
             if (IsToggle)
             {
                 drawDepressed = drawDepressed || ToggleState;
@@ -331,55 +281,21 @@ public partial class Button : Label
         }
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    /// <param name="down">If set to <c>true</c> mouse button is down.</param>
-    protected override void OnMouseClickedLeft(int x, int y, bool down, bool automated = false)
+    protected override void OnMouseDown(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        //base.OnMouseClickedLeft(x, y, down);
-        if (down)
-        {
-            IsDepressed = true;
-            InputHandler.MouseFocus = this;
-
-            //Play Mouse Down Sound
-            base.PlaySound(mMouseDownSound);
-            if (Pressed != null)
-            {
-                Pressed.Invoke(this, EventArgs.Empty);
-            }
-        }
-        else
-        {
-            if (IsHovered && mDepressed)
-            {
-                //Play Clicked Sound
-                base.PlaySound(mClickSound);
-                OnClicked(x, y);
-            }
-
-            //Play Mouse Up Sound
-            base.PlaySound(mMouseUpSound);
-            IsDepressed = false;
-            InputHandler.MouseFocus = null;
-            if (Released != null)
-            {
-                Released.Invoke(this, EventArgs.Empty);
-            }
-        }
-
-        Redraw();
+        base.OnMouseDown(mouseButton, mousePosition, userAction);
+        PlaySound(ButtonSoundState.MouseDown);
     }
 
-    /// <summary>
-    ///     Internal OnPressed implementation.
-    /// </summary>
-    protected virtual void OnClicked(int x, int y)
+    protected override void OnMouseUp(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        if (IsDisabled)
+        base.OnMouseUp(mouseButton, mousePosition, userAction);
+        PlaySound(ButtonSoundState.MouseUp);
+    }
+
+    protected override void OnMouseClicked(MouseButton mouseButton, Point mousePosition, bool userAction = true)
+    {
+        if (IsDisabledByTree)
         {
             return;
         }
@@ -389,7 +305,8 @@ public partial class Button : Label
             Toggle();
         }
 
-        base.OnMouseClickedLeft(x, y, true);
+        base.OnMouseClicked(mouseButton, mousePosition, userAction);
+        PlaySound(ButtonSoundState.MouseClicked);
     }
 
     /// <summary>
@@ -411,10 +328,7 @@ public partial class Button : Label
     /// <summary>
     ///     Default accelerator handler.
     /// </summary>
-    protected override void OnAccelerator()
-    {
-        OnClicked(0, 0);
-    }
+    protected override void OnAccelerator() => OnMouseClicked(default, default);
 
     /// <summary>
     ///     Lays out the control's interior according to alignment, padding, dock etc.
@@ -430,165 +344,131 @@ public partial class Button : Label
     /// </summary>
     public override void UpdateColors()
     {
-        var textColor = GetTextColor(Label.ControlState.Normal);
-        if (IsDisabled && GetTextColor(Label.ControlState.Disabled) != null)
+        var textColor = GetTextColor(ComponentState.Normal) ?? Skin.Colors.Button.Normal;
+        if (IsDisabledByTree)
         {
-            textColor = GetTextColor(Label.ControlState.Disabled);
+            textColor = GetTextColor(ComponentState.Disabled) ?? Skin.Colors.Button.Disabled;
         }
-        else if (IsHovered && GetTextColor(Label.ControlState.Hovered) != null)
+        else if (IsActive)
         {
-            textColor = GetTextColor(Label.ControlState.Hovered);
+            textColor = GetTextColor(ComponentState.Active) ?? Skin.Colors.Button.Active;
         }
-
-        if (textColor != null)
+        else if (IsHovered)
         {
-            TextColor = textColor;
-
-            return;
+            textColor = GetTextColor(ComponentState.Hovered) ?? Skin.Colors.Button.Hover;
         }
 
-        if (IsDisabled)
-        {
-            TextColor = Skin.Colors.Button.Disabled;
+        // ApplicationContext.CurrentContext.Logger.LogInformation(
+        //     "'{ComponentName}' IsDisabled={IsDisabled} IsActive={IsActive} IsHovered={IsHovered} TextColor={TextColor}",
+        //     CanonicalName,
+        //     IsDisabled,
+        //     IsActive,
+        //     IsHovered,
+        //     textColor
+        // );
 
-            return;
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+        if (textColor == null)
+        {
+            ApplicationContext.CurrentContext.Logger.LogError(
+                "Text color for the current control state of {ComponentType} '{ComponentName}' is somehow null IsDisabled={IsDisabled} IsActive={IsActive} IsHovered={IsHovered}",
+                GetType().GetName(qualified: true),
+                ParentQualifiedName,
+                IsDisabled,
+                IsActive,
+                IsHovered
+            );
+
+            textColor = new Color(r: 255, g: 0, b: 255);
         }
 
-        if (IsDepressed || ToggleState)
-        {
-            TextColor = Skin.Colors.Button.Down;
+        var oldTextColor = TextColor;
+        // if (textColor != oldTextColor)
+        // {
+        //     ApplicationContext.CurrentContext.Logger.LogTrace(
+        //         "Changing TextColor to '{ToTextColor}' from '{FromTextColor}' of {ComponentType} '{ComponentName}' IsDisabled={IsDisabled} IsActive={IsActive} IsHovered={IsHovered}",
+        //         textColor,
+        //         oldTextColor,
+        //         GetType().GetName(qualified: true),
+        //         CanonicalName,
+        //         IsDisabled,
+        //         IsActive,
+        //         IsHovered
+        //     );
+        // }
 
-            return;
-        }
-
-        if (IsHovered)
-        {
-            TextColor = Skin.Colors.Button.Hover;
-
-            return;
-        }
-
-        TextColor = Skin.Colors.Button.Normal;
+        TextColor = textColor;
     }
 
-    /// <summary>
-    ///     Handler invoked on mouse double click (left) event.
-    /// </summary>
-    /// <param name="x">X coordinate.</param>
-    /// <param name="y">Y coordinate.</param>
-    protected override void OnMouseDoubleClickedLeft(int x, int y)
+    protected override void OnMouseDoubleClicked(MouseButton mouseButton, Point mousePosition, bool userAction = true)
     {
-        base.OnMouseDoubleClickedLeft(x, y);
-        OnMouseClickedLeft(x, y, true);
+        base.OnMouseDoubleClicked(mouseButton, mousePosition, userAction);
+        OnMouseClicked(mouseButton, mousePosition, userAction);
     }
 
-    public void SetImage(string textureName, ControlState controlState)
+    public void SetStateTexture(ComponentState componentState, string textureName)
     {
         var texture = GameContentManager.Current.GetTexture(TextureType.Gui, textureName);
-        SetImage(texture, textureName, controlState);
+        SetStateTexture(texture, textureName, componentState);
     }
 
     /// <summary>
     ///     Sets the button's image.
     /// </summary>
-    /// <param name="textureName">Texture name. Null to remove.</param>
-    public void SetImage(GameTexture texture, string fileName, ControlState state)
+    /// <param name="texture"></param>
+    /// <param name="name"></param>
+    /// <param name="state"></param>
+    public void SetStateTexture(IGameTexture? texture, string? name, ComponentState state)
     {
-        if (texture == null && !string.IsNullOrWhiteSpace(fileName))
+        if (texture == null && !string.IsNullOrWhiteSpace(name))
         {
-            texture = GameContentManager.Current?.GetTexture(Framework.Content.TextureType.Gui, fileName);
+            texture = GameContentManager.Current.GetTexture(TextureType.Gui, name);
         }
 
-        switch (state)
+        if (texture == null)
         {
-            case ControlState.Normal:
-                mNormalImageFilename = fileName;
-                mNormalImage = texture;
+            _ = _stateTextures.Remove(state);
+        }
+        else
+        {
+            _stateTextures[state] = texture;
+        }
 
-                break;
-            case ControlState.Hovered:
-                mHoverImageFilename = fileName;
-                mHoverImage = texture;
-
-                break;
-            case ControlState.Clicked:
-                mClickedImageFilename = fileName;
-                mClickedImage = texture;
-
-                break;
-            case ControlState.Disabled:
-                mDisabledImageFilename = fileName;
-                mDisabledImage = texture;
-
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(state), state, null);
+        if (name == null)
+        {
+            _ = _stateTextureNames.Remove(state);
+        }
+        else
+        {
+            _stateTextureNames[state] = name;
         }
     }
 
-    public GameTexture? GetImage(ControlState state)
-    {
-        switch (state)
-        {
-            case ControlState.Normal:
-                return mNormalImage;
-            case ControlState.Hovered:
-                return mHoverImage;
-            case ControlState.Clicked:
-                return mClickedImage;
-            case ControlState.Disabled:
-                return mDisabledImage;
-            default:
-                return null;
-        }
-    }
+    public IGameTexture? GetStateTexture(ComponentState state) => _stateTextures.GetValueOrDefault(state);
 
-    public string GetImageFilename(ControlState state)
-    {
-        switch (state)
-        {
-            case ControlState.Normal:
-                return mNormalImageFilename;
-            case ControlState.Hovered:
-                return mHoverImageFilename;
-            case ControlState.Clicked:
-                return mClickedImageFilename;
-            case ControlState.Disabled:
-                return mDisabledImageFilename;
-            default:
-                return null;
-        }
-    }
+    public string? GetStateTextureName(ComponentState state) => _stateTextureNames.GetValueOrDefault(state);
 
     protected override void OnMouseEntered()
     {
         base.OnMouseEntered();
 
-        //Play Mouse Entered Sound
         if (ShouldDrawHover)
         {
-            base.PlaySound(mHoverSound);
+            PlaySound(ButtonSoundState.Hover);
         }
     }
 
-    public void SetHoverSound(string sound)
+    public void SetSound(ButtonSoundState state, string? soundName)
     {
-        mHoverSound = sound;
-    }
-
-    public void SetClickSound(string sound)
-    {
-        mClickSound = sound;
-    }
-
-    public void SetMouseDownSound(string sound)
-    {
-        mMouseDownSound = sound;
-    }
-
-    public void SetMouseUpSound(string sound)
-    {
-        mMouseUpSound = sound;
+        soundName = soundName?.Trim();
+        if (string.IsNullOrEmpty(soundName))
+        {
+            _stateSoundNames.Remove(state);
+        }
+        else
+        {
+            _stateSoundNames[state] = soundName;
+        }
     }
 
 }

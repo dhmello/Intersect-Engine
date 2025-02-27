@@ -1,4 +1,5 @@
 ﻿using Intersect.Client.Framework.GenericClasses;
+using Intersect.Client.Framework.Gwen.ControlInternal;
 
 namespace Intersect.Client.Framework.Gwen.Skin;
 
@@ -470,10 +471,10 @@ public partial class Simple : Skin.Base
         mRenderer.DrawShavedCornerRect(new Rectangle(rect.X, rect.Y, rect.Width, rect.Height));
     }
 
-    public override void DrawWindowCloseButton(Control.Base control, bool depressed, bool hovered, bool disabled)
+    public override void DrawWindowCloseButton(CloseButton closeButton, bool depressed, bool hovered, bool disabled)
     {
         // TODO
-        DrawButton(control, depressed, hovered, disabled, control.HasFocus);
+        DrawButton(closeButton, depressed, hovered, disabled, closeButton.HasFocus);
     }
 
     public override void DrawHighlight(Control.Base control)
@@ -498,10 +499,10 @@ public partial class Simple : Skin.Base
         mRenderer.DrawFilledRect(rect);
     }
 
-    public override void DrawScrollBarBar(Control.Base control, bool depressed, bool hovered, bool horizontal)
+    public override void DrawScrollBarBar(ScrollBarBar scrollBarBar)
     {
         //TODO: something specialized
-        DrawButton(control, depressed, hovered, false, control.HasFocus);
+        DrawButton(scrollBarBar, scrollBarBar.IsActive, scrollBarBar.IsHovered, scrollBarBar.IsDisabledByTree, scrollBarBar.HasFocus);
     }
 
     public override void DrawTabTitleBar(Control.Base control)
@@ -536,7 +537,7 @@ public partial class Simple : Skin.Base
         }
         else
         {
-            //Background 
+            //Background
             mRenderer.DrawColor = mColControlDark;
             mRenderer.DrawFilledRect(new Rectangle(1, 1, rect.Width - 2, rect.Height - 2));
 
@@ -768,6 +769,7 @@ public partial class Simple : Skin.Base
         Control.Base ctrl,
         bool open,
         bool selected,
+        int treeNodeHeight,
         int labelHeight,
         int labelWidth,
         int halfWay,
@@ -778,12 +780,22 @@ public partial class Simple : Skin.Base
         if (selected)
         {
             Renderer.DrawColor = Color.FromArgb(100, 0, 150, 255);
-            Renderer.DrawFilledRect(new Rectangle(17, 0, labelWidth + 2, labelHeight - 1));
+            Renderer.DrawFilledRect(new Rectangle(17, 0, labelWidth + 2, treeNodeHeight - 1));
             Renderer.DrawColor = Color.FromArgb(200, 0, 150, 255);
-            Renderer.DrawLinedRect(new Rectangle(17, 0, labelWidth + 2, labelHeight - 1));
+            Renderer.DrawLinedRect(new Rectangle(17, 0, labelWidth + 2, treeNodeHeight - 1));
         }
 
-        base.DrawTreeNode(ctrl, open, selected, labelHeight, labelWidth, halfWay, lastBranch, isRoot);
+        base.DrawTreeNode(
+            ctrl,
+            open,
+            selected,
+            treeNodeHeight,
+            labelHeight,
+            labelWidth,
+            halfWay,
+            lastBranch,
+            isRoot
+        );
     }
 
     public override void DrawStatusBar(Control.Base control)
@@ -839,9 +851,9 @@ public partial class Simple : Skin.Base
         DrawArrowRight(control.RenderBounds);
     }
 
-    public override void DrawSliderButton(Control.Base control, bool depressed, bool horizontal)
+    public override void DrawSliderButton(SliderBar sliderBar)
     {
-        DrawButton(control, depressed, control.IsHovered, control.IsDisabled, control.HasFocus);
+        DrawButton(sliderBar, sliderBar.IsActive, sliderBar.IsHovered, sliderBar.IsDisabled, sliderBar.HasFocus);
     }
 
     public override void DrawCategoryHolder(Control.Base control)

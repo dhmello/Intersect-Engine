@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-
 using Intersect.Editor.Content;
 using Intersect.Editor.General;
 using Intersect.Editor.Localization;
@@ -7,7 +6,6 @@ using Intersect.Enums;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Maps;
 using Intersect.Utilities;
-
 using Graphics = Intersect.Editor.Core.Graphics;
 
 namespace Intersect.Editor.Maps;
@@ -414,9 +412,9 @@ partial class MapProperties
                 Strings.General.None
             };
 
-            WeatherList.AddRange(AnimationBase.Names);
-            var name = AnimationBase.GetName(mMyMap.WeatherAnimationId);
-            if (AnimationBase.Get(mMyMap.WeatherAnimationId) == null)
+            WeatherList.AddRange(AnimationDescriptor.Names);
+            var name = AnimationDescriptor.GetName(mMyMap.WeatherAnimationId);
+            if (AnimationDescriptor.Get(mMyMap.WeatherAnimationId) == null)
             {
                 name = null;
             }
@@ -428,15 +426,15 @@ partial class MapProperties
             var idVal = Guid.Empty;
             if (!TextUtils.IsNone(value))
             {
-                var animationNames = new List<string>(AnimationBase.Names);
+                var animationNames = new List<string>(AnimationDescriptor.Names);
                 var index = animationNames.IndexOf(value);
-                idVal = AnimationBase.IdFromList(index);
+                idVal = AnimationDescriptor.IdFromList(index);
             }
 
             if (mMyMap.WeatherAnimationId != idVal)
             {
                 Globals.MapEditorWindow.PrepUndoState();
-                mMyMap.WeatherAnimation = AnimationBase.Get(idVal);
+                mMyMap.WeatherAnimation = AnimationDescriptor.Get(idVal);
                 Globals.MapEditorWindow.AddUndoState();
             }
         }
@@ -744,7 +742,7 @@ public partial class MapWeatherProperty : StringConverter
             Strings.General.None
         };
 
-        WeatherList.AddRange(AnimationBase.Names);
+        WeatherList.AddRange(AnimationDescriptor.Names);
 
         return new StandardValuesCollection(WeatherList.ToArray());
     }

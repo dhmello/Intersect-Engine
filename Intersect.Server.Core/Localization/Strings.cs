@@ -1,9 +1,10 @@
 using System.Text;
 using Intersect.Config;
+using Intersect.Core;
 using Intersect.Localization;
-using Intersect.Logging;
 using Intersect.Server.Core;
 using Intersect.Server.Networking.Helpers;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace Intersect.Server.Localization;
@@ -279,6 +280,9 @@ public static partial class Strings
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public readonly LocalizedString ImmuneToEffect = @"IMMUNE!";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public readonly LocalizedString LevelDown = @"LEVEL DOWN!";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public readonly LocalizedString LevelUp = @"LEVEL UP!";
@@ -1097,6 +1101,9 @@ public static partial class Strings
         public readonly LocalizedString Left = @"{00} has left {01}.";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public readonly LocalizedString LevelLost = @"You have lost a level! You are now level {00}!";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public readonly LocalizedString LevelUp = @"You have leveled up! You are now level {00}!";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
@@ -1127,7 +1134,10 @@ public static partial class Strings
         public readonly LocalizedString ServerKilled = @"{00} has been killed by the server!";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        public readonly LocalizedString SpellTaughtLevelUp = @"You've learned the {00} spell!";
+        public readonly LocalizedString LearnedSpell = @"You've learned the {00} spell!";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public readonly LocalizedString ForgotSpell = @"You've forgotten the {00} spell!";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public readonly LocalizedString StatPoints = @"You have {00} stat points available to be spent!";
@@ -1356,7 +1366,7 @@ public static partial class Strings
                     );
                 }
 
-                Log.Error(exception);
+                ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to deserialize strings");
 
                 return false;
             }
@@ -1378,7 +1388,7 @@ public static partial class Strings
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to save strings");
 
             return false;
         }

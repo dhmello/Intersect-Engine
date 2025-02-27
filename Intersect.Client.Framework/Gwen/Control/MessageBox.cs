@@ -26,15 +26,15 @@ public partial class MessageBox : WindowControl
     {
         DeleteOnClose = true;
 
-        mLabel = new Label(mInnerPanel);
+        mLabel = new Label(_innerPanel);
         mLabel.Text = text;
         mLabel.Margin = Margin.Five;
         mLabel.Dock = Pos.Top;
-        mLabel.Alignment = Pos.Center;
+        mLabel.TextAlign = Pos.Center;
 
-        mButton = new Button(mInnerPanel);
+        mButton = new Button(_innerPanel);
         mButton.Text = "OK"; // todo: parametrize buttons
-        mButton.Clicked += CloseButtonPressed;
+        mButton.Clicked += OnClose;
         mButton.Clicked += DismissedHandler;
         mButton.Margin = Margin.Five;
         mButton.SetSize(50, 20);
@@ -60,8 +60,8 @@ public partial class MessageBox : WindowControl
 
         Align.PlaceDownLeft(mButton, mLabel, 10);
         Align.CenterHorizontally(mButton);
-        mInnerPanel.SizeToChildren();
-        mInnerPanel.Height += 10;
+        _innerPanel.SizeToChildren();
+        _innerPanel.Height += 10;
         SizeToChildren();
     }
 

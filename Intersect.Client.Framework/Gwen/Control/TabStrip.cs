@@ -84,11 +84,19 @@ public partial class TabStrip : Base
             }
         }
 
-        var droppedOn = GetControlAt(localPos.X, localPos.Y);
+        var droppedOn = GetComponentAt(localPos.X, localPos.Y);
         if (droppedOn != null)
         {
             var dropPos = droppedOn.CanvasPosToLocal(new Point(x, y));
-            DragAndDrop.SourceControl.BringNextToControl(droppedOn, dropPos.X > droppedOn.Width / 2);
+            var behind = dropPos.X > droppedOn.Width / 2;
+            if (behind)
+            {
+                DragAndDrop.SourceControl.MoveBefore(droppedOn);
+            }
+            else
+            {
+                DragAndDrop.SourceControl.MoveAfter(droppedOn);
+            }
         }
         else
         {
@@ -121,57 +129,52 @@ public partial class TabStrip : Base
     {
         var largestTab = new Point(5, 5);
 
-        var num = 0;
-        foreach (var child in Children)
+        var children = Children.ToArray();
+        for (var childIndex = 0; childIndex < children.Length; childIndex++)
         {
-            var button = child as TabButton;
-            if (null == button)
+            var child = children[childIndex];
+            if (child is not TabButton tab)
             {
                 continue;
             }
 
-            button.SizeToContents();
+            tab.SizeToContents(out var tabSize);
 
-            var m = new Margin();
-            var notFirst = num > 0 ? -1 : 0;
+            Margin margin = new();
+            var notFirst = childIndex > 0 ? -1 : 0;
 
-            if (Dock == Pos.Top)
+            switch (Dock)
             {
-                m.Left = notFirst;
-                button.Dock = Pos.Left;
+                case Pos.Top:
+                    margin.Left = notFirst;
+                    tab.Dock = Pos.Left;
+                    break;
+                case Pos.Left:
+                    margin.Top = notFirst;
+                    tab.Dock = Pos.Top;
+                    break;
+                case Pos.Right:
+                    margin.Top = notFirst;
+                    tab.Dock = Pos.Top;
+                    break;
+                case Pos.Bottom:
+                    margin.Left = notFirst;
+                    tab.Dock = Pos.Left;
+                    break;
             }
 
-            if (Dock == Pos.Left)
-            {
-                m.Top = notFirst;
-                button.Dock = Pos.Top;
-            }
+            largestTab.X = Math.Max(largestTab.X, tabSize.X);
+            largestTab.Y = Math.Max(largestTab.Y, tabSize.Y);
 
-            if (Dock == Pos.Right)
-            {
-                m.Top = notFirst;
-                button.Dock = Pos.Top;
-            }
-
-            if (Dock == Pos.Bottom)
-            {
-                m.Left = notFirst;
-                button.Dock = Pos.Left;
-            }
-
-            largestTab.X = Math.Max(largestTab.X, button.Width);
-            largestTab.Y = Math.Max(largestTab.Y, button.Height);
-
-            button.Margin = m;
-            num++;
+            tab.Margin = margin;
         }
 
-        if (Dock == Pos.Top || Dock == Pos.Bottom)
+        if (Dock is Pos.Top or Pos.Bottom)
         {
             SetSize(Width, largestTab.Y);
         }
 
-        if (Dock == Pos.Left || Dock == Pos.Right)
+        if (Dock is Pos.Left or Pos.Right)
         {
             SetSize(largestTab.X, Height);
         }
@@ -206,7 +209,7 @@ public partial class TabStrip : Base
     {
         var localPos = CanvasPosToLocal(new Point(x, y));
 
-        var droppedOn = GetControlAt(localPos.X, localPos.Y);
+        var droppedOn = GetComponentAt(localPos.X, localPos.Y);
         if (droppedOn != null && droppedOn != this)
         {
             var dropPos = droppedOn.CanvasPosToLocal(new Point(x, y));

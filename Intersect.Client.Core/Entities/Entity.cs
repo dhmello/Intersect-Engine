@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using Intersect.Client.Core;
 using Intersect.Client.Entities.Events;
 using Intersect.Client.Entities.Projectiles;
@@ -10,13 +12,17 @@ using Intersect.Client.Framework.Maps;
 using Intersect.Client.General;
 using Intersect.Client.Items;
 using Intersect.Client.Localization;
+using Intersect.Client.Maps;
 using Intersect.Client.Spells;
+using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Animations;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Maps;
-using Intersect.Logging;
 using Intersect.Network.Packets.Server;
 using Intersect.Utilities;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Client.Entities;
 
@@ -24,8 +30,8 @@ public partial class Entity : IEntity
 {
     public int AnimationFrame { get; set; }
 
-    //Entity Animations
-    public List<Animation> Animations { get; set; } = [];
+    private readonly List<Animation> _animations = [];
+    private readonly Dictionary<AnimationSource, Animation> _animationsBySource = [];
 
     //Animation Timer (for animated sprites)
     public long AnimationTimer { get; set; }
@@ -44,7 +50,9 @@ public partial class Entity : IEntity
 
     public bool IsCasting => CastTime > Timing.Global.Milliseconds;
 
-    public bool IsTurnAroundWhileCastingDisabled => !Options.Instance.CombatOpts.EnableTurnAroundWhileCasting && IsCasting;
+    protected readonly bool EnableTurnAroundWhileCasting = Options.Instance.Combat.EnableTurnAroundWhileCasting;
+
+    public bool CanTurnAround => !IsMoving && (!IsCasting || EnableTurnAroundWhileCasting);
 
     public bool IsDashing => Dashing != null;
 
@@ -59,7 +67,9 @@ public partial class Entity : IEntity
 
     public float elapsedtime { get; set; } //to be removed
 
-    private Guid[] _equipment = new Guid[Options.EquipmentSlots.Count];
+    private Guid[] _equipment = new Guid[Options.Instance.Equipment.Slots.Count];
+
+    public bool HasAnimations => _animations.Count > 0;
 
     public Guid[] Equipment
     {
@@ -72,13 +82,16 @@ public partial class Entity : IEntity
             }
 
             _equipment = value;
-            LoadAnimationTexture(string.IsNullOrWhiteSpace(TransformedSprite) ? Sprite : TransformedSprite, SpriteAnimations.Weapon);
+            LoadAnimationTexture(
+                string.IsNullOrWhiteSpace(TransformedSprite) ? Sprite : TransformedSprite,
+                SpriteAnimations.Weapon
+            );
         }
     }
 
-    IReadOnlyList<int> IEntity.EquipmentSlots => [.. MyEquipment];
+    IReadOnlyList<int> IEntity.EquipmentSlots => [..MyEquipment];
 
-    public Animation?[] EquipmentAnimations { get; set; } = new Animation[Options.EquipmentSlots.Count];
+    public Animation?[] EquipmentAnimations { get; set; } = new Animation[Options.Instance.Equipment.Slots.Count];
 
     //Extras
     public string Face { get; set; } = string.Empty;
@@ -97,7 +110,7 @@ public partial class Entity : IEntity
     public Guid Id { get; set; }
 
     //Inventory/Spells/Equipment
-    public IItem[] Inventory { get; set; } = new IItem[Options.MaxInvItems];
+    public IItem[] Inventory { get; } = new IItem[Options.Instance.Player.MaxInventory];
 
     IReadOnlyList<IItem> IEntity.Items => [.. Inventory];
 
@@ -113,14 +126,15 @@ public partial class Entity : IEntity
     //Vitals & Stats
     public long[] MaxVital { get; set; } = new long[Enum.GetValues<Vital>().Length];
 
-    IReadOnlyList<long> IEntity.MaxVitals => [.. MaxVital];
+    IReadOnlyDictionary<Vital, long> IEntity.MaxVitals =>
+        Enum.GetValues<Vital>().ToDictionary(vital => vital, vital => MaxVital[(int)vital]);
 
-    protected Pointf mOrigin = Pointf.Empty;
+    protected Vector2 mOrigin = Vector2.Zero;
 
     //Chat
     private readonly List<ChatBubble> mChatBubbles = [];
 
-    private Direction mDir;
+    private Direction _directionFacing;
 
     protected bool mDisposed;
 
@@ -130,7 +144,7 @@ public partial class Entity : IEntity
 
     public Color Color { get; set; } = new Color(255, 255, 255, 255);
 
-    public virtual Direction MoveDir { get; set; } = Direction.None;
+    public virtual Direction DirectionMoving { get; set; } = Direction.None;
 
     public long MoveTimer { get; set; }
 
@@ -140,15 +154,11 @@ public partial class Entity : IEntity
 
     private long mWalkTimer;
 
-    public int[] MyEquipment { get; set; } = new int[Options.EquipmentSlots.Count];
+    public int[] MyEquipment { get; set; } = new int[Options.Instance.Equipment.Slots.Count];
 
     public string Name { get; set; } = string.Empty;
 
     public Color? NameColor { get; set; } = null;
-
-    public float OffsetX { get; set; }
-
-    public float OffsetY { get; set; }
 
     public bool Passable { get; set; }
 
@@ -172,21 +182,22 @@ public partial class Entity : IEntity
         }
     }
 
-    public Spell[] Spells { get; set; } = new Spell[Options.Instance.PlayerOpts.MaxSpells];
+    public Spell[] Spells { get; set; } = new Spell[Options.Instance.Player.MaxSpells];
 
     IReadOnlyList<Guid> IEntity.Spells => Spells.Select(x => x.Id).ToList();
 
     public int[] Stat { get; set; } = new int[Enum.GetValues<Stat>().Length];
 
-    IReadOnlyList<int> IEntity.Stats => [.. Stat];
+    IReadOnlyDictionary<Stat, int> IEntity.Stats =>
+        Enum.GetValues<Stat>().ToDictionary(stat => stat, stat => Stat[(int)stat]);
 
-    public GameTexture? Texture { get; set; }
+    public IGameTexture? Texture { get; set; }
 
     #region "Animation Textures and Timing"
 
     public SpriteAnimations SpriteAnimation { get; set; } = SpriteAnimations.Normal;
 
-    public Dictionary<SpriteAnimations, GameTexture> AnimatedTextures { get; set; } = [];
+    public Dictionary<SpriteAnimations, IGameTexture> AnimatedTextures { get; set; } = [];
 
     public int SpriteFrame { get; set; } = 0;
 
@@ -204,7 +215,8 @@ public partial class Entity : IEntity
 
     public long[] Vital { get; set; } = new long[Enum.GetValues<Vital>().Length];
 
-    IReadOnlyList<long> IEntity.Vitals => [.. Vital];
+    IReadOnlyDictionary<Vital, long> IEntity.Vitals =>
+        Enum.GetValues<Vital>().ToDictionary(vital => vital, vital => Vital[(int)vital]);
 
     public int WalkFrame { get; set; }
 
@@ -212,12 +224,61 @@ public partial class Entity : IEntity
 
     public bool IsHovered { get; set; }
 
+    private Vector3 _position;
+
+    public Vector3 Position
+    {
+        get => _position;
+        set
+        {
+            if (_position == value)
+            {
+                return;
+            }
+
+            var oldValue = _position;
+            var delta = value - oldValue;
+            _position = value;
+            OnPositionChanged(value, oldValue);
+        }
+    }
+
+    protected virtual void OnPositionChanged(Vector3 newPosition, Vector3 oldPosition) {}
+
+    public int TileX => (int)float.Floor(Position.X);
+    public int TileY => (int)float.Floor(Position.Y);
+    public int TileZ => (int)float.Floor(Position.Z);
+
     //Location Info
-    public byte X { get; set; }
+    public byte X
+    {
+        get => (byte)float.Floor(Position.X);
+        set => Position = Position with { X = value };
+    }
 
-    public byte Y { get; set; }
+    public byte Y
+    {
+        get => (byte)float.Floor(Position.Y);
+        set => Position = Position with { Y = value };
+    }
 
-    public byte Z { get; set; }
+    public byte Z
+    {
+        get => (byte)float.Floor(Position.Z);
+        set => Position = Position with { Z = value };
+    }
+
+    public float OffsetX { get; set; }
+    // {
+    //     get => (Position.X % 1) * TileWidth;
+    //     set => Position = Position with { X = X + (value / TileWidth) };
+    // }
+
+    public float OffsetY { get; set; }
+    // {
+    //     get => (Position.Y % 1) * TileHeight;
+    //     set => Position = Position with { Y = Y + (value / TileHeight) };
+    // }
 
     public Entity(Guid id, EntityPacket? packet, EntityType entityType)
     {
@@ -227,17 +288,17 @@ public partial class Entity : IEntity
 
         if (Id != Guid.Empty && Type != EntityType.Event)
         {
-            for (var i = 0; i < Options.MaxInvItems; i++)
+            for (var i = 0; i < Options.Instance.Player.MaxInventory; i++)
             {
                 Inventory[i] = new Item();
             }
 
-            for (var i = 0; i < Options.Instance.PlayerOpts.MaxSpells; i++)
+            for (var i = 0; i < Options.Instance.Player.MaxSpells; i++)
             {
                 Spells[i] = new Spell();
             }
 
-            for (var i = 0; i < Options.EquipmentSlots.Count; i++)
+            for (var i = 0; i < Options.Instance.Equipment.Slots.Count; i++)
             {
                 Equipment[i] = Guid.Empty;
                 MyEquipment[i] = -1;
@@ -247,7 +308,7 @@ public partial class Entity : IEntity
         AnimationTimer = Timing.Global.MillisecondsUtc + Globals.Random.Next(0, 500);
 
         //TODO Remove because fixed orrrrr change the exception text
-        if (Options.EquipmentSlots.Count == 0)
+        if (Options.Instance.Equipment.Slots.Count == 0)
         {
             throw new Exception("What the fuck is going on!?!?!?!?!?!");
         }
@@ -260,19 +321,19 @@ public partial class Entity : IEntity
 
     IReadOnlyList<IStatus> IEntity.Status => Status;
 
-    public Pointf Origin => LatestMap == default ? Pointf.Empty : mOrigin;
+    public Vector2 Origin => LatestMap == default ? Vector2.Zero : mOrigin;
 
-    protected virtual Pointf CenterOffset => (Texture == default) ? Pointf.Empty : (Pointf.UnitY * Texture.Center.Y / Options.Instance.Sprites.Directions);
+    protected virtual Vector2 CenterOffset => (Texture == default) ? Vector2.Zero : (Vector2.UnitY * Texture.Center.Y / Options.Instance.Sprites.Directions);
 
-    public Pointf Center => Origin - CenterOffset;
+    public Vector2 Center => Origin - CenterOffset;
 
-    public Direction Dir
+    public Direction DirectionFacing
     {
-        get => mDir;
-        set => mDir = (Direction)((int)(value + Options.Instance.MapOpts.MovementDirections) % Options.Instance.MapOpts.MovementDirections);
+        get => _directionFacing;
+        set => _directionFacing = (Direction)((int)(value + Options.Instance.Map.MovementDirections) % Options.Instance.Map.MovementDirections);
     }
 
-    private Direction mLastDirection = Direction.Down;
+    private Direction _lastDirection = Direction.Down;
 
     public virtual string TransformedSprite
     {
@@ -341,10 +402,8 @@ public partial class Entity : IEntity
         Color = packet.Color;
         Face = packet.Face;
         Level = packet.Level;
-        X = packet.X;
-        Y = packet.Y;
-        Z = packet.Z;
-        Dir = (Direction)packet.Dir;
+        Position = packet.Position;
+        DirectionFacing = (Direction)packet.Dir;
         Passable = packet.Passable;
         HideName = packet.HideName;
         IsHidden = packet.HideEntity;
@@ -353,17 +412,17 @@ public partial class Entity : IEntity
         FooterLabel = new Label(packet.FooterLabel.Label, packet.FooterLabel.Color);
 
         var animsToClear = new List<Animation>();
-        var animsToAdd = new List<AnimationBase>();
+        var animsToAdd = new List<AnimationDescriptor>();
         for (var i = 0; i < packet.Animations.Length; i++)
         {
-            var anim = AnimationBase.Get(packet.Animations[i]);
+            var anim = AnimationDescriptor.Get(packet.Animations[i]);
             if (anim != null)
             {
                 animsToAdd.Add(anim);
             }
         }
 
-        foreach (var anim in Animations)
+        foreach (var anim in _animations)
         {
             animsToClear.Add(anim);
             if (!anim.InfiniteLoop)
@@ -374,7 +433,7 @@ public partial class Entity : IEntity
             {
                 foreach (var addedAnim in animsToAdd)
                 {
-                    if (addedAnim.Id == anim?.MyBase?.Id)
+                    if (addedAnim.Id == anim?.Descriptor?.Id)
                     {
                         _ = animsToClear.Remove(anim);
                         _ = animsToAdd.Remove(addedAnim);
@@ -393,7 +452,7 @@ public partial class Entity : IEntity
             }
         }
 
-        ClearAnimations(animsToClear);
+        RemoveAnimations(animsToClear);
         AddAnimations(animsToAdd);
 
         Vital = packet.Vital;
@@ -404,7 +463,7 @@ public partial class Entity : IEntity
 
         if (packet.StatusEffects == null)
         {
-            Log.Warn($"'{nameof(packet)}.{nameof(packet.StatusEffects)}' is null.");
+            ApplicationContext.Context.Value?.Logger.LogWarning($"'{nameof(packet)}.{nameof(packet.StatusEffects)}' is null.");
         }
         else
         {
@@ -431,33 +490,40 @@ public partial class Entity : IEntity
         //Status effects box update
         if (Globals.Me == null)
         {
-            Log.Warn($"'{nameof(Globals.Me)}' is null.");
+            ApplicationContext.Context.Value?.Logger.LogWarning($"'{nameof(Globals.Me)}' is null.");
         }
         else
         {
             if (Id == Globals.Me.Id)
             {
-                if (Interface.Interface.GameUi == null)
-                {
-                    Log.Warn($"'{nameof(Interface.Interface.GameUi)}' is null.");
-                }
-                else
-                {
-                    if (Interface.Interface.GameUi.PlayerStatusWindow == null)
+                Interface.Interface.EnqueueInGame(
+                    gameInterface =>
                     {
-                        Log.Warn($"'{nameof(Interface.Interface.GameUi.PlayerStatusWindow)}' is null.");
-                    }
-                    else
-                    {
-                        Interface.Interface.GameUi.PlayerStatusWindow.ShouldUpdateStatuses = true;
-                    }
-                }
+                        if (gameInterface.PlayerStatusWindow == null)
+                        {
+                            ApplicationContext.Context.Value?.Logger.LogWarning(
+                                $"'{nameof(gameInterface.PlayerStatusWindow)}' is null."
+                            );
+                        }
+                        else
+                        {
+                            gameInterface.PlayerStatusWindow.ShouldUpdateStatuses = true;
+                        }
+                    },
+                    (entityId, entityName) => ApplicationContext.CurrentContext.Logger.LogWarning(
+                        "Tried to load entity {EntityId} ({EntityName}) from packet before in-game UI was ready",
+                        entityId,
+                        entityName
+                    ),
+                    packet.EntityId,
+                    packet.Name
+                );
             }
-            else if (Id != Guid.Empty && Id == Globals.Me.TargetIndex)
+            else if (Id != Guid.Empty && Id == Globals.Me.TargetId)
             {
                 if (Globals.Me.TargetBox == null)
                 {
-                    Log.Warn($"'{nameof(Globals.Me.TargetBox)}' is null.");
+                    ApplicationContext.Context.Value?.Logger.LogWarning($"'{nameof(Globals.Me.TargetBox)}' is null.");
                 }
                 else
                 {
@@ -467,11 +533,11 @@ public partial class Entity : IEntity
         }
     }
 
-    public void AddAnimations(List<AnimationBase> anims)
+    public void AddAnimations(List<AnimationDescriptor> animationDescriptors)
     {
-        foreach (var anim in anims)
+        foreach (var animationDescriptor in animationDescriptors)
         {
-            Animations.Add(new Animation(anim, true, false, -1, this));
+            TryAddAnimation(new Animation(animationDescriptor, true, false, -1, this));
         }
     }
 
@@ -503,23 +569,23 @@ public partial class Entity : IEntity
         return false;
     }
 
-    public void ClearAnimations(List<Animation>? anims)
+    public void ClearAnimations() => RemoveAnimations(_animations);
+
+    public void RemoveAnimations(IEnumerable<Animation> animations, bool dispose = true)
     {
-        anims ??= Animations;
-        if (anims.Count > 0)
+        var animationsToRemove = animations.ToArray();
+        foreach (var animation in animationsToRemove)
         {
-            for (var i = 0; i < anims.Count; i++)
+            if (dispose)
             {
-                anims[i].Dispose();
-                _ = Animations.Remove(anims[i]);
+                animation.Dispose();
             }
+
+            _ = TryRemoveAnimation(animation);
         }
     }
 
-    public virtual bool IsDisposed()
-    {
-        return mDisposed;
-    }
+    public bool IsDisposed => mDisposed;
 
     public virtual void Dispose()
     {
@@ -528,7 +594,7 @@ public partial class Entity : IEntity
             _ = RenderList.Remove(this);
         }
 
-        ClearAnimations(null);
+        ClearAnimations();
         GC.SuppressFinalize(this);
         mDisposed = true;
     }
@@ -537,14 +603,14 @@ public partial class Entity : IEntity
     public virtual float GetMovementTime()
     {
         var time = 1000f / (float)(1 + Math.Log(Stat[(int)Enums.Stat.Speed]));
-        if (Dir > Direction.Right)
+        if (DirectionFacing > Direction.Right)
         {
             time *= MathHelper.UnitDiagonalLength;
         }
 
         if (IsBlocking)
         {
-            time += time * Options.BlockingSlow;
+            time += time * Options.Instance.Combat.BlockingSlow;
         }
 
         return Math.Min(1000f, time);
@@ -592,7 +658,7 @@ public partial class Entity : IEntity
                 Dashing.Start(this);
                 OffsetX = 0;
                 OffsetY = 0;
-                DashTimer = Timing.Global.Milliseconds + Options.MaxDashSpeed;
+                DashTimer = Timing.Global.Milliseconds + Options.Instance.Combat.MaxDashSpeed;
             }
             else
             {
@@ -635,11 +701,11 @@ public partial class Entity : IEntity
         }
         else if (IsMoving)
         {
-            var displacementTime = ecTime * Options.TileHeight / GetMovementTime();
+            var displacementTime = ecTime * TileHeight / GetMovementTime();
 
-            PickLastDirection(Dir);
+            PickLastDirection(DirectionFacing);
 
-            switch (Dir)
+            switch (DirectionFacing)
             {
                 case Direction.Up:
                     OffsetY -= displacementTime;
@@ -745,11 +811,12 @@ public partial class Entity : IEntity
         }
 
         //Check to see if we should start or stop equipment animations
-        if (Equipment.Length == Options.EquipmentSlots.Count)
+        if (Equipment.Length == Options.Instance.Equipment.Slots.Count)
         {
-            for (var z = 0; z < Options.EquipmentSlots.Count; z++)
+            for (var z = 0; z < Options.Instance.Equipment.Slots.Count; z++)
             {
-                if (Equipment[z] != Guid.Empty && (this != Globals.Me || MyEquipment[z] < Options.MaxInvItems))
+                var equipmentAnimation = EquipmentAnimations[z];
+                if (Equipment[z] != Guid.Empty && (this != Globals.Me || MyEquipment[z] < Options.Instance.Player.MaxInventory))
                 {
                     var itemId = Guid.Empty;
                     if (this == Globals.Me)
@@ -765,47 +832,30 @@ public partial class Entity : IEntity
                         itemId = Equipment[z];
                     }
 
-                    var itm = ItemBase.Get(itemId);
-                    AnimationBase? anim = null;
-                    if (itm != null)
+                    if (ItemBase.TryGet(itemId, out var itemDescriptor) &&
+                        itemDescriptor.EquipmentAnimation is { } animationDescriptor)
                     {
-                        anim = itm.EquipmentAnimation;
-                    }
-
-                    if (anim != null)
-                    {
-                        if (EquipmentAnimations[z] != null &&
-                            (EquipmentAnimations[z]!.MyBase != anim || EquipmentAnimations[z]!.Disposed()))
+                        if (equipmentAnimation != null &&
+                            (equipmentAnimation.Descriptor != animationDescriptor || equipmentAnimation.IsDisposed))
                         {
-                            EquipmentAnimations[z]!.Dispose();
-                            _ = Animations.Remove(EquipmentAnimations[z]!);
+                            TryRemoveAnimation(equipmentAnimation, dispose: true);
                             EquipmentAnimations[z] = null;
                         }
 
-                        if (EquipmentAnimations[z] == null)
-                        {
-                            EquipmentAnimations[z] = new Animation(anim, true, true, -1, this);
-                            Animations.Add(EquipmentAnimations[z]!);
-                        }
+                        equipmentAnimation = new Animation(animationDescriptor, true, true, -1, this);
+                        EquipmentAnimations[z] = equipmentAnimation;
+                        _animations.Add(equipmentAnimation);
                     }
-                    else
+                    else if (equipmentAnimation != null)
                     {
-                        if (EquipmentAnimations[z] != null)
-                        {
-                            EquipmentAnimations[z]!.Dispose();
-                            _ = Animations.Remove(EquipmentAnimations[z]!);
-                            EquipmentAnimations[z] = null;
-                        }
-                    }
-                }
-                else
-                {
-                    if (EquipmentAnimations[z] != null)
-                    {
-                        EquipmentAnimations[z]!.Dispose();
-                        _ = Animations.Remove(EquipmentAnimations[z]!);
+                        TryRemoveAnimation(equipmentAnimation, dispose: true);
                         EquipmentAnimations[z] = null;
                     }
+                }
+                else if (equipmentAnimation != null)
+                {
+                    TryRemoveAnimation(equipmentAnimation, dispose: true);
+                    EquipmentAnimations[z] = null;
                 }
             }
         }
@@ -831,30 +881,30 @@ public partial class Entity : IEntity
 
         CalculateOrigin();
 
-        List<Animation>? animsToRemove = null;
-        foreach (var animInstance in Animations)
+        List<Animation>? disposedAnimations = null;
+        foreach (var animation in _animations)
         {
-            animInstance.Update();
+            animation.Update();
 
             //If disposed mark to be removed and continue onward
-            if (animInstance.Disposed())
+            if (animation.IsDisposed)
             {
-                animsToRemove ??= [];
-                animsToRemove.Add(animInstance);
+                disposedAnimations ??= [];
+                disposedAnimations.Add(animation);
                 continue;
             }
 
             if (IsStealthed || IsHidden)
             {
-                animInstance.Hide();
+                animation.Hide();
             }
             else
             {
-                animInstance.Show();
+                animation.Show();
             }
 
-            var animationDirection = animInstance.AutoRotate ? Dir : default;
-            animInstance.SetPosition(
+            var animationDirection = animation.AutoRotate ? DirectionFacing : default;
+            animation.SetPosition(
                 (int)Math.Ceiling(Center.X),
                 (int)Math.Ceiling(Center.Y),
                 X,
@@ -864,12 +914,9 @@ public partial class Entity : IEntity
             );
         }
 
-        if (animsToRemove != null)
+        if (disposedAnimations != null)
         {
-            foreach (var anim in animsToRemove)
-            {
-                _ = Animations.Remove(anim);
-            }
+            RemoveAnimations(disposedAnimations);
         }
 
         mLastUpdate = Timing.Global.Milliseconds;
@@ -877,6 +924,79 @@ public partial class Entity : IEntity
         UpdateSpriteAnimation();
 
         return true;
+    }
+
+    public bool TryAddAnimation(Animation animation, AnimationSource animationSource = default)
+    {
+        if (animationSource != default)
+        {
+            if (_animationsBySource.TryGetValue(animationSource, out var existingAnimation))
+            {
+                if (!TryRemoveAnimation(existingAnimation, animationSource))
+                {
+                    return false;
+                }
+            }
+        }
+
+        _animationsBySource[animationSource] = animation;
+        _animations.Add(animation);
+        return true;
+    }
+
+    public bool TryRemoveAnimation(AnimationSource animationSource, bool dispose = false) => TryRemoveAnimation(
+        animationSource: animationSource,
+        dispose: dispose,
+        animation: out _
+    );
+
+    public bool TryRemoveAnimation(AnimationSource animationSource, [NotNullWhen(true)] out Animation? animation) =>
+        TryRemoveAnimation(animationSource: animationSource, dispose: false, animation: out animation);
+
+    public bool TryRemoveAnimation(
+        AnimationSource animationSource,
+        bool dispose,
+        [NotNullWhen(true)] out Animation? animation
+    )
+    {
+        if (!_animationsBySource.Remove(animationSource, out animation))
+        {
+            return false;
+        }
+
+        _animations.Remove(animation);
+
+        if (dispose)
+        {
+            animation.Dispose();
+        }
+
+        return true;
+    }
+
+    public bool RemoveAnimationIfExists(AnimationSource animationSource, bool dispose = false)
+    {
+        return !_animationsBySource.ContainsKey(animationSource) ||
+               TryRemoveAnimation(animationSource: animationSource, dispose: dispose);
+    }
+
+    public bool TryRemoveAnimation(Animation animation, bool dispose = false) => TryRemoveAnimation(
+        animation: animation,
+        animationSource: animation.Source,
+        dispose: dispose
+    );
+
+    public bool TryRemoveAnimation(Animation animation, AnimationSource animationSource, bool dispose = false)
+    {
+        var removedFromSourceLookup = animationSource != default && _animationsBySource.Remove(animationSource);
+        var removedFromList = _animations.Remove(animation);
+
+        if (dispose)
+        {
+            animation.Dispose();
+        }
+
+        return removedFromList || removedFromSourceLookup;
     }
 
     public virtual int CalculateAttackTime()
@@ -888,10 +1008,10 @@ public partial class Entity : IEntity
         }
 
         //Otherwise return the legacy attack speed calculation
-        return (int)(Options.MaxAttackRate +
-                      (Options.MinAttackRate - Options.MaxAttackRate) *
-                      (((float)Options.MaxStatValue - Stat[(int)Enums.Stat.Speed]) /
-                       Options.MaxStatValue));
+        return (int)(Options.Instance.Combat.MaxAttackRate +
+                     (Options.Instance.Combat.MinAttackRate - Options.Instance.Combat.MaxAttackRate) *
+                     (((float)Options.Instance.Player.MaxStat - Stat[(int)Enums.Stat.Speed]) /
+                      Options.Instance.Player.MaxStat));
     }
 
     /// <summary>
@@ -1012,18 +1132,18 @@ public partial class Entity : IEntity
 
                 if (y == gridY - 1)
                 {
-                    entityY = Options.MapHeight + Y;
+                    entityY = MapHeight + Y;
                 }
                 else if (y == gridY)
                 {
-                    entityY = Options.MapHeight * 2 + Y;
+                    entityY = MapHeight * 2 + Y;
                 }
                 else
                 {
-                    entityY = Options.MapHeight * 3 + Y;
+                    entityY = MapHeight * 3 + Y;
                 }
 
-                entityY = (int)Math.Floor(entityY + OffsetY / Options.TileHeight);
+                entityY = (int)Math.Floor(entityY + OffsetY / TileHeight);
 
                 var renderingEntities = Graphics.RenderingEntities;
                 if (priority >= renderingEntities.GetLength(0) || entityY >= renderingEntities.GetLength(1))
@@ -1050,8 +1170,8 @@ public partial class Entity : IEntity
         }
 
         WorldPos.Reset();
-        var map = Maps.MapInstance.Get(MapId);
-        if (map == null || !Globals.GridMaps.Contains(MapId))
+
+        if (!Globals.GridMaps.ContainsKey(MapId) || !Maps.MapInstance.TryGet(MapId, out var map))
         {
             return;
         }
@@ -1107,20 +1227,20 @@ public partial class Entity : IEntity
         {
             // We don't have a texture to render, but we still want this to be targetable.
             WorldPos = new FloatRect(
-                map.X + X * Options.TileWidth + OffsetX,
-                map.Y + Y * Options.TileHeight + OffsetY,
-                Options.TileWidth,
-                Options.TileHeight);
+                map.X + X * TileWidth + OffsetX,
+                map.Y + Y * TileHeight + OffsetY,
+                TileWidth,
+                TileHeight);
             return;
         }
 
-        var spriteRow = PickSpriteRow(Dir);
+        var spriteRow = PickSpriteRow(DirectionFacing);
 
         var frameWidth = texture.Width / SpriteFrames;
         var frameHeight = texture.Height / Options.Instance.Sprites.Directions;
 
         var frame = SpriteFrame;
-        if (Options.AnimatedSprites.Contains(sprite.ToLower()))
+        if (Options.Instance.AnimatedSprites.Contains(sprite.ToLower()))
         {
             frame = AnimationFrame;
         }
@@ -1140,10 +1260,10 @@ public partial class Entity : IEntity
         WorldPos = destRectangle;
 
         //Order the layers of paperdolls and sprites
-        for (var z = 0; z < Options.PaperdollOrder[(int)mLastDirection].Count; z++)
+        for (var z = 0; z < Options.Instance.Equipment.Paperdoll.Directions[(int)_lastDirection].Count; z++)
         {
-            var paperdoll = Options.PaperdollOrder[(int)mLastDirection][z];
-            var equipSlot = Options.EquipmentSlots.IndexOf(paperdoll);
+            var paperdoll = Options.Instance.Equipment.Paperdoll.Directions[(int)_lastDirection][z];
+            var equipSlot = Options.Instance.Equipment.Slots.IndexOf(paperdoll);
 
             //Check for player
             if (string.Equals("Player", paperdoll, StringComparison.Ordinal))
@@ -1153,10 +1273,10 @@ public partial class Entity : IEntity
             else if (equipSlot > -1)
             {
                 //Don't render the paperdolls if they have transformed.
-                if (sprite == Sprite && Equipment.Length == Options.EquipmentSlots.Count)
+                if (sprite == Sprite && Equipment.Length == Options.Instance.Equipment.Slots.Count)
                 {
                     if (Equipment[equipSlot] != Guid.Empty && this != Globals.Me ||
-                        MyEquipment[equipSlot] < Options.MaxInvItems)
+                        MyEquipment[equipSlot] < Options.Instance.Player.MaxInventory)
                     {
                         var itemId = Guid.Empty;
                         if (this == Globals.Me)
@@ -1222,23 +1342,23 @@ public partial class Entity : IEntity
         switch (direction)
         {
             case Direction.Left:
-            case Direction.DownLeft when mLastDirection == Direction.Left:
-            case Direction.UpLeft when mLastDirection == Direction.Left:
+            case Direction.DownLeft when _lastDirection == Direction.Left:
+            case Direction.UpLeft when _lastDirection == Direction.Left:
                 return 1;
 
             case Direction.Right:
-            case Direction.DownRight when mLastDirection == Direction.Right:
-            case Direction.UpRight when mLastDirection == Direction.Right:
+            case Direction.DownRight when _lastDirection == Direction.Right:
+            case Direction.UpRight when _lastDirection == Direction.Right:
                 return 2;
 
             case Direction.Up:
-            case Direction.UpLeft when mLastDirection != Direction.Left:
-            case Direction.UpRight when mLastDirection != Direction.Right:
+            case Direction.UpLeft when _lastDirection != Direction.Left:
+            case Direction.UpRight when _lastDirection != Direction.Right:
                 return 3;
 
             case Direction.Down:
-            case Direction.DownLeft when mLastDirection != Direction.Left:
-            case Direction.DownRight when mLastDirection != Direction.Right:
+            case Direction.DownLeft when _lastDirection != Direction.Left:
+            case Direction.DownRight when _lastDirection != Direction.Right:
             default:
                 return 0;
         }
@@ -1249,28 +1369,28 @@ public partial class Entity : IEntity
         switch (direction)
         {
             case Direction.Left:
-            case Direction.DownLeft when mLastDirection == Direction.Left:
-            case Direction.UpLeft when mLastDirection == Direction.Left:
-                mLastDirection = Direction.Left;
+            case Direction.DownLeft when _lastDirection == Direction.Left:
+            case Direction.UpLeft when _lastDirection == Direction.Left:
+                _lastDirection = Direction.Left;
                 break;
 
             case Direction.Right:
-            case Direction.DownRight when mLastDirection == Direction.Right:
-            case Direction.UpRight when mLastDirection == Direction.Right:
-                mLastDirection = Direction.Right;
+            case Direction.DownRight when _lastDirection == Direction.Right:
+            case Direction.UpRight when _lastDirection == Direction.Right:
+                _lastDirection = Direction.Right;
                 break;
 
             case Direction.Up:
-            case Direction.UpLeft when mLastDirection != Direction.Left:
-            case Direction.UpRight when mLastDirection != Direction.Right:
-                mLastDirection = Direction.Up;
+            case Direction.UpLeft when _lastDirection != Direction.Left:
+            case Direction.UpRight when _lastDirection != Direction.Right:
+                _lastDirection = Direction.Up;
                 break;
 
             case Direction.Down:
-            case Direction.DownLeft when mLastDirection != Direction.Left:
-            case Direction.DownRight when mLastDirection != Direction.Right:
+            case Direction.DownLeft when _lastDirection != Direction.Left:
+            case Direction.DownRight when _lastDirection != Direction.Right:
             default:
-                mLastDirection = Direction.Down;
+                _lastDirection = Direction.Down;
                 break;
         }
     }
@@ -1312,7 +1432,7 @@ public partial class Entity : IEntity
         }
 
         // Paperdoll textures and Frames.
-        GameTexture? paperdollTex = null;
+        IGameTexture? paperdollTex = null;
         var spriteFrames = SpriteFrames;
 
         // Extract filename without it's extension.
@@ -1362,7 +1482,7 @@ public partial class Entity : IEntity
         }
 
         // Calculate: direction, frame width and frame height.
-        var spriteRow = PickSpriteRow(Dir);
+        var spriteRow = PickSpriteRow(DirectionFacing);
         var frameWidth = paperdollTex.Width / spriteFrames;
         var frameHeight = paperdollTex.Height / Options.Instance.Sprites.Directions;
 
@@ -1387,15 +1507,20 @@ public partial class Entity : IEntity
 
     protected virtual void CalculateOrigin()
     {
+        if (LatestMap?.IsDisposed ?? false)
+        {
+            LatestMap = Maps.MapInstance.TryGet(MapId, out MapInstance updatedInstance) ? updatedInstance : null;
+        }
+
         if (LatestMap == default)
         {
             mOrigin = default;
             return;
         }
 
-        mOrigin = new Pointf(
-            LatestMap.X + X * Options.TileWidth + OffsetX + Options.TileWidth / 2,
-            LatestMap.Y + Y * Options.TileHeight + OffsetY + Options.TileHeight
+        mOrigin = new Vector2(
+            LatestMap.X + X * TileWidth + OffsetX + TileWidth / 2,
+            LatestMap.Y + Y * TileHeight + OffsetY + TileHeight
         );
     }
 
@@ -1457,7 +1582,7 @@ public partial class Entity : IEntity
             textColor = labelColor;
         }
 
-        var textSize = Graphics.Renderer.MeasureText(label, Graphics.EntityNameFont, 1);
+        var textSize = Graphics.Renderer.MeasureText(label, Graphics.EntityNameFont, Graphics.EntityNameFontSize, 1);
 
         var x = (int)Math.Ceiling(Origin.X);
         var y = position == 0 ? GetLabelLocation(LabelType.Header) : GetLabelLocation(LabelType.Footer);
@@ -1465,14 +1590,24 @@ public partial class Entity : IEntity
         if (backgroundColor != Color.Transparent)
         {
             Graphics.DrawGameTexture(
-                Graphics.Renderer.GetWhiteTexture(), new FloatRect(0, 0, 1, 1),
-                new FloatRect(x - textSize.X / 2f - 4, y, textSize.X + 8, textSize.Y), backgroundColor
+                Graphics.Renderer.WhitePixel,
+                new FloatRect(0, 0, 1, 1),
+                new FloatRect(x - textSize.X / 2f - 4, y, textSize.X + 8, textSize.Y),
+                backgroundColor
             );
         }
 
         Graphics.Renderer.DrawString(
-            label, Graphics.EntityNameFont, x - (int)Math.Ceiling(textSize.X / 2f), (int)y, 1,
-            Color.FromArgb(textColor.ToArgb()), true, null, Color.FromArgb(borderColor.ToArgb())
+            label,
+            Graphics.EntityNameFont,
+            Graphics.EntityNameFontSize,
+            x - (int)Math.Ceiling(textSize.X / 2f),
+            (int)y,
+            1,
+            Color.FromArgb(textColor.ToArgb()),
+            true,
+            null,
+            Color.FromArgb(borderColor.ToArgb())
         );
     }
 
@@ -1515,12 +1650,13 @@ public partial class Entity : IEntity
         }
 
         var name = Name;
-        if ((this is Player && Options.Player.ShowLevelByName) || (Type == EntityType.GlobalEntity && Options.Npc.ShowLevelByName))
+        if ((this is Player && Options.Instance.Player.ShowLevelByName) ||
+            (Type == EntityType.GlobalEntity && Options.Instance.Npc.ShowLevelByName))
         {
             name = Strings.GameWindow.EntityNameAndLevel.ToString(Name, Level);
         }
 
-        var textSize = Graphics.Renderer.MeasureText(name, Graphics.EntityNameFont, 1);
+        var textSize = Graphics.Renderer.MeasureText(name, Graphics.EntityNameFont, Graphics.EntityNameFontSize, 1);
 
         var x = (int)Math.Ceiling(Origin.X);
         var y = GetLabelLocation(LabelType.Name);
@@ -1528,14 +1664,24 @@ public partial class Entity : IEntity
         if (backgroundColor != Color.Transparent)
         {
             Graphics.DrawGameTexture(
-                Graphics.Renderer.GetWhiteTexture(), new FloatRect(0, 0, 1, 1),
-                new FloatRect(x - textSize.X / 2f - 4, y, textSize.X + 8, textSize.Y), backgroundColor
+                Graphics.Renderer.WhitePixel,
+                new FloatRect(0, 0, 1, 1),
+                new FloatRect(x - textSize.X / 2f - 4, y, textSize.X + 8, textSize.Y),
+                backgroundColor
             );
         }
 
         Graphics.Renderer.DrawString(
-            name, Graphics.EntityNameFont, x - (int)Math.Ceiling(textSize.X / 2f), (int)y, 1,
-            textColor, true, null, Color.FromArgb(borderColor.ToArgb())
+            name,
+            Graphics.EntityNameFont,
+            Graphics.EntityNameFontSize,
+            x - (int)Math.Ceiling(textSize.X / 2f),
+            (int)y,
+            1,
+            textColor,
+            true,
+            null,
+            Color.FromArgb(borderColor.ToArgb())
         );
     }
 
@@ -1564,7 +1710,12 @@ public partial class Entity : IEntity
                     break;
                 }
 
-                var headerSize = Graphics.Renderer.MeasureText(HeaderLabel.Text, Graphics.EntityNameFont, 1);
+                var headerSize = Graphics.Renderer.MeasureText(
+                    HeaderLabel.Text,
+                    Graphics.EntityNameFont,
+                    Graphics.EntityNameFontSize,
+                    1
+                );
                 y -= headerSize.Y + 2;
                 break;
 
@@ -1574,13 +1725,23 @@ public partial class Entity : IEntity
                     break;
                 }
 
-                var footerSize = Graphics.Renderer.MeasureText(FooterLabel.Text, Graphics.EntityNameFont, 1);
+                var footerSize = Graphics.Renderer.MeasureText(
+                    FooterLabel.Text,
+                    Graphics.EntityNameFont,
+                    Graphics.EntityNameFontSize,
+                    1
+                );
                 y -= footerSize.Y - 6;
                 break;
 
             case LabelType.Name:
                 y = GetLabelLocation(LabelType.Footer);
-                var nameSize = Graphics.Renderer.MeasureText(Name, Graphics.EntityNameFont, 1);
+                var nameSize = Graphics.Renderer.MeasureText(
+                    Name,
+                    Graphics.EntityNameFont,
+                    Graphics.EntityNameFontSize,
+                    1
+                );
                 y -= nameSize.Y + (string.IsNullOrEmpty(FooterLabel.Text) ? -6 : 2);
                 break;
 
@@ -1606,7 +1767,12 @@ public partial class Entity : IEntity
                         break;
                     }
 
-                    var guildSize = Graphics.Renderer.MeasureText(player.Guild, Graphics.EntityNameFont, 1);
+                    var guildSize = Graphics.Renderer.MeasureText(
+                        player.Guild,
+                        Graphics.EntityNameFont,
+                        Graphics.EntityNameFontSize,
+                        1
+                    );
                     y -= 2 + guildSize.Y;
                 }
 
@@ -1616,19 +1782,8 @@ public partial class Entity : IEntity
         return y;
     }
 
-    public long GetShieldSize()
-    {
-        long shieldSize = 0;
-        foreach (var status in Status)
-        {
-            if (status.Type == SpellEffect.Shield)
-            {
-                shieldSize += status.Shield[(int)Enums.Vital.Health];
-            }
-        }
-
-        return shieldSize;
-    }
+    public long ShieldSize =>
+        Status.Sum(status => status.Type == SpellEffect.Shield ? status.Shield[(int)Enums.Vital.Health] : 0);
 
     protected virtual bool ShouldDrawHpBar
     {
@@ -1644,7 +1799,7 @@ public partial class Entity : IEntity
                 return true;
             }
 
-            if (GetShieldSize() > 0)
+            if (ShieldSize > 0)
             {
                 return true;
             }
@@ -1666,7 +1821,7 @@ public partial class Entity : IEntity
         }
     }
 
-    public GameTexture GetBoundingHpBarTexture()
+    public IGameTexture GetBoundingHpBarTexture()
     {
         return GameTexture.GetBoundingTexture(
             BoundsComparison.Height,
@@ -1699,7 +1854,7 @@ public partial class Entity : IEntity
 
         // Check for shields
         var maxVital = MaxVital[(int)Enums.Vital.Health];
-        var shieldSize = GetShieldSize();
+        var shieldSize = ShieldSize;
 
         if (shieldSize + Vital[(int)Enums.Vital.Health] > maxVital)
         {
@@ -1931,15 +2086,15 @@ public partial class Entity : IEntity
                 SpriteAnimation = SpriteAnimations.Attack;
             }
 
-            if (Options.WeaponIndex > -1 && Options.WeaponIndex < Equipment.Length)
+            if (Options.Instance.Equipment.WeaponSlot > -1 && Options.Instance.Equipment.WeaponSlot < Equipment.Length)
             {
-                if (Equipment[Options.WeaponIndex] != Guid.Empty && this != Globals.Me ||
-                    MyEquipment[Options.WeaponIndex] < Options.MaxInvItems)
+                if (Equipment[Options.Instance.Equipment.WeaponSlot] != Guid.Empty && this != Globals.Me ||
+                    MyEquipment[Options.Instance.Equipment.WeaponSlot] < Options.Instance.Player.MaxInventory)
                 {
                     var itemId = Guid.Empty;
                     if (this == Globals.Me)
                     {
-                        var slot = MyEquipment[Options.WeaponIndex];
+                        var slot = MyEquipment[Options.Instance.Equipment.WeaponSlot];
                         if (slot > -1)
                         {
                             itemId = Inventory[slot].ItemId;
@@ -1947,7 +2102,7 @@ public partial class Entity : IEntity
                     }
                     else
                     {
-                        itemId = Equipment[Options.WeaponIndex];
+                        itemId = Equipment[Options.Instance.Equipment.WeaponSlot];
                     }
 
                     var item = ItemBase.Get(itemId);
@@ -2058,7 +2213,7 @@ public partial class Entity : IEntity
     {
         SpriteAnimations spriteAnimationOveride = spriteAnimation;
         var textureOverride = string.Empty;
-        var weaponId = Equipment[Options.WeaponIndex];
+        var weaponId = Equipment[Options.Instance.Equipment.WeaponSlot];
 
         switch (spriteAnimation)
         {
@@ -2077,7 +2232,7 @@ public partial class Entity : IEntity
                 break;
 
             case SpriteAnimations.Shoot:
-                if (Equipment.Length <= Options.WeaponIndex)
+                if (Equipment.Length <= Options.Instance.Equipment.WeaponSlot)
                 {
                     break;
                 }
@@ -2108,7 +2263,7 @@ public partial class Entity : IEntity
                 break;
 
             case SpriteAnimations.Weapon:
-                if (Equipment.Length <= Options.WeaponIndex)
+                if (Equipment.Length <= Options.Instance.Equipment.WeaponSlot)
                 {
                     break;
                 }
@@ -2135,7 +2290,7 @@ public partial class Entity : IEntity
         }
     }
 
-    protected virtual bool TryGetAnimationTexture(string textureName, SpriteAnimations spriteAnimation, string textureOverride, out GameTexture texture)
+    protected virtual bool TryGetAnimationTexture(string textureName, SpriteAnimations spriteAnimation, string textureOverride, out IGameTexture texture)
     {
         var baseFilename = Path.GetFileNameWithoutExtension(textureName);
         var extension = Path.GetExtension(textureName);
@@ -2161,7 +2316,7 @@ public partial class Entity : IEntity
     {
         if (en == null)
         {
-            return Dir;
+            return DirectionFacing;
         }
 
         var originMapController = MapInstance;
@@ -2169,13 +2324,13 @@ public partial class Entity : IEntity
 
         if (originMapController == null || targetMapController == null)
         {
-            return Dir;
+            return DirectionFacing;
         }
 
-        var originY = Y + originMapController.GridY * Options.MapHeight;
-        var originX = X + originMapController.GridX * Options.MapWidth;
-        var targetY = en.Y + targetMapController.GridY * Options.MapHeight;
-        var targetX = en.X + targetMapController.GridX * Options.MapWidth;
+        var originY = Y + originMapController.GridY * MapHeight;
+        var originX = X + originMapController.GridX * MapWidth;
+        var targetY = en.Y + targetMapController.GridY * MapHeight;
+        var targetX = en.X + targetMapController.GridX * MapWidth;
 
         // Calculate the offset between origin and target along both of their axis.
         var yDiff = originY - targetY;
@@ -2188,7 +2343,7 @@ public partial class Entity : IEntity
         }
 
         // If X offset is 0 or If diagonal movement is disabled, direction is determined by Y offset.
-        if (xDiff == 0 || !Options.Instance.MapOpts.EnableDiagonalMovement)
+        if (xDiff == 0 || !Options.Instance.Map.EnableDiagonalMovement)
         {
             return yDiff > 0 ? Direction.Up : Direction.Down;
         }
@@ -2243,25 +2398,25 @@ public partial class Entity : IEntity
             if (delta.X < 0)
             {
                 gridX--;
-                tmpX = Options.MapWidth - delta.X * -1;
+                tmpX = MapWidth - delta.X * -1;
             }
 
             if (delta.Y < 0)
             {
                 gridY--;
-                tmpY = Options.MapHeight - delta.Y * -1;
+                tmpY = MapHeight - delta.Y * -1;
             }
 
-            if (delta.X > Options.MapWidth - 1)
+            if (delta.X > MapWidth - 1)
             {
                 gridX++;
-                tmpX = delta.X - Options.MapWidth;
+                tmpX = delta.X - MapWidth;
             }
 
-            if (delta.Y > Options.MapHeight - 1)
+            if (delta.Y > MapHeight - 1)
             {
                 gridY++;
-                tmpY = delta.Y - Options.MapHeight;
+                tmpY = delta.Y - MapHeight;
             }
 
             if (Globals.MapGrid == default || gridX < 0 || gridY < 0 || gridX >= Globals.MapGridWidth || gridY >= Globals.MapGridHeight)

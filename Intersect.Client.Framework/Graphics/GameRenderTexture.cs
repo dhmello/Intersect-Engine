@@ -1,34 +1,17 @@
-﻿namespace Intersect.Client.Framework.Graphics;
+namespace Intersect.Client.Framework.Graphics;
 
-
-public abstract partial class GameRenderTexture : GameTexture
+public abstract partial class
+    GameRenderTexture<TPlatformRenderTexture, TPlatformRenderer> :
+    GameTexture<TPlatformRenderTexture, TPlatformRenderer>,
+    IGameRenderTexture where TPlatformRenderTexture : class, IDisposable where TPlatformRenderer : GameRenderer
 {
-    private static int _nextId;
-
-    private readonly int _id;
-
-    private bool _disposed;
-
-    protected readonly int _width;
-    protected readonly int _height;
-
-    private GameRenderTexture(int width, int height, int id) : base($"RenderTexture#{id}")
-    {
-        _id = id;
-        RenderTextureCount++;
-        _width = width;
-        _height = height;
-    }
-
-    protected GameRenderTexture(int width, int height) : this(width, height, ++_nextId)
+    protected GameRenderTexture(TPlatformRenderer renderer, TPlatformRenderTexture platformRenderTexture) : base(
+        renderer,
+        name: null,
+        platformTexture: platformRenderTexture
+    )
     {
     }
-
-    public static int RenderTextureCount { get; set; }
-
-    public override int Width => _width;
-
-    public override int Height => _height;
 
     /// <summary>
     ///     Called before a frame is drawn, if the renderer must re-created or anything it does it here.
@@ -41,24 +24,13 @@ public abstract partial class GameRenderTexture : GameTexture
     /// </summary>
     public abstract void End();
 
-    public bool SetActive(bool active)
+    private protected override void InternalReload()
     {
-        return true;
+        // Render targets should not be reloaded
     }
 
     /// <summary>
     ///     Clears everything off the render target with a specified color.
     /// </summary>
     public abstract void Clear(Color color);
-
-    public abstract override object? GetTexture();
-
-    public virtual void Dispose()
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        _disposed = true;
-        RenderTextureCount--;
-    }
-
 }

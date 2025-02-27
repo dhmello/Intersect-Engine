@@ -10,9 +10,12 @@ using Intersect.Client.Interface.Game.Hotbar;
 using Intersect.Client.Interface.Game.Inventory;
 using Intersect.Client.Interface.Game.Shop;
 using Intersect.Client.Interface.Game.Trades;
+using Intersect.Client.Interface.Shared;
 using Intersect.Client.Networking;
+using Intersect.Core;
 using Intersect.Enums;
 using Intersect.GameObjects;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Client.Interface.Game;
 
@@ -37,9 +40,7 @@ public partial class GameInterface : MutableInterface
 
     private Chatbox mChatBox;
 
-    private CraftingWindow mCraftingWindow;
-
-    private EventWindow mEventWindow;
+    private CraftingWindow? mCraftingWindow;
 
     private PictureWindow mPictureWindow;
 
@@ -48,6 +49,8 @@ public partial class GameInterface : MutableInterface
     private ShopWindow mShopWindow;
 
     private MapItemWindow mMapItemWindow;
+
+    private SettingsWindow? _settingsWindow;
 
     private bool mShouldCloseBag;
 
@@ -89,33 +92,47 @@ public partial class GameInterface : MutableInterface
 
     public PlayerStatusWindow PlayerStatusWindow;
 
+    private SettingsWindow GetOrCreateSettingsWindow()
+    {
+        _settingsWindow ??= new SettingsWindow(GameCanvas)
+        {
+            IsVisibleInTree = false,
+        };
+
+        return _settingsWindow;
+    }
+
     public GameInterface(Canvas canvas) : base(canvas)
     {
         GameCanvas = canvas;
-        EscapeMenu = new EscapeMenu(GameCanvas) {IsHidden = true};
-        SimplifiedEscapeMenu = new SimplifiedEscapeMenu(GameCanvas) {IsHidden = true};
-        TargetContextMenu = new TargetContextMenu(GameCanvas) {IsHidden = true};
-        AnnouncementWindow = new AnnouncementWindow(GameCanvas) { IsHidden = true };
 
         InitGameGui();
     }
 
     public Canvas GameCanvas { get; }
 
-    public EscapeMenu EscapeMenu { get; }
+    private AnnouncementWindow? _announcementWindow;
+    private EscapeMenu? _escapeMenu;
+    private SimplifiedEscapeMenu? _simplifiedEscapeMenu;
+    private TargetContextMenu? _targetContextMenu;
 
-    public SimplifiedEscapeMenu SimplifiedEscapeMenu { get; }
+    public EscapeMenu EscapeMenu => _escapeMenu ??= new EscapeMenu(GameCanvas, GetOrCreateSettingsWindow)
+    {
+        IsHidden = true,
+    };
 
-    public TargetContextMenu TargetContextMenu { get; }
+    public SimplifiedEscapeMenu SimplifiedEscapeMenu => _simplifiedEscapeMenu ??= new SimplifiedEscapeMenu(GameCanvas, GetOrCreateSettingsWindow) {IsHidden = true};
 
-    public AnnouncementWindow AnnouncementWindow { get; }
+    public TargetContextMenu TargetContextMenu => _targetContextMenu ??= new TargetContextMenu(GameCanvas) {IsHidden = true};
 
-    public Menu GameMenu { get; private set; }
+    public AnnouncementWindow AnnouncementWindow => _announcementWindow ??= new AnnouncementWindow(GameCanvas) { IsHidden = true };
+
+    public MenuContainer GameMenu { get; private set; }
 
     public void InitGameGui()
     {
         mChatBox = new Chatbox(GameCanvas, this);
-        GameMenu = new Menu(GameCanvas);
+        GameMenu = new MenuContainer(GameCanvas);
         Hotbar = new HotBarWindow(GameCanvas);
         PlayerBox = new EntityBox(GameCanvas, EntityType.Player, Globals.Me, true);
         PlayerBox.SetEntity(Globals.Me);
@@ -125,7 +142,6 @@ public partial class GameInterface : MutableInterface
             mPictureWindow = new PictureWindow(GameCanvas);
         }
 
-        mEventWindow = new EventWindow(GameCanvas);
         mQuestOfferWindow = new QuestOfferWindow(GameCanvas);
         mMapItemWindow = new MapItemWindow(GameCanvas);
         mBankWindow = new BankWindow(GameCanvas);
@@ -165,6 +181,8 @@ public partial class GameInterface : MutableInterface
         if (mAdminWindow == null)
         {
             mAdminWindow ??= new AdminWindow(GameCanvas);
+            mAdminWindow.X = GameCanvas.Width - mAdminWindow.OuterWidth;
+            mAdminWindow.Y = (GameCanvas.Height - mAdminWindow.OuterHeight) / 2;
         }
         else if (IsAdminWindowOpen)
         {
@@ -191,9 +209,7 @@ public partial class GameInterface : MutableInterface
 
     public void OpenShop()
     {
-        mShopWindow?.Close();
-
-        mShopWindow = new ShopWindow(GameCanvas);
+        mShopWindow = new ShopWindow(GameCanvas) { DeleteOnClose = true };
         mShouldOpenShop = false;
     }
 
@@ -298,16 +314,23 @@ public partial class GameInterface : MutableInterface
 
     public bool IsAdminWindowOpen => !mAdminWindow?.IsHidden ?? false;
 
-    public void AdminWindowSelectName(string name) => mAdminWindow?.SetName(name);
+    public void AdminWindowSelectName(string playerName)
+    {
+        if (mAdminWindow is not { } adminWindow)
+        {
+            return;
+        }
 
-    public void Update()
+        adminWindow.PlayerName = playerName;
+    }
+
+    public void Update(TimeSpan elapsed, TimeSpan total)
     {
         if (Globals.Me != null && PlayerBox?.MyEntity != Globals.Me)
         {
             PlayerBox?.SetEntity(Globals.Me);
         }
 
-        mChatBox?.Update();
         GameMenu?.Update(mShouldUpdateQuestLog);
         mShouldUpdateQuestLog = false;
         Hotbar?.Update();
@@ -318,14 +341,21 @@ public partial class GameInterface : MutableInterface
         AnnouncementWindow?.Update();
         mPictureWindow?.Update();
 
-        if (Globals.QuestOffers.Count > 0)
+        var questDescriptorId = Globals.QuestOffers.FirstOrDefault();
+        if (questDescriptorId == default)
         {
-            var quest = QuestBase.Get(Globals.QuestOffers[0]);
-            mQuestOfferWindow.Update(quest);
+            if (mQuestOfferWindow.IsVisible())
+            {
+                mQuestOfferWindow.Hide();
+            }
+        }
+        else if (QuestBase.TryGet(questDescriptorId, out var questDescriptor))
+        {
+            mQuestOfferWindow.Update(questDescriptor);
         }
         else
         {
-            mQuestOfferWindow.Hide();
+            ApplicationContext.CurrentContext.Logger.LogWarning("Failed to get quest {QuestId}", questDescriptorId);
         }
 
         if (Globals.Picture != null)
@@ -345,7 +375,7 @@ public partial class GameInterface : MutableInterface
             }
         }
 
-        mEventWindow?.Update();
+        EventWindow.ShowOrUpdateDialog(GameCanvas);
 
         //Admin window update
         if (mShouldOpenAdminWindow)
@@ -360,7 +390,7 @@ public partial class GameInterface : MutableInterface
             GameMenu.OpenInventory();
         }
 
-        if (mShopWindow != null && (!mShopWindow.IsVisible() || mShouldCloseShop))
+        if (mShopWindow != null && (!mShopWindow.IsVisibleInTree || mShouldCloseShop))
         {
             CloseShop();
         }
@@ -413,13 +443,9 @@ public partial class GameInterface : MutableInterface
 
         if (mCraftingWindow != null)
         {
-            if (!mCraftingWindow.IsVisible() || mShouldCloseCraftingTable)
+            if (!mCraftingWindow.IsVisibleInTree || mShouldCloseCraftingTable)
             {
                 CloseCraftingTable();
-            }
-            else
-            {
-                mCraftingWindow.Update();
             }
         }
 
@@ -485,15 +511,15 @@ public partial class GameInterface : MutableInterface
         }
     }
 
-    public void Draw()
+    public void Draw(TimeSpan elapsed, TimeSpan total)
     {
-        GameCanvas.RenderCanvas();
+        GameCanvas.RenderCanvas(elapsed, total);
     }
 
     private void CloseShop()
     {
         Globals.GameShop = null;
-        mShopWindow?.Close();
+        mShopWindow?.Hide();
         mShopWindow = null;
         PacketSender.SendCloseShop();
     }
@@ -551,13 +577,13 @@ public partial class GameInterface : MutableInterface
             closedWindows = true;
         }
 
-        if (mCraftingWindow != null && mCraftingWindow.IsVisible() && !mCraftingWindow.IsCrafting)
+        if (mCraftingWindow is { IsVisibleInTree: true, IsCrafting: false })
         {
             CloseCraftingTable();
             closedWindows = true;
         }
 
-        if (mShopWindow != null && mShopWindow.IsVisible())
+        if (mShopWindow is { IsVisibleInTree: true })
         {
             CloseShop();
             closedWindows = true;
@@ -569,7 +595,7 @@ public partial class GameInterface : MutableInterface
             closedWindows = true;
         }
 
-        if (TargetContextMenu.IsVisible)
+        if (TargetContextMenu.IsVisibleInTree)
         {
             TargetContextMenu.ToggleHidden();
             closedWindows = true;

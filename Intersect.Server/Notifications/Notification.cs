@@ -1,7 +1,4 @@
-using System;
-using System.IO;
-using System.Net;
-using Intersect.Logging;
+using Intersect.Core;
 using Intersect.Server.Localization;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -31,7 +28,7 @@ namespace Intersect.Server.Notifications
         public bool Send()
         {
             //Check and see if smtp is even setup
-            if (Options.Smtp.IsValid())
+            if (Options.Instance.SmtpSettings.IsValid())
             {
                 //Make sure we have a body
                 if (!string.IsNullOrEmpty(Body))
@@ -39,13 +36,13 @@ namespace Intersect.Server.Notifications
                     try
                     {
                         //Send the email
-                        var fromAddress = new MailboxAddress(Options.Smtp.FromName, Options.Smtp.FromAddress);
+                        var fromAddress = new MailboxAddress(Options.Instance.SmtpSettings.FromName, Options.Instance.SmtpSettings.FromAddress);
                         var toAddress = new MailboxAddress(ToAddress, ToAddress);
 
                         using (var client = new SmtpClient())
                         {
-                            client.Connect(Options.Smtp.Host, Options.Smtp.Port, Options.Smtp.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto);
-                            client.Authenticate(Options.Smtp.Username, Options.Smtp.Password);
+                            client.Connect(Options.Instance.SmtpSettings.Host, Options.Instance.SmtpSettings.Port, Options.Instance.SmtpSettings.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto);
+                            client.Authenticate(Options.Instance.SmtpSettings.Username, Options.Instance.SmtpSettings.Password);
 
                             var message = new MimeMessage();
                             message.To.Add(toAddress);
@@ -71,7 +68,7 @@ namespace Intersect.Server.Notifications
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(
+                        ApplicationContext.Context.Value?.Logger.LogError(
                             "Failed to send email (Subject: " +
                             Subject +
                             ") to " +
@@ -85,7 +82,7 @@ namespace Intersect.Server.Notifications
                 }
                 else
                 {
-                    Log.Warn(
+                    ApplicationContext.Context.Value?.Logger.LogWarning(
                         "Failed to send email (Subject: " +
                         Subject +
                         ") to " +
@@ -97,7 +94,7 @@ namespace Intersect.Server.Notifications
             }
             else
             {
-                Log.Warn(
+                ApplicationContext.Context.Value?.Logger.LogWarning(
                     "Failed to send email (Subject: " + Subject + ") to " + ToAddress + ". Reason: SMTP not configured!"
                 );
                 return false;
@@ -125,7 +122,7 @@ namespace Intersect.Server.Notifications
             }
             else
             {
-                Log.Warn(
+                ApplicationContext.Context.Value?.Logger.LogWarning(
                     "Failed to load email template (Subject: " +
                     Subject +
                     ") for " +

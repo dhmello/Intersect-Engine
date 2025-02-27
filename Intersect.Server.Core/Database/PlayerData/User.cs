@@ -5,12 +5,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.Framework.Reflection;
-using Intersect.GameObjects;
-using Intersect.Logging;
-using Intersect.Reflection;
 using Intersect.Security;
 using Intersect.Server.Collections.Indexing;
 using Intersect.Server.Collections.Sorting;
@@ -25,6 +24,7 @@ using Intersect.Server.Localization;
 using Intersect.Server.Networking;
 using Intersect.Utilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using VariableValue = Intersect.Framework.Core.GameObjects.Variables.VariableValue;
 
@@ -181,7 +181,7 @@ public partial class User
             return true;
         }
 
-        var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == Id);
+        var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == Id);
         client?.LogAndDisconnect(default, nameof(TrySetPassword));
         return false;
     }
@@ -218,7 +218,7 @@ public partial class User
         }
         catch (Exception ex)
         {
-            Log.Error(ex, $"Failed to save user while adding character: {Name}");
+            ApplicationContext.Context.Value?.Logger.LogError(ex, $"Failed to save user while adding character: {Name}");
             ServerContext.DispatchUnhandledException(
                 new Exception("Failed to save user, shutting down to prevent rollbacks!")
             );
@@ -251,7 +251,7 @@ public partial class User
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to save user while deleting character: " + Name);
+            ApplicationContext.Context.Value?.Logger.LogError(ex, "Failed to save user while deleting character: " + Name);
             return false;
         }
     }
@@ -279,7 +279,7 @@ public partial class User
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to delete user: " + Name);
+            ApplicationContext.Context.Value?.Logger.LogError(ex, "Failed to delete user: " + Name);
             return false;
         }
     }
@@ -296,7 +296,7 @@ public partial class User
         {
             if (_lastSave < debounceMs + Timing.Global.MillisecondsUtc)
             {
-                Log.Debug("Skipping save due to debounce");
+                ApplicationContext.Context.Value?.Logger.LogDebug("Skipping save due to debounce");
                 return;
             }
         }
@@ -306,7 +306,7 @@ public partial class User
             return;
         }
 
-        var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == Id);
+        var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == Id);
         client?.LogAndDisconnect(default, nameof(SaveWithDebounce));
     }
 
@@ -348,13 +348,13 @@ public partial class User
             if (!lockTaken)
             {
 #if DIAGNOSTIC
-                Log.Debug($"Failed to take lock {Environment.StackTrace}");
+                ApplicationContext.Context.Value?.Logger.LogDebug($"Failed to take lock {Environment.StackTrace}");
 #endif
                 return UserSaveResult.SkippedCouldNotTakeLock;
             }
 
 #if DIAGNOSTIC
-            Log.Debug($"DBOP-A Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"DBOP-A Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
 #endif
 
             if (playerContext == null)
@@ -383,7 +383,7 @@ public partial class User
                         try
                         {
                             playerContext.Users.Update(this);
-                            Log.Warn(invalidOperationException, $"Successfully recovered from {nameof(InvalidOperationException)}");
+                            ApplicationContext.Context.Value?.Logger.LogWarning(invalidOperationException, $"Successfully recovered from {nameof(InvalidOperationException)}");
                         }
                         catch (Exception exception)
                         {
@@ -421,10 +421,10 @@ public partial class User
             }
 
 #if DIAGNOSTIC
-            Log.Debug($"DBOP-B Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"DBOP-B Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
 #endif
 
-            var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == Id);
+            var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == Id);
             client?.LogAndDisconnect(default, "User.Save");
 
             return UserSaveResult.DatabaseFailure;
@@ -459,14 +459,14 @@ public partial class User
 #if DIAGNOSTIC
             suffix = $"#{currentExecutionId}";
 #endif
-            Log.Error(ex, $"Jackpot! Concurrency Bug For {Name} in {(createdContext == default ? "Existing" : "Created")} Context {suffix}");
-            Log.Error(concurrencyErrors.ToString());
+            ApplicationContext.Context.Value?.Logger.LogError(ex, $"Jackpot! Concurrency Bug For {Name} in {(createdContext == default ? "Existing" : "Created")} Context {suffix}");
+            ApplicationContext.Context.Value?.Logger.LogError(concurrencyErrors.ToString());
 
 #if DIAGNOSTIC
-            Log.Debug($"DBOP-C Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"DBOP-C Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
 #endif
 
-            var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == Id);
+            var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == Id);
             client?.LogAndDisconnect(default, "User.Save");
 
             if (Options.Instance.PlayerDatabase.KillServerOnConcurrencyException)
@@ -480,13 +480,13 @@ public partial class User
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to save user: " + Name);
+            ApplicationContext.Context.Value?.Logger.LogError(ex, "Failed to save user: " + Name);
 
 #if DIAGNOSTIC
-            Log.Debug($"DBOP-C Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
+            ApplicationContext.Context.Value?.Logger.LogDebug($"DBOP-C Save({playerContext}, {force}, {create}) #{currentExecutionId} {Name} ({Id})");
 #endif
 
-            var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == Id);
+            var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == Id);
             client?.LogAndDisconnect(default, "User.Save");
 
             if (Options.Instance.PlayerDatabase.KillServerOnConcurrencyException)
@@ -553,12 +553,12 @@ public partial class User
 
         if (lookupKey.IsId)
         {
-            client = Globals.Clients.Find(queryClient => lookupKey.Id == queryClient?.User?.Id);
+            client = Client.Instances.Find(queryClient => lookupKey.Id == queryClient?.User?.Id);
             user = client?.User ?? FindById(lookupKey.Id);
             return user != default;
         }
 
-        client = Globals.Clients.Find(queryClient => Entity.CompareName(lookupKey.Name, queryClient?.User?.Name));
+        client = Client.Instances.Find(queryClient => Entity.CompareName(lookupKey.Name, queryClient?.User?.Name));
         user = client?.User ?? Find(lookupKey.Name);
         return user != default;
     }
@@ -613,7 +613,7 @@ public partial class User
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to authenticate {Username}", username);
         }
 
         return user != default;
@@ -634,7 +634,7 @@ public partial class User
             var hashedPassword = SaltPasswordHash(ptPassword, user.Salt);
             if (!string.Equals(user.Password, hashedPassword, StringComparison.Ordinal))
             {
-                Log.Debug($"Login to {username} failed due invalid credentials");
+                ApplicationContext.Context.Value?.Logger.LogDebug($"Login to {username} failed due invalid credentials");
                 user = default;
                 failureReason = new LoginFailureReason(LoginFailureType.InvalidCredentials);
                 return false;
@@ -643,7 +643,7 @@ public partial class User
             var result = user.Save();
             if (result != UserSaveResult.Completed)
             {
-                Log.Error($"Login to {username} failed due to pre-logged in User save failure: {result}");
+                ApplicationContext.Context.Value?.Logger.LogError($"Login to {username} failed due to pre-logged in User save failure: {result}");
                 user = default;
                 failureReason = new LoginFailureReason(LoginFailureType.ServerError);
                 return false;
@@ -655,7 +655,7 @@ public partial class User
                 return true;
             }
 
-            Log.Error($"Login to {username} failed due to {nameof(PostLoad)}() returning null.");
+            ApplicationContext.Context.Value?.Logger.LogError($"Login to {username} failed due to {nameof(PostLoad)}() returning null.");
             user = default;
             failureReason = new LoginFailureReason(LoginFailureType.ServerError);
             return false;
@@ -669,7 +669,7 @@ public partial class User
             {
                 if (UserExists(username))
                 {
-                    Log.Error($"Login to {username} failed because the salt is empty.");
+                    ApplicationContext.Context.Value?.Logger.LogError($"Login to {username} failed because the salt is empty.");
                     failureReason = new LoginFailureReason(LoginFailureType.ServerError);
                 }
                 else
@@ -688,7 +688,7 @@ public partial class User
         }
         catch (Exception exception)
         {
-            Log.Error(exception, $"Login to {username} failed due to an exception");
+            ApplicationContext.Context.Value?.Logger.LogError(exception, $"Login to {username} failed due to an exception");
             user = default;
             failureReason = new LoginFailureReason(LoginFailureType.ServerError);
             return false;
@@ -743,7 +743,7 @@ public partial class User
         }
         catch (Exception exception)
         {
-            Log.Error(exception, $"Failed to find user by name '{username}'");
+            ApplicationContext.Context.Value?.Logger.LogError(exception, $"Failed to find user by name '{username}'");
         }
 
         return false;
@@ -776,7 +776,7 @@ public partial class User
         }
         catch (Exception exception)
         {
-            Log.Error(exception, $"Failed to find user by id '{userId}'");
+            ApplicationContext.Context.Value?.Logger.LogError(exception, $"Failed to find user by id '{userId}'");
         }
 
         return user != default;
@@ -804,9 +804,9 @@ public partial class User
             var queriedUser = QueryUserByNameShallow(context, username);
             return queriedUser;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to find {Username}", username);
             return null;
         }
     }
@@ -841,9 +841,13 @@ public partial class User
             var queriedUser = QueryUserByNameOrEmailShallow(playerContext, nameOrEmail);
             return queriedUser;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Failed to load user by name or email '{UsernameOrEmail}'",
+                nameOrEmail
+            );
             return null;
         }
     }
@@ -872,9 +876,13 @@ public partial class User
         {
             return QueryUserByEmailShallow(playerContext, email);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Failed to load user for email address '{Email}'",
+                email
+            );
             return null;
         }
     }
@@ -897,9 +905,13 @@ public partial class User
             using var context = DbInterface.CreatePlayerContext();
             return SaltByName(context, userName);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error getting salt for '{Username}'",
+                userName
+            );
             return null;
         }
     }
@@ -930,9 +942,13 @@ public partial class User
                 return AnyUserByNameOrEmail(context, nameOrEmail);
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error checking if user known by '{NameOrEmail}' exists",
+                nameOrEmail
+            );
             return false;
         }
     }
@@ -946,7 +962,7 @@ public partial class User
         {
             if (Save() == UserSaveResult.DatabaseFailure)
             {
-                var client = Globals.ClientLookup.Values.FirstOrDefault(c => c.User.Id == Id);
+                var client = Client.LookupByConnectionId.Values.FirstOrDefault(c => c.User.Id == Id);
                 client?.LogAndDisconnect(default, "User.Save");
             }
 
@@ -1042,7 +1058,7 @@ public partial class User
         error = default;
         user = default;
 
-        if (Options.BlockClientRegistrations)
+        if (Options.Instance.BlockClientRegistrations)
         {
             error = Strings.Account.RegistrationsBlocked;
             return false;
@@ -1159,7 +1175,7 @@ public partial class User
         {
             using (var context = DbInterface.CreatePlayerContext())
             {
-                foreach (var user in Globals.OnlineList.Select(p => p.User))
+                foreach (var user in Player.OnlinePlayers.Select(p => p.User))
                 {
                     if (user != default)
                     {
@@ -1203,9 +1219,9 @@ public partial class User
                 return users;
             }
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Log.Error(ex);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Error listing users");
             total = 0;
             return null;
         }

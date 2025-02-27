@@ -19,6 +19,8 @@ public abstract partial class GameDatabase
 
     public int SoundVolume { get; set; }
 
+    public bool ShowFPSCounter { get; set; }
+
     public int TargetFps { get; set; }
 
     public int TargetResolution { get; set; }
@@ -28,6 +30,8 @@ public abstract partial class GameDatabase
     public bool StickyTarget { get; set; }
 
     public bool AutoTurnToTarget { get; set; }
+
+    public bool AutoSoftRetargetOnSelfCast { get; set; }
 
     public bool FriendOverheadInfo { get; set; }
 
@@ -66,6 +70,8 @@ public abstract partial class GameDatabase
     public bool TypewriterEnabled => TypewriterBehavior != TypewriterBehavior.Off;
 
     public float UIScale { get; set; } = 1.0f;
+
+    public bool EnableScrollingWorldZoom { get; set; }
 
     public float WorldZoom { get; set; } = 1.0f;
 
@@ -111,6 +117,7 @@ public abstract partial class GameDatabase
         MusicVolume = LoadPreference(nameof(MusicVolume), 10);
         SoundVolume = LoadPreference(nameof(SoundVolume), 15);
         TargetResolution = LoadPreference(nameof(TargetResolution), -1);
+        ShowFPSCounter = LoadPreference(nameof(ShowFPSCounter), false);
         TargetFps = LoadPreference(nameof(TargetFps), 0);
         FullScreen = LoadPreference(nameof(FullScreen), false);
         EnableLighting = LoadPreference(nameof(EnableLighting), true);
@@ -119,6 +126,7 @@ public abstract partial class GameDatabase
         TargetAccountDirection = LoadPreference(nameof(TargetAccountDirection), false);
         StickyTarget = LoadPreference(nameof(StickyTarget), false);
         AutoTurnToTarget = LoadPreference(nameof(AutoTurnToTarget), false);
+        AutoSoftRetargetOnSelfCast = LoadPreference(nameof(AutoSoftRetargetOnSelfCast), false);
         FriendOverheadInfo = LoadPreference(nameof(FriendOverheadInfo), true);
         FriendOverheadHpBar = LoadPreference(nameof(FriendOverheadHpBar), false);
         GuildMemberOverheadInfo = LoadPreference(nameof(GuildMemberOverheadInfo), true);
@@ -137,6 +145,7 @@ public abstract partial class GameDatabase
         SimplifiedEscapeMenu = LoadPreference(nameof(SimplifiedEscapeMenu), false);
         TypewriterBehavior = LoadPreference(nameof(TypewriterBehavior), TypewriterBehavior.Word);
         UIScale = LoadPreference(nameof(UIScale), 1.0f);
+        EnableScrollingWorldZoom = LoadPreference(nameof(EnableScrollingWorldZoom), false);
         WorldZoom = LoadPreference(nameof(WorldZoom), 1.0f);
     }
 
@@ -150,12 +159,14 @@ public abstract partial class GameDatabase
         SavePreference(nameof(TargetResolution), TargetResolution);
         SavePreference(nameof(TargetFps), TargetFps);
         SavePreference(nameof(FullScreen), FullScreen);
+        SavePreference(nameof(ShowFPSCounter), ShowFPSCounter);
         SavePreference(nameof(EnableLighting), EnableLighting);
         SavePreference(nameof(HideOthersOnWindowOpen), HideOthersOnWindowOpen);
         SavePreference(nameof(AutoToggleChatLog), AutoToggleChatLog);
         SavePreference(nameof(TargetAccountDirection), TargetAccountDirection);
         SavePreference(nameof(StickyTarget), StickyTarget);
         SavePreference(nameof(AutoTurnToTarget), AutoTurnToTarget);
+        SavePreference(nameof(AutoSoftRetargetOnSelfCast), AutoSoftRetargetOnSelfCast);
         SavePreference(nameof(FriendOverheadInfo), FriendOverheadInfo);
         SavePreference(nameof(FriendOverheadHpBar), FriendOverheadHpBar);
         SavePreference(nameof(GuildMemberOverheadInfo), GuildMemberOverheadInfo);
@@ -174,6 +185,7 @@ public abstract partial class GameDatabase
         SavePreference(nameof(SimplifiedEscapeMenu), SimplifiedEscapeMenu);
         SavePreference(nameof(TypewriterBehavior), TypewriterBehavior);
         SavePreference(nameof(UIScale), UIScale);
+        SavePreference(nameof(EnableScrollingWorldZoom), EnableScrollingWorldZoom);
         SavePreference(nameof(WorldZoom), WorldZoom);
     }
 

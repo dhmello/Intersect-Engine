@@ -2,7 +2,7 @@ using Intersect.Client.Framework.Audio;
 using Intersect.Client.Framework.Core.Sounds;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.General;
-using Intersect.Utilities;
+using Intersect.Framework.Core;
 
 namespace Intersect.Client.Core.Sounds;
 
@@ -40,8 +40,7 @@ public partial class Sound : ISound
         {
             mSound = sound.CreateInstance();
             mSound.IsLooping = mLoop && mLoopInterval <= 0;
-           
-            mSound.SetVolume(100);
+            mSound.Volume = 100;
             mSound.Play();
             Loaded = true;
         }
@@ -67,6 +66,8 @@ public partial class Sound : ISound
             return false;
         }
 
+        mSound?.Update();
+
         if (mLoop && mLoopInterval > 0 && mSound?.State == GameAudioInstance.AudioInstanceState.Stopped)
         {
             if (mStoppedTime == -1)
@@ -84,7 +85,8 @@ public partial class Sound : ISound
 
             return true;
         }
-        else if (mLoop || mSound?.State != GameAudioInstance.AudioInstanceState.Stopped)
+
+        if (mLoop || mSound?.State != GameAudioInstance.AudioInstanceState.Stopped)
         {
             return true;
         }

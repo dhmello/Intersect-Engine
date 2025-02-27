@@ -87,17 +87,17 @@ public partial class FriendsRow
 
     }
 
-    private void MRemove_Clicked(Base sender, ClickedEventArgs arguments)
+    private void MRemove_Clicked(Base sender, MouseButtonState arguments)
     {
         var iBox = new InputBox(
             title: Strings.Friends.RemoveFriend,
             prompt: Strings.Friends.RemoveFriendPrompt.ToString(mMyName),
-            inputType: InputBox.InputType.YesNo,
-            onSuccess: (s, e) => PacketSender.SendRemoveFriend(mMyName)
+            inputType: InputType.YesNo,
+            onSubmit: (s, e) => PacketSender.SendRemoveFriend(mMyName)
         );
     }
 
-    private void MTell_Clicked(Base sender, ClickedEventArgs arguments)
+    private void MTell_Clicked(Base sender, MouseButtonState arguments)
     {
         Interface.GameUi.SetChatboxText($"/pm {mMyName} ");
     }

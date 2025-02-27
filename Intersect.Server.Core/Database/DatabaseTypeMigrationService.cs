@@ -1,10 +1,11 @@
 ﻿using System.Reflection;
+using Intersect.Core;
 using Intersect.Extensions;
-using Intersect.Logging;
-using Intersect.Reflection;
+using Intersect.Framework.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Intersect.Server.Localization;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Server.Database;
 
@@ -31,11 +32,11 @@ public class DatabaseTypeMigrationService
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(exception, "Failed to migrate {ContextType}", typeof(TContext).GetName(qualified: true));
             return true;
         }
 
-        Log.Error(Strings.Migration.MySqlNotEmpty);
+        ApplicationContext.Context.Value?.Logger.LogError(Strings.Migration.MySqlNotEmpty);
         return true;
     }
 
@@ -144,7 +145,8 @@ public class DatabaseTypeMigrationService
             var modelGraphRoots = GetModelGraph<TContext>(fromOptions);
             var modelGraphSortedTypes = Flatten(modelGraphRoots);
 
-            var dbSetInfos = typeof(TContext).GetProperties()
+            var contextPropertyInfos = typeof(TContext).GetProperties();
+            var dbSetInfos = contextPropertyInfos
                 .Where(propertyInfo => propertyInfo.PropertyType.Extends(typeof(DbSet<>)))
                 .ToArray();
 
@@ -159,7 +161,7 @@ public class DatabaseTypeMigrationService
 
             foreach (var dbSetInfo in sortedDbSetInfos)
             {
-                Log.Info(Strings.Migration.MigratingDbSet.ToString(dbSetInfo.Name));
+                ApplicationContext.Context.Value?.Logger.LogInformation(Strings.Migration.MigratingDbSet.ToString(dbSetInfo.Name));
 
                 try
                 {
@@ -168,13 +170,18 @@ public class DatabaseTypeMigrationService
                         MethodInfoMigrateDbSet.MakeGenericMethod(typeof(TContext), dbSetContainedType);
                     var migrateTask = migrateDbSetMethod.Invoke(
                         null,
-                        new object[] { fromOptions, toOptions, dbSetInfo }
+                        [fromOptions, toOptions, dbSetInfo]
                     ) as Task;
                     await (migrateTask ?? throw new InvalidOperationException());
                 }
                 catch (Exception exception)
                 {
-                    Log.Error(exception);
+                    ApplicationContext.Context.Value?.Logger.LogError(
+                        exception,
+                        "Failed to migrate DBSet {DBSetName} in {ContextType}",
+                        dbSetInfo.Name,
+                        dbSetInfo.DeclaringType?.GetName(qualified: true)
+                    );
                     throw;
                 }
             }
@@ -183,7 +190,11 @@ public class DatabaseTypeMigrationService
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error migrating {ContextType}",
+                typeof(TContext).GetName(qualified: true)
+            );
             throw;
         }
     }
@@ -199,14 +210,12 @@ public class DatabaseTypeMigrationService
         await using var fromContext = IntersectDbContext<TContext>.Create(fromOptions with
         {
             DisableAutoInclude = true,
-            LoggerFactory = new IntersectLoggerFactory(typeof(TContext).Name),
         });
         await using var toContext = IntersectDbContext<TContext>.Create(toOptions with
         {
             DisableAutoInclude = true,
             EnableDetailedErrors = true,
             EnableSensitiveDataLogging = true,
-            LoggerFactory = new IntersectLoggerFactory(typeof(TContext).Name),
         });
 
         if (dbSetInfo.GetValue(fromContext) is not DbSet<T> fromDbSet)
@@ -232,7 +241,12 @@ public class DatabaseTypeMigrationService
         }
         catch (Exception exception)
         {
-            Log.Error(exception);
+            ApplicationContext.Context.Value?.Logger.LogError(
+                exception,
+                "Error migrating DbSet<{T}> in {ContextType}",
+                typeof(T).GetName(qualified: true),
+                typeof(TContext).GetName(qualified: true)
+            );
             throw;
         }
     }

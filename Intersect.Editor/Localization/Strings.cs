@@ -1,12 +1,11 @@
 using System.Reflection;
-
 using Intersect.Enums;
 using Intersect.Framework.Core.GameObjects.Variables;
+using Intersect.Framework.Reflection;
 using Intersect.GameObjects;
 using Intersect.GameObjects.Events;
 using Intersect.Localization;
-using Intersect.Logging;
-
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -296,9 +295,9 @@ public static partial class Strings
 
     public static string GetEventConditionalDesc(NoNpcsOnMapCondition condition)
     {
-        return condition.SpecificNpc ?
-            EventConditionDesc.NoNpcsOfTypeOnMap.ToString(NpcBase.GetName(condition.NpcId)) :
-            EventConditionDesc.NoNpcsOnMap.ToString();
+        return condition.SpecificNpc
+            ? EventConditionDesc.NoNpcsOfTypeOnMap.ToString(NpcBase.GetName(condition.NpcId))
+            : EventConditionDesc.NoNpcsOnMap.ToString();
     }
 
     public static string GetEventConditionalDesc(GenderIsCondition condition)
@@ -550,7 +549,7 @@ public static partial class Strings
                             var jsonString = (string)serializedValue;
                             if (jsonString == default)
                             {
-                                Log.Warn($"{groupType.Name}.{fieldInfo.Name} is null.");
+                                Intersect.Core.ApplicationContext.Context.Value?.Logger.LogWarning($"{groupType.Name}.{fieldInfo.Name} is null.");
                                 missingStrings.Add($"{groupType.Name}.{fieldInfo.Name} (string)");
                                 serializedGroup[fieldInfo.Name] = (string)localizedString;
                             }
@@ -571,9 +570,14 @@ public static partial class Strings
                         default:
                             {
                                 var fieldType = fieldInfo.FieldType;
-                                if (!fieldType.IsGenericType || typeof(Dictionary<,>) != fieldType.GetGenericTypeDefinition())
+                                if (!fieldType.IsGenericType || typeof(Dictionary<,>).ExtendedBy(fieldType) && typeof(LocaleDictionary<,>).ExtendedBy(fieldType))
                                 {
-                                    Log.Error(new NotSupportedException($"Unsupported localization type for {groupType.Name}.{fieldInfo.Name}: {fieldInfo.FieldType.FullName}"));
+                                    Intersect.Core.ApplicationContext.Context.Value?.Logger.LogError(
+                                        new NotSupportedException(
+                                            $"Unsupported localization type for {groupType.Name}.{fieldInfo.Name}: {fieldInfo.FieldType.FullName}"
+                                        ),
+                                        $"Unsupported localization type for {groupType.Name}.{fieldInfo.Name}: {fieldInfo.FieldType.FullName}"
+                                    );
                                     break;
                                 }
 
@@ -581,20 +585,28 @@ public static partial class Strings
                                 var localizedParameterType = parameters.Last();
                                 if (localizedParameterType != typeof(LocalizedString))
                                 {
-                                    Log.Error(new NotSupportedException($"Unsupported localization dictionary value type for {groupType.Name}.{fieldInfo.Name}: {localizedParameterType.FullName}"));
+                                    Intersect.Core.ApplicationContext.Context.Value?.Logger.LogError(
+                                        new NotSupportedException(
+                                            $"Unsupported localization dictionary value type for {groupType.Name}.{fieldInfo.Name}: {localizedParameterType.FullName}"
+                                        ),
+                                        $"Unsupported localization dictionary value type for {groupType.Name}.{fieldInfo.Name}: {localizedParameterType.FullName}"
+                                    );
                                     break;
                                 }
 
-                                _ = _methodInfoDeserializeDictionary.MakeGenericMethod(parameters.First()).Invoke(default, new object[]
-                                {
-                                            missingStrings,
+                                var keyType = parameters.First();
+                                var constructedMethod = _methodInfoDeserializeDictionary.MakeGenericMethod(keyType);
+                                _ = constructedMethod.Invoke(null,
+                                [
+                                    missingStrings,
                                             groupType,
                                             fieldInfo,
                                             fieldValue,
                                             serializedGroup,
                                             serializedValue,
-                                            fieldValue
-                                });
+                                            fieldValue,
+                                ]
+                                );
                                 break;
                             }
                     }
@@ -603,13 +615,13 @@ public static partial class Strings
 
             if (missingStrings.Count > 0)
             {
-                Log.Warn($"Missing strings, overwriting strings file:\n\t{string.Join(",\n\t", missingStrings)}");
+                Intersect.Core.ApplicationContext.Context.Value?.Logger.LogWarning($"Missing strings, overwriting strings file:\n\t{string.Join(",\n\t", missingStrings)}");
                 SaveSerialized(serialized);
             }
         }
         catch (Exception exception)
         {
-            Log.Warn(exception);
+            Intersect.Core.ApplicationContext.Context.Value?.Logger.LogWarning(exception, "Load error");
             Save();
         }
 
@@ -628,7 +640,7 @@ public static partial class Strings
         object fieldValue,
         Dictionary<string, object> serializedGroup,
         object serializedValue,
-        Dictionary<TKey, LocalizedString> dictionary
+        IDictionary<TKey, LocalizedString> dictionary
     )
     {
         var serializedDictionary = serializedValue as JObject;
@@ -656,7 +668,7 @@ public static partial class Strings
         }
     }
 
-    private static Dictionary<string, string> SerializeDictionary<TKey>(Dictionary<TKey, LocalizedString> localizedDictionary)
+    private static Dictionary<string, string> SerializeDictionary<TKey>(IDictionary<TKey, LocalizedString> localizedDictionary)
     {
         return localizedDictionary.ToDictionary(
             pair => pair.Key.ToString(),
@@ -685,6 +697,35 @@ public static partial class Strings
 
                 case Dictionary<ChatboxTab, LocalizedString> localizedChatboxTabKeyDictionary:
                     serializedGroup.Add(fieldInfo.Name, SerializeDictionary(localizedChatboxTabKeyDictionary));
+                    break;
+                
+                default:
+                    if (!typeof(LocaleDictionary<,>).ExtendedBy(fieldInfo.FieldType))
+                    {
+                        break;
+                    }
+
+                    var serializeMethod = typeof(Strings).GetMethod(
+                        nameof(SerializeDictionary),
+                        BindingFlags.Static | BindingFlags.NonPublic
+                    );
+
+                    if (serializeMethod == null)
+                    {
+                        throw new MissingMethodException(
+                            typeof(Strings).GetName(qualified: true),
+                            nameof(SerializeDictionary)
+                        );
+                    }
+
+                    var keyType = fieldInfo.FieldType.GenericTypeArguments.First();
+                    var constructedSerializeMethod = serializeMethod.MakeGenericMethod(keyType);
+                    var result = constructedSerializeMethod.Invoke(null, [fieldInfo.GetValue(null)]);
+                    if (result is not Dictionary<string, string> dictionary)
+                    {
+                        throw new InvalidOperationException("Invalid serialization result");
+                    }
+                    serializedGroup.Add(fieldInfo.Name, result);
                     break;
             }
         }
@@ -2792,6 +2833,7 @@ Tick timer saved in server config.json.";
             {16, @"Inventory Changed"},
             {17, @"Map Changed"},
             {18, @"User Variable Changed"},
+            {19, @"Level Down"},
         };
 
         public static LocalizedString conditions = @"Conditions";
@@ -2939,20 +2981,17 @@ Tick timer saved in server config.json.";
 
     public partial struct EventGiveExperience
     {
-
-        public static LocalizedString cancel = @"Cancel";
-
-        public static LocalizedString label = @"Give Experience:";
-
-        public static LocalizedString okay = @"Ok";
-
-        public static LocalizedString title = @"Give Experience";
-
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static LocalizedString AmountType = @"Amount Type";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        public static LocalizedString Variable = @"Variable";
+        public static LocalizedString EnableLosingLevels = @"Enable losing levels?";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString GuildVariable = @"Guild Variable";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString Label = @"Give Experience:";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static LocalizedString Manual = @"Manual";
@@ -2964,8 +3003,10 @@ Tick timer saved in server config.json.";
         public static LocalizedString ServerVariable = @"Global Variable";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        public static LocalizedString GuildVariable = @"Guild Variable";
+        public static LocalizedString Title = @"Give Experience";
 
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString Variable = @"Variable";
     }
 
     public partial struct EventGotoLabel
@@ -4201,7 +4242,7 @@ Tick timer saved in server config.json.";
     public partial struct MapInstance
     {
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        public static Dictionary<MapInstanceType, LocalizedString> InstanceTypes = new Dictionary<MapInstanceType, LocalizedString>
+        public static LocaleDictionary<MapInstanceType, LocalizedString> InstanceTypes = new LocaleDictionary<MapInstanceType, LocalizedString>
         {
             {MapInstanceType.Overworld, @"Overworld" },
             {MapInstanceType.Personal, @"Personal" },
@@ -4457,7 +4498,9 @@ Tick timer saved in server config.json.";
 
         public static LocalizedString dropitem = @"Item:";
 
-        public static LocalizedString dropamount = @"Amount:";
+        public static LocalizedString DropMaxAmount = @"Max Amount:";
+
+        public static LocalizedString DropMinAmount = @"Min Amount:";
 
         public static LocalizedString dropchance = @"Chance (%):";
 
@@ -4465,7 +4508,7 @@ Tick timer saved in server config.json.";
 
         public static LocalizedString dropremove = @"Remove";
 
-        public static LocalizedString dropdisplay = @"{00} x{01} - {02}%";
+        public static LocalizedString dropdisplay = @"{00} x{01}-{02} | {03}%";
 
         public static LocalizedString enabled = @"Enabled?";
 
@@ -4932,7 +4975,9 @@ Tick timer saved in server config.json.";
 
         public static LocalizedString dropitem = @"Item:";
 
-        public static LocalizedString dropamount = @"Amount:";
+        public static LocalizedString DropMaxAmount = @"Max Amount:";
+
+        public static LocalizedString DropMinAmount = @"Min Amount:";
 
         public static LocalizedString dropchance = @"Chance (%):";
 
@@ -4940,7 +4985,7 @@ Tick timer saved in server config.json.";
 
         public static LocalizedString dropremove = @"Remove";
 
-        public static LocalizedString dropdisplay = @"{00} x{01} - {02}%";
+        public static LocalizedString dropdisplay = @"{00} x{01}-{02} | {03}%";
 
         public static LocalizedString exhaustedgraphic = @"Exhausted Graphic:";
 

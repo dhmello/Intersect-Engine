@@ -22,10 +22,10 @@ public partial class ProgressBar : Label
         AutoSizeToContents = false;
 
         SetSize(128, 32);
-        TextPadding = Padding.Three;
+        Padding = Padding.Three;
         IsHorizontal = true;
 
-        Alignment = Pos.Center;
+        TextAlign = Pos.Center;
         mProgress = 0;
         mAutoLabel = true;
     }

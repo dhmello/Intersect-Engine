@@ -4,9 +4,7 @@ using Intersect.GameObjects.Conditions;
 using Intersect.GameObjects.Events;
 using Intersect.Models;
 using Intersect.Utilities;
-
 using Microsoft.EntityFrameworkCore;
-
 using Newtonsoft.Json;
 
 namespace Intersect.GameObjects;
@@ -45,9 +43,9 @@ public partial class SpellBase : DatabaseObject<SpellBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase CastAnimation
+    public AnimationDescriptor CastAnimation
     {
-        get => AnimationBase.Get(CastAnimationId);
+        get => AnimationDescriptor.Get(CastAnimationId);
         set => CastAnimationId = value?.Id ?? Guid.Empty;
     }
 
@@ -56,9 +54,9 @@ public partial class SpellBase : DatabaseObject<SpellBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase HitAnimation
+    public AnimationDescriptor HitAnimation
     {
-        get => AnimationBase.Get(HitAnimationId);
+        get => AnimationDescriptor.Get(HitAnimationId);
         set => HitAnimationId = value?.Id ?? Guid.Empty;
     }
 
@@ -67,9 +65,9 @@ public partial class SpellBase : DatabaseObject<SpellBase>, IFolderable
 
     [NotMapped]
     [JsonIgnore]
-    public AnimationBase TickAnimation
+    public AnimationDescriptor TickAnimation
     {
-        get => AnimationBase.Get(TickAnimationId);
+        get => AnimationDescriptor.Get(TickAnimationId);
         set => TickAnimationId = value?.Id ?? Guid.Empty;
     }
 

@@ -1,6 +1,8 @@
-﻿using Intersect.Logging;
+﻿
+using Intersect.Framework.Reflection;
 using Intersect.Plugins.Interfaces;
 using Intersect.Threading;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Core;
 
@@ -13,6 +15,26 @@ public interface IApplicationContext : IDisposable
     /// If the application has encountered unhandled/unobserved exceptions during its lifespan.
     /// </summary>
     bool HasErrors { get; }
+
+    /// <summary>
+    /// If the application is a debug build.
+    /// </summary>
+    bool IsDebug
+    {
+        get
+        {
+#if !DEBUG
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+
+    /// <summary>
+    /// If the application is being run in developer mode.
+    /// </summary>
+    bool IsDeveloper => false;
 
     /// <summary>
     /// If the application has been disposed.
@@ -28,6 +50,11 @@ public interface IApplicationContext : IDisposable
     /// If the application is running.
     /// </summary>
     bool IsRunning { get; }
+
+    /// <summary>
+    /// The name of the application.
+    /// </summary>
+    string Name { get; }
 
     /// <summary>
     /// The options the application was started with.
@@ -50,6 +77,11 @@ public interface IApplicationContext : IDisposable
     List<IApplicationService> Services { get; }
 
     /// <summary>
+    /// The human-friendly version string.
+    /// </summary>
+    string VersionName => GetType().Assembly.GetMetadataVersionName();
+
+    /// <summary>
     /// Gets a service of type <typeparamref name="TApplicationService"/> if one has been registered.
     /// </summary>
     /// <typeparam name="TApplicationService">the service type to look for</typeparam>
@@ -63,8 +95,8 @@ public interface IApplicationContext : IDisposable
     void Start(bool lockUntilShutdown = true);
 
     /// <summary>
-    /// Start the application with a <see cref="LockingActionQueue"/>.
+    /// Start the application with a <see cref="ILockingActionQueue"/>.
     /// </summary>
-    /// <returns>the <see cref="LockingActionQueue"/> instance being used</returns>
+    /// <returns>the <see cref="ILockingActionQueue"/> instance being used</returns>
     ILockingActionQueue StartWithActionQueue();
 }
