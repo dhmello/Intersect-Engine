@@ -1,8 +1,5 @@
 using Intersect.Enums;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
 using Intersect.Network;
 using Intersect.Network.Packets;
 using Intersect.Network.Packets.Client;
@@ -21,6 +18,11 @@ using System.Diagnostics;
 using System.Text;
 using Intersect.Core;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Network.Packets.Server;
 using Intersect.Server.Core;
 using Microsoft.Extensions.Logging;
@@ -732,7 +734,7 @@ internal sealed partial class PacketHandler
     }
 
     //NeedMapPacket
-    public void HandlePacket(Client client, GetObjectData<MapBase> packet)
+    public void HandlePacket(Client client, GetObjectData<MapDescriptor> packet)
     {
         var player = client?.Entity;
 
@@ -1122,9 +1124,9 @@ internal sealed partial class PacketHandler
         else
         {
             //Search for command activated events and run them
-            foreach (var evt in EventBase.Lookup)
+            foreach (var evt in EventDescriptor.Lookup)
             {
-                var eventDescriptor = evt.Value as EventBase;
+                var eventDescriptor = evt.Value as EventDescriptor;
                 if (eventDescriptor == default)
                 {
                     continue;
@@ -1315,7 +1317,7 @@ internal sealed partial class PacketHandler
                 );
             }
 
-            var projectileBase = ProjectileBase.Get(weaponItem?.ProjectileId ?? Guid.Empty);
+            var projectileBase = ProjectileDescriptor.Get(weaponItem?.ProjectileId ?? Guid.Empty);
 
             if (projectileBase != null)
             {
@@ -1329,7 +1331,7 @@ internal sealed partial class PacketHandler
                     {
                         PacketSender.SendChatMsg(
                             player,
-                            Strings.Items.NotEnough.ToString(ItemBase.GetName(projectileBase.AmmoItemId)),
+                            Strings.Items.NotEnough.ToString(ItemDescriptor.GetName(projectileBase.AmmoItemId)),
                             ChatMessageType.Inventory,
                             CustomColors.Combat.NoAmmo
                         );
@@ -1392,7 +1394,7 @@ internal sealed partial class PacketHandler
 
         if (unequippedAttack)
         {
-            var classBase = ClassBase.Get(player.ClassId);
+            var classBase = ClassDescriptor.Get(player.ClassId);
             if (classBase != null)
             {
                 //Check for animation
@@ -1581,7 +1583,7 @@ internal sealed partial class PacketHandler
         }
 
         var index = client.Id;
-        var classBase = ClassBase.Get(packet.ClassId);
+        var classBase = ClassDescriptor.Get(packet.ClassId);
         if (classBase == null || classBase.Locked)
         {
             PacketSender.SendError(client, Strings.Account.InvalidClass, Strings.General.NoticeError);
@@ -1641,7 +1643,7 @@ internal sealed partial class PacketHandler
 
         foreach (var item in classBase.Items)
         {
-            if (ItemBase.Get(item.Id) != null)
+            if (ItemDescriptor.Get(item.Id) != null)
             {
                 var tempItem = new Item(item.Id, item.Quantity);
                 newChar.TryGiveItem(tempItem, ItemHandling.Normal, false, -1, false);
@@ -1752,7 +1754,7 @@ internal sealed partial class PacketHandler
                     continue;
                 }
 
-                if (ItemBase.TryGet(mapItem.ItemId, out var item))
+                if (ItemDescriptor.TryGet(mapItem.ItemId, out var item))
                 {
                     PacketSender.SendActionMsg(player, item.Name, CustomColors.Items.Rarities[item.Rarity]);
                 }
@@ -1991,7 +1993,7 @@ internal sealed partial class PacketHandler
                 return;
             }
 
-            if (!CraftBase.TryGet(packet.CraftId, out var craftDescriptor))
+            if (!CraftingRecipeDescriptor.TryGet(packet.CraftId, out var craftDescriptor))
             {
                 ApplicationContext.Context.Value?.Logger.LogWarning($"Player {player.Id} tried to craft {packet.CraftId} which does not exist.");
                 return;

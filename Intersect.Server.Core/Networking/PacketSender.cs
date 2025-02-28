@@ -3,11 +3,16 @@ using Intersect.Core;
 using Intersect.Enums;
 using Intersect.Framework.Core;
 using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Models;
 using Intersect.Network;
 using Intersect.Network.Packets.Server;
@@ -197,7 +202,7 @@ public static partial class PacketSender
         {
             foreach (var id in map.EventIds)
             {
-                if (EventBase.TryGet(id, out var evt))
+                if (EventDescriptor.TryGet(id, out var evt))
                 {
                     SendGameObject(client, evt);
                 }
@@ -1401,7 +1406,7 @@ public static partial class PacketSender
 
                 var itemId = character.Items[itemIndex].ItemId;
 
-                if (!ItemBase.TryGet(itemId, out var itemDescriptor))
+                if (!ItemDescriptor.TryGet(itemId, out var itemDescriptor))
                 {
                     continue;
                 }
@@ -1420,7 +1425,7 @@ public static partial class PacketSender
                     character.Sprite,
                     character.Face,
                     character.Level,
-                    ClassBase.GetName(character.ClassId),
+                    ClassDescriptor.GetName(character.ClassId),
                     equipment
                 )
             );
@@ -1678,7 +1683,7 @@ public static partial class PacketSender
     }
 
     //ShopPacket
-    public static void SendOpenShop(Player player, ShopBase shop)
+    public static void SendOpenShop(Player player, ShopDescriptor shop)
     {
         if (shop == null)
         {
@@ -1695,17 +1700,17 @@ public static partial class PacketSender
     }
 
     //CraftingTablePacket
-    public static void SendOpenCraftingTable(Player player, CraftingTableBase table, bool journalMode)
+    public static void SendOpenCraftingTable(Player player, CraftingTableDescriptor table, bool journalMode)
     {
         if (table != null)
         {
             //Use Json To Cheaply Clone The Table
-            var playerTable = JsonConvert.DeserializeObject<CraftingTableBase>(table.JsonData);
+            var playerTable = JsonConvert.DeserializeObject<CraftingTableDescriptor>(table.JsonData);
 
             //Strip our the items the player can't craft
             foreach (var craft in table.Crafts)
             {
-                var craftBase = CraftBase.Get(craft);
+                var craftBase = CraftingRecipeDescriptor.Get(craft);
                 if (!(craftBase != null && Conditions.MeetsConditionLists(craftBase.CraftingRequirements, player, null)))
                 {
                     playerTable.Crafts.Remove(craft);
@@ -1736,70 +1741,70 @@ public static partial class PacketSender
 
                 break;
             case GameObjectType.Class:
-                foreach (var obj in ClassBase.Lookup)
+                foreach (var obj in ClassDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Item:
-                foreach (var obj in ItemBase.Lookup)
+                foreach (var obj in ItemDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Npc:
-                foreach (var obj in NpcBase.Lookup)
+                foreach (var obj in NPCDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Projectile:
-                foreach (var obj in ProjectileBase.Lookup)
+                foreach (var obj in ProjectileDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Quest:
-                foreach (var obj in QuestBase.Lookup)
+                foreach (var obj in QuestDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Resource:
-                foreach (var obj in ResourceBase.Lookup)
+                foreach (var obj in ResourceDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Shop:
-                foreach (var obj in ShopBase.Lookup)
+                foreach (var obj in ShopDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Spell:
-                foreach (var obj in SpellBase.Lookup)
+                foreach (var obj in SpellDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.CraftTables:
-                foreach (var obj in CraftingTableBase.Lookup)
+                foreach (var obj in CraftingTableDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
 
                 break;
             case GameObjectType.Crafts:
-                foreach (var obj in CraftBase.Lookup)
+                foreach (var obj in CraftingRecipeDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
@@ -1808,9 +1813,9 @@ public static partial class PacketSender
             case GameObjectType.Map:
                 throw new Exception("Maps are not sent as batches, use the proper send map functions");
             case GameObjectType.Event:
-                foreach (var obj in EventBase.Lookup)
+                foreach (var obj in EventDescriptor.Lookup)
                 {
-                    if (((EventBase)obj.Value).CommonEvent)
+                    if (((EventDescriptor)obj.Value).CommonEvent)
                     {
                         SendGameObject(client, obj.Value, false, false, packetList);
                     }
@@ -1832,7 +1837,7 @@ public static partial class PacketSender
 
                 break;
             case GameObjectType.Tileset:
-                foreach (var obj in TilesetBase.Lookup)
+                foreach (var obj in TilesetDescriptor.Lookup)
                 {
                     SendGameObject(client, obj.Value, false, false, packetList);
                 }
@@ -1878,7 +1883,7 @@ public static partial class PacketSender
             //If editor send quest events and map events
             if (obj.Type == GameObjectType.Quest)
             {
-                SendQuestEventsTo(client, (QuestBase)obj);
+                SendQuestEventsTo(client, (QuestDescriptor)obj);
             }
         }
 
@@ -1895,7 +1900,7 @@ public static partial class PacketSender
     }
 
     //GameObjectPacket
-    public static void SendQuestEventsTo(Client client, QuestBase qst)
+    public static void SendQuestEventsTo(Client client, QuestDescriptor qst)
     {
         SendEventIfExists(client, qst.StartEvent);
         SendEventIfExists(client, qst.EndEvent);
@@ -1906,7 +1911,7 @@ public static partial class PacketSender
     }
 
     //GameObjectPacket
-    public static void SendEventIfExists(Client client, EventBase evt)
+    public static void SendEventIfExists(Client client, EventDescriptor evt)
     {
         if (evt != null && evt.Id != Guid.Empty)
         {
@@ -1995,13 +2000,13 @@ public static partial class PacketSender
     //TimeDataPacket
     public static void SendTimeBaseTo(Client client)
     {
-        client.Send(new TimeDataPacket(TimeBase.GetTimeBase().GetInstanceJson()));
+        client.Send(new TimeDataPacket(DaylightCycleDescriptor.Instance.GetInstanceJson()));
     }
 
     //TimeDataPacket
     public static void SendTimeBaseToAllEditors()
     {
-        SendDataToEditors(new TimeDataPacket(TimeBase.GetTimeBase().GetInstanceJson()));
+        SendDataToEditors(new TimeDataPacket(DaylightCycleDescriptor.Instance.GetInstanceJson()));
     }
 
     //TimePacket
@@ -2009,7 +2014,7 @@ public static partial class PacketSender
     {
         SendDataToAllPlayers(
             new TimePacket(
-                Time.GetTime(), TimeBase.GetTimeBase().SyncTime ? 1 : TimeBase.GetTimeBase().Rate,
+                Time.GetTime(), DaylightCycleDescriptor.Instance.SyncTime ? 1 : DaylightCycleDescriptor.Instance.Rate,
                 Time.GetTimeColor()
             )
         );
@@ -2020,7 +2025,7 @@ public static partial class PacketSender
     {
         client?.Send(
             new TimePacket(
-                Time.GetTime(), TimeBase.GetTimeBase().SyncTime ? 1 : TimeBase.GetTimeBase().Rate,
+                Time.GetTime(), DaylightCycleDescriptor.Instance.SyncTime ? 1 : DaylightCycleDescriptor.Instance.Rate,
                 Time.GetTimeColor()
             )
         );
@@ -2104,9 +2109,9 @@ public static partial class PacketSender
         }
 
         var hiddenQuests = new List<Guid>();
-        foreach (var pair in QuestBase.Lookup)
+        foreach (var pair in QuestDescriptor.Lookup)
         {
-            var quest = (QuestBase)pair.Value;
+            var quest = (QuestDescriptor)pair.Value;
             if (!player.Quests.Any(q => q.QuestId == quest.Id) && quest.DoNotShowUnlessRequirementsMet && !player.CanStartQuest(quest))
             {
                 hiddenQuests.Add(quest.Id);

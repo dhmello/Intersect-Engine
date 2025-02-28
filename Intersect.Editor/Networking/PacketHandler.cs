@@ -5,12 +5,18 @@ using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Maps;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Network;
 using Intersect.Network.Packets.Server;
 using Microsoft.Extensions.Logging;
@@ -369,7 +375,7 @@ internal sealed partial class PacketHandler
     public void HandlePacket(IPacketSender packetSender, MapListPacket packet)
     {
         MapList.List.JsonData = packet.MapListData;
-        MapList.List.PostLoad(MapBase.Lookup, false, true);
+        MapList.List.PostLoad(MapDescriptor.Lookup, false, true);
 
         // If our current map is null, load our previous map as per our stored Id or the first available map.
         if (Globals.CurrentMap == null)
@@ -482,14 +488,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.Class:
                 if (deleted)
                 {
-                    var cls = ClassBase.Get(id);
+                    var cls = ClassDescriptor.Get(id);
                     cls.Delete();
                 }
                 else
                 {
-                    var cls = new ClassBase(id);
+                    var cls = new ClassDescriptor(id);
                     cls.Load(json);
-                    ClassBase.Lookup.Set(id, cls);
+                    ClassDescriptor.Lookup.Set(id, cls);
                 }
 
                 break;
@@ -497,28 +503,28 @@ internal sealed partial class PacketHandler
             case GameObjectType.Item:
                 if (deleted)
                 {
-                    var itm = ItemBase.Get(id);
+                    var itm = ItemDescriptor.Get(id);
                     itm.Delete();
                 }
                 else
                 {
-                    var itm = new ItemBase(id);
+                    var itm = new ItemDescriptor(id);
                     itm.Load(json);
-                    ItemBase.Lookup.Set(id, itm);
+                    ItemDescriptor.Lookup.Set(id, itm);
                 }
 
                 break;
             case GameObjectType.Npc:
                 if (deleted)
                 {
-                    var npc = NpcBase.Get(id);
+                    var npc = NPCDescriptor.Get(id);
                     npc.Delete();
                 }
                 else
                 {
-                    var npc = new NpcBase(id);
+                    var npc = new NPCDescriptor(id);
                     npc.Load(json);
-                    NpcBase.Lookup.Set(id, npc);
+                    NPCDescriptor.Lookup.Set(id, npc);
                 }
 
                 break;
@@ -526,14 +532,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.Projectile:
                 if (deleted)
                 {
-                    var proj = ProjectileBase.Get(id);
+                    var proj = ProjectileDescriptor.Get(id);
                     proj.Delete();
                 }
                 else
                 {
-                    var proj = new ProjectileBase(id);
+                    var proj = new ProjectileDescriptor(id);
                     proj.Load(json);
-                    ProjectileBase.Lookup.Set(id, proj);
+                    ProjectileDescriptor.Lookup.Set(id, proj);
                 }
 
                 break;
@@ -541,19 +547,19 @@ internal sealed partial class PacketHandler
             case GameObjectType.Quest:
                 if (deleted)
                 {
-                    var qst = QuestBase.Get(id);
+                    var qst = QuestDescriptor.Get(id);
                     qst.Delete();
                 }
                 else
                 {
-                    var qst = new QuestBase(id);
+                    var qst = new QuestDescriptor(id);
                     qst.Load(json);
                     foreach (var tsk in qst.Tasks)
                     {
                         qst.OriginalTaskEventIds.Add(tsk.Id, tsk.CompletionEventId);
                     }
 
-                    QuestBase.Lookup.Set(id, qst);
+                    QuestDescriptor.Lookup.Set(id, qst);
                 }
 
                 break;
@@ -561,14 +567,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.Resource:
                 if (deleted)
                 {
-                    var res = ResourceBase.Get(id);
+                    var res = ResourceDescriptor.Get(id);
                     res.Delete();
                 }
                 else
                 {
-                    var res = new ResourceBase(id);
+                    var res = new ResourceDescriptor(id);
                     res.Load(json);
-                    ResourceBase.Lookup.Set(id, res);
+                    ResourceDescriptor.Lookup.Set(id, res);
                 }
 
                 break;
@@ -576,14 +582,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.Shop:
                 if (deleted)
                 {
-                    var shp = ShopBase.Get(id);
+                    var shp = ShopDescriptor.Get(id);
                     shp.Delete();
                 }
                 else
                 {
-                    var shp = new ShopBase(id);
+                    var shp = new ShopDescriptor(id);
                     shp.Load(json);
-                    ShopBase.Lookup.Set(id, shp);
+                    ShopDescriptor.Lookup.Set(id, shp);
                 }
 
                 break;
@@ -591,14 +597,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.Spell:
                 if (deleted)
                 {
-                    var spl = SpellBase.Get(id);
+                    var spl = SpellDescriptor.Get(id);
                     spl.Delete();
                 }
                 else
                 {
-                    var spl = new SpellBase(id);
+                    var spl = new SpellDescriptor(id);
                     spl.Load(json);
-                    SpellBase.Lookup.Set(id, spl);
+                    SpellDescriptor.Lookup.Set(id, spl);
                 }
 
                 break;
@@ -606,14 +612,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.CraftTables:
                 if (deleted)
                 {
-                    var cft = CraftingTableBase.Get(id);
+                    var cft = CraftingTableDescriptor.Get(id);
                     cft.Delete();
                 }
                 else
                 {
-                    var cft = new CraftingTableBase(id);
+                    var cft = new CraftingTableDescriptor(id);
                     cft.Load(json);
-                    CraftingTableBase.Lookup.Set(id, cft);
+                    CraftingTableDescriptor.Lookup.Set(id, cft);
                 }
 
                 break;
@@ -621,14 +627,14 @@ internal sealed partial class PacketHandler
             case GameObjectType.Crafts:
                 if (deleted)
                 {
-                    var cft = CraftBase.Get(id);
+                    var cft = CraftingRecipeDescriptor.Get(id);
                     cft.Delete();
                 }
                 else
                 {
-                    var cft = new CraftBase(id);
+                    var cft = new CraftingRecipeDescriptor(id);
                     cft.Load(json);
-                    CraftBase.Lookup.Set(id, cft);
+                    CraftingRecipeDescriptor.Lookup.Set(id, cft);
                 }
 
                 break;
@@ -641,16 +647,16 @@ internal sealed partial class PacketHandler
                 var wasCommon = false;
                 if (deleted)
                 {
-                    var evt = EventBase.Get(id);
+                    var evt = EventDescriptor.Get(id);
                     wasCommon = evt.CommonEvent;
                     evt.Delete();
                 }
                 else
                 {
-                    var evt = new EventBase(id);
+                    var evt = new EventDescriptor(id);
                     evt.Load(json);
                     wasCommon = evt.CommonEvent;
-                    EventBase.Lookup.Set(id, evt);
+                    EventDescriptor.Lookup.Set(id, evt);
                 }
 
                 if (!wasCommon)
@@ -691,9 +697,9 @@ internal sealed partial class PacketHandler
                 break;
 
             case GameObjectType.Tileset:
-                var obj = new TilesetBase(id);
+                var obj = new TilesetDescriptor(id);
                 obj.Load(json);
-                TilesetBase.Lookup.Set(id, obj);
+                TilesetDescriptor.Lookup.Set(id, obj);
                 if (Globals.HasGameData && !packet.AnotherFollowing)
                 {
                     GameContentManager.LoadTilesets();
@@ -746,6 +752,6 @@ internal sealed partial class PacketHandler
     //TimeDataPacket
     public void HandlePacket(IPacketSender packetSender, TimeDataPacket packet)
     {
-        TimeBase.GetTimeBase().LoadFromJson(packet.TimeJson);
+        DaylightCycleDescriptor.Instance.LoadFromJson(packet.TimeJson);
     }
 }

@@ -1,14 +1,16 @@
 ﻿using System.IO.Compression;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Conditions;
+using Intersect.Framework.Core.GameObjects.Conditions.ConditionMetadata;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
 using Intersect.Framework.Core.Serialization;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using MapAttribute = Intersect.GameObjects.Maps.MapAttribute;
+using MapAttribute = Intersect.Framework.Core.GameObjects.Maps.MapAttribute;
 
 namespace Intersect.Server.Database.GameData.Migrations;
 

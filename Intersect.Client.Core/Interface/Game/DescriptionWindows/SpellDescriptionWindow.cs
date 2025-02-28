@@ -9,11 +9,11 @@ namespace Intersect.Client.Interface.Game.DescriptionWindows;
 
 public partial class SpellDescriptionWindow : DescriptionWindowBase
 {
-    protected SpellBase mSpell;
+    protected SpellDescriptor mSpell;
 
     public SpellDescriptionWindow(Guid spellId, int x, int y, ImagePanel? itemDecriptionContainer = null) : base(Interface.GameUi.GameCanvas, "DescriptionWindow")
     {
-        mSpell = SpellBase.Get(spellId);
+        mSpell = SpellDescriptor.Get(spellId);
 
         GenerateComponents();
         SetupDescriptionWindow();
@@ -22,7 +22,7 @@ public partial class SpellDescriptionWindow : DescriptionWindowBase
 
     public SpellDescriptionWindow(Guid spellId, ImagePanel _statusIcon) : base(Interface.GameUi.GameCanvas, "DescriptionWindow")
     {
-        mSpell = SpellBase.Get(spellId);
+        mSpell = SpellDescriptor.Get(spellId);
 
         GenerateComponents();
         SetupDescriptionWindow();
@@ -92,7 +92,7 @@ public partial class SpellDescriptionWindow : DescriptionWindowBase
         {
             if (mSpell.Combat.TargetType == SpellTargetType.Projectile)
             {
-                var proj = ProjectileBase.Get(mSpell.Combat.ProjectileId);
+                var proj = ProjectileDescriptor.Get(mSpell.Combat.ProjectileId);
                 header.SetDescription(Strings.SpellDescription.TargetTypes[(int)mSpell.Combat.TargetType].ToString(proj?.Range ?? 0, mSpell.Combat.HitRadius), Color.White);
             }
             else

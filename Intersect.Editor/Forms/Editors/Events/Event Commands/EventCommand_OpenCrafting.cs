@@ -1,6 +1,7 @@
 using Intersect.Editor.Localization;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events.Commands;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 
@@ -19,8 +20,8 @@ public partial class EventCommandOpenCraftingTable : UserControl
         mEventEditor = editor;
         InitLocalization();
         cmbTable.Items.Clear();
-        cmbTable.Items.AddRange(CraftingTableBase.Names);
-        cmbTable.SelectedIndex = CraftingTableBase.ListIndex(mMyCommand.CraftingTableId);
+        cmbTable.Items.AddRange(CraftingTableDescriptor.Names);
+        cmbTable.SelectedIndex = CraftingTableDescriptor.ListIndex(mMyCommand.CraftingTableId);
         chkJournalMode.Checked = mMyCommand.JournalMode;
     }
 
@@ -46,7 +47,7 @@ public partial class EventCommandOpenCraftingTable : UserControl
     {
         if (cmbTable.SelectedIndex > -1)
         {
-            mMyCommand.CraftingTableId = CraftingTableBase.IdFromList(cmbTable.SelectedIndex);
+            mMyCommand.CraftingTableId = CraftingTableDescriptor.IdFromList(cmbTable.SelectedIndex);
         }
 
         mMyCommand.JournalMode = chkJournalMode.Checked;

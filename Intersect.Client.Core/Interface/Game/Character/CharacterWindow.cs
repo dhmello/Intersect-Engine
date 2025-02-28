@@ -7,6 +7,8 @@ using Intersect.Client.General;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.GameObjects;
 using Intersect.Network.Packets.Server;
 
@@ -69,7 +71,7 @@ public partial class CharacterWindow
     public int Y;
 
     //Extra Buffs
-    ClassBase mPlayer;
+    ClassDescriptor mPlayer;
 
     Label mHpRegen;
 
@@ -218,7 +220,7 @@ public partial class CharacterWindow
 
         mCharacterName.Text = Globals.Me.Name;
         mCharacterLevelAndClass.Text = Strings.Character.LevelAndClass.ToString(
-            Globals.Me.Level, ClassBase.GetName(Globals.Me.Class)
+            Globals.Me.Level, ClassDescriptor.GetName(Globals.Me.Class)
         );
 
         //Load Portrait
@@ -256,7 +258,7 @@ public partial class CharacterWindow
                             .Inventory[equipment[Options.Instance.Equipment.Slots.IndexOf(Options.Instance.Equipment.Paperdoll.Directions[1][z])]]
                             .ItemId;
 
-                        if (ItemBase.TryGet(itemNum, out var itemDescriptor))
+                        if (ItemDescriptor.TryGet(itemNum, out var itemDescriptor))
                         {
                             paperdoll = Globals.Me.Gender == 0
                                 ? itemDescriptor.MalePaperdoll : itemDescriptor.FemalePaperdoll;
@@ -406,7 +408,7 @@ public partial class CharacterWindow
     /// </summary>
     public void UpdateExtraBuffs()
     {
-        mPlayer = ClassBase.Get(Globals.Me?.Class ?? Guid.Empty);
+        mPlayer = ClassDescriptor.Get(Globals.Me?.Class ?? Guid.Empty);
 
         //Getting HP and Mana Regen
         if (mPlayer != null)
@@ -440,7 +442,7 @@ public partial class CharacterWindow
     /// <param name="itemId">Id of item to update extra buffs</param>
     public void UpdateExtraBuffs(Guid itemId)
     {
-        var item = ItemBase.Get(itemId);
+        var item = ItemDescriptor.Get(itemId);
 
         if (item == null)
         {

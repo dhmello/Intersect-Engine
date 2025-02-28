@@ -1,9 +1,15 @@
 using Intersect.Editor.Localization;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Conditions;
+using Intersect.Framework.Core.GameObjects.Conditions.ConditionMetadata;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
 using Intersect.Utilities;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
@@ -266,17 +272,17 @@ public partial class EventCommandConditionalBranch : UserControl
         btnCancel.Text = Strings.EventConditional.cancel;
     }
 
-    private void ConditionTypeChanged(ConditionTypes type)
+    private void ConditionTypeChanged(ConditionType type)
     {
         chkBank.Visible = false;
         switch (type)
         {
-            case ConditionTypes.VariableIs:
+            case ConditionType.VariableIs:
                 Condition = new VariableIsCondition();
                 SetupFormValues((dynamic)Condition);
 
                 break;
-            case ConditionTypes.HasItem:
+            case ConditionType.HasItem:
                 Condition = new HasItemCondition();
                 if (cmbItem.Items.Count > 0)
                 {
@@ -287,7 +293,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 chkBank.Visible = true;
 
                 break;
-            case ConditionTypes.ClassIs:
+            case ConditionType.ClassIs:
                 Condition = new ClassIsCondition();
                 if (cmbClass.Items.Count > 0)
                 {
@@ -295,7 +301,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.KnowsSpell:
+            case ConditionType.KnowsSpell:
                 Condition = new KnowsSpellCondition();
                 if (cmbSpell.Items.Count > 0)
                 {
@@ -303,7 +309,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.LevelOrStat:
+            case ConditionType.LevelOrStat:
                 Condition = new LevelOrStatCondition();
                 cmbLevelComparator.SelectedIndex = 0;
                 cmbLevelStat.SelectedIndex = 0;
@@ -311,24 +317,24 @@ public partial class EventCommandConditionalBranch : UserControl
                 chkStatIgnoreBuffs.Checked = false;
 
                 break;
-            case ConditionTypes.SelfSwitch:
+            case ConditionType.SelfSwitch:
                 Condition = new SelfSwitchCondition();
                 cmbSelfSwitch.SelectedIndex = 0;
                 cmbSelfSwitchVal.SelectedIndex = 0;
 
                 break;
-            case ConditionTypes.AccessIs:
+            case ConditionType.AccessIs:
                 Condition = new AccessIsCondition();
                 cmbPower.SelectedIndex = 0;
 
                 break;
-            case ConditionTypes.TimeBetween:
+            case ConditionType.TimeBetween:
                 Condition = new TimeBetweenCondition();
                 cmbTime1.SelectedIndex = 0;
                 cmbTime2.SelectedIndex = 0;
 
                 break;
-            case ConditionTypes.CanStartQuest:
+            case ConditionType.CanStartQuest:
                 Condition = new CanStartQuestCondition();
                 if (cmbStartQuest.Items.Count > 0)
                 {
@@ -336,7 +342,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.QuestInProgress:
+            case ConditionType.QuestInProgress:
                 Condition = new QuestInProgressCondition();
                 if (cmbQuestInProgress.Items.Count > 0)
                 {
@@ -346,7 +352,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 cmbTaskModifier.SelectedIndex = 0;
 
                 break;
-            case ConditionTypes.QuestCompleted:
+            case ConditionType.QuestCompleted:
                 Condition = new QuestCompletedCondition();
                 if (cmbCompletedQuest.Items.Count > 0)
                 {
@@ -354,7 +360,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.NoNpcsOnMap:
+            case ConditionType.NoNpcsOnMap:
                 Condition = new NoNpcsOnMapCondition();
                 if (cmbNpcs.Items.Count > 0)
                 {
@@ -362,17 +368,17 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.GenderIs:
+            case ConditionType.GenderIs:
                 Condition = new GenderIsCondition();
                 cmbGender.SelectedIndex = 0;
 
                 break;
-            case ConditionTypes.MapIs:
+            case ConditionType.MapIs:
                 Condition = new MapIsCondition();
                 btnSelectMap.Tag = Guid.Empty;
 
                 break;
-            case ConditionTypes.IsItemEquipped:
+            case ConditionType.IsItemEquipped:
                 Condition = new IsItemEquippedCondition();
                 if (cmbEquippedItem.Items.Count > 0)
                 {
@@ -380,17 +386,17 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.HasFreeInventorySlots:
+            case ConditionType.HasFreeInventorySlots:
                 Condition = new HasFreeInventorySlots();
 
 
                 break;
-            case ConditionTypes.InGuildWithRank:
+            case ConditionType.InGuildWithRank:
                 Condition = new InGuildWithRank();
                 cmbRank.SelectedIndex = 0;
 
                 break;
-            case ConditionTypes.MapZoneTypeIs:
+            case ConditionType.MapZoneTypeIs:
                 Condition = new MapZoneTypeIs();
                 if (cmbMapZoneType.Items.Count > 0)
                 {
@@ -398,7 +404,7 @@ public partial class EventCommandConditionalBranch : UserControl
                 }
 
                 break;
-            case ConditionTypes.CheckEquipment:
+            case ConditionType.CheckEquipment:
                 Condition = new CheckEquippedSlot();
                 if (cmbCheckEquippedSlot.Items.Count > 0)
                 {
@@ -411,7 +417,7 @@ public partial class EventCommandConditionalBranch : UserControl
         }
     }
 
-    private void UpdateFormElements(ConditionTypes type)
+    private void UpdateFormElements(ConditionType type)
     {
         grpVariable.Hide();
         grpInventoryConditions.Hide();
@@ -433,7 +439,7 @@ public partial class EventCommandConditionalBranch : UserControl
         grpCheckEquippedSlot.Hide();
         switch (type)
         {
-            case ConditionTypes.VariableIs:
+            case ConditionType.VariableIs:
                 grpVariable.Show();
 
                 cmbCompareGlobalVar.Items.Clear();
@@ -455,98 +461,98 @@ public partial class EventCommandConditionalBranch : UserControl
                 cmbBooleanUserVariable.Items.AddRange(UserVariableDescriptor.Names);
 
                 break;
-            case ConditionTypes.HasItem:
+            case ConditionType.HasItem:
                 grpInventoryConditions.Show();
                 grpInventoryConditions.Text = Strings.EventConditional.hasitem;
                 lblItem.Visible = true;
                 cmbItem.Visible = true;
                 cmbItem.Items.Clear();
-                cmbItem.Items.AddRange(ItemBase.Names);
+                cmbItem.Items.AddRange(ItemDescriptor.Names);
                 SetupAmountInput();
 
                 break;
-            case ConditionTypes.ClassIs:
+            case ConditionType.ClassIs:
                 grpClass.Show();
                 cmbClass.Items.Clear();
-                cmbClass.Items.AddRange(ClassBase.Names);
+                cmbClass.Items.AddRange(ClassDescriptor.Names);
 
                 break;
-            case ConditionTypes.KnowsSpell:
+            case ConditionType.KnowsSpell:
                 grpSpell.Show();
                 cmbSpell.Items.Clear();
-                cmbSpell.Items.AddRange(SpellBase.Names);
+                cmbSpell.Items.AddRange(SpellDescriptor.Names);
 
                 break;
-            case ConditionTypes.LevelOrStat:
+            case ConditionType.LevelOrStat:
                 grpLevelStat.Show();
 
                 break;
-            case ConditionTypes.SelfSwitch:
+            case ConditionType.SelfSwitch:
                 grpSelfSwitch.Show();
 
                 break;
-            case ConditionTypes.AccessIs:
+            case ConditionType.AccessIs:
                 grpPowerIs.Show();
 
                 break;
-            case ConditionTypes.TimeBetween:
+            case ConditionType.TimeBetween:
                 grpTime.Show();
                 cmbTime1.Items.Clear();
                 cmbTime2.Items.Clear();
                 var time = new DateTime(2000, 1, 1, 0, 0, 0);
-                for (var i = 0; i < 1440; i += TimeBase.GetTimeBase().RangeInterval)
+                for (var i = 0; i < 1440; i += DaylightCycleDescriptor.Instance.RangeInterval)
                 {
                     var addRange = time.ToString("h:mm:ss tt") + " " + Strings.EventConditional.to + " ";
-                    time = time.AddMinutes(TimeBase.GetTimeBase().RangeInterval);
+                    time = time.AddMinutes(DaylightCycleDescriptor.Instance.RangeInterval);
                     addRange += time.ToString("h:mm:ss tt");
                     cmbTime1.Items.Add(addRange);
                     cmbTime2.Items.Add(addRange);
                 }
 
                 break;
-            case ConditionTypes.CanStartQuest:
+            case ConditionType.CanStartQuest:
                 grpStartQuest.Show();
                 cmbStartQuest.Items.Clear();
-                cmbStartQuest.Items.AddRange(QuestBase.Names);
+                cmbStartQuest.Items.AddRange(QuestDescriptor.Names);
 
                 break;
-            case ConditionTypes.QuestInProgress:
+            case ConditionType.QuestInProgress:
                 grpQuestInProgress.Show();
                 cmbQuestInProgress.Items.Clear();
-                cmbQuestInProgress.Items.AddRange(QuestBase.Names);
+                cmbQuestInProgress.Items.AddRange(QuestDescriptor.Names);
 
                 break;
-            case ConditionTypes.QuestCompleted:
+            case ConditionType.QuestCompleted:
                 grpQuestCompleted.Show();
                 cmbCompletedQuest.Items.Clear();
-                cmbCompletedQuest.Items.AddRange(QuestBase.Names);
+                cmbCompletedQuest.Items.AddRange(QuestDescriptor.Names);
 
                 break;
-            case ConditionTypes.NoNpcsOnMap:
+            case ConditionType.NoNpcsOnMap:
                 grpNpc.Show();
                 cmbNpcs.Items.Clear();
-                cmbNpcs.Items.AddRange(NpcBase.Names);
+                cmbNpcs.Items.AddRange(NPCDescriptor.Names);
 
                 chkNpc.Checked = false;
                 cmbNpcs.Hide();
                 lblNpc.Hide();
                 break;
-            case ConditionTypes.GenderIs:
+            case ConditionType.GenderIs:
                 grpGender.Show();
 
                 break;
-            case ConditionTypes.MapIs:
+            case ConditionType.MapIs:
                 grpMapIs.Show();
 
                 break;
-            case ConditionTypes.IsItemEquipped:
+            case ConditionType.IsItemEquipped:
                 grpEquippedItem.Show();
                 cmbEquippedItem.Items.Clear();
-                cmbEquippedItem.Items.AddRange(ItemBase.Names);
+                cmbEquippedItem.Items.AddRange(ItemDescriptor.Names);
 
                 break;
 
-            case ConditionTypes.HasFreeInventorySlots:
+            case ConditionType.HasFreeInventorySlots:
                 grpInventoryConditions.Show();
                 grpInventoryConditions.Text = Strings.EventConditional.FreeInventorySlots;
                 lblItem.Visible = false;
@@ -555,15 +561,15 @@ public partial class EventCommandConditionalBranch : UserControl
                 SetupAmountInput();
 
                 break;
-            case ConditionTypes.InGuildWithRank:
+            case ConditionType.InGuildWithRank:
                 grpInGuild.Show();
 
                 break;
-            case ConditionTypes.MapZoneTypeIs:
+            case ConditionType.MapZoneTypeIs:
                 grpMapZoneType.Show();
 
                 break;
-            case ConditionTypes.CheckEquipment:
+            case ConditionType.CheckEquipment:
                 grpCheckEquippedSlot.Show();
                 cmbCheckEquippedSlot.Items.Clear();
                 foreach (var slot in Options.Instance.Equipment.Slots)
@@ -623,10 +629,10 @@ public partial class EventCommandConditionalBranch : UserControl
             type = 0;
         }
 
-        UpdateFormElements((ConditionTypes)type);
-        if ((ConditionTypes)type != Condition.Type)
+        UpdateFormElements((ConditionType)type);
+        if ((ConditionType)type != Condition.Type)
         {
-            ConditionTypeChanged((ConditionTypes)type);
+            ConditionTypeChanged((ConditionType)type);
         }
     }
 
@@ -645,7 +651,7 @@ public partial class EventCommandConditionalBranch : UserControl
     private void cmbQuestInProgress_SelectedIndexChanged(object sender, EventArgs e)
     {
         cmbQuestTask.Items.Clear();
-        var quest = QuestBase.Get(QuestBase.IdFromList(cmbQuestInProgress.SelectedIndex));
+        var quest = QuestDescriptor.Get(QuestDescriptor.IdFromList(cmbQuestInProgress.SelectedIndex));
         if (quest != null)
         {
             foreach (var task in quest.Tasks)
@@ -1132,12 +1138,12 @@ public partial class EventCommandConditionalBranch : UserControl
 
         switch (Condition.Type)
         {
-            case ConditionTypes.HasFreeInventorySlots:
+            case ConditionType.HasFreeInventorySlots:
                 conditionVariableType = ((HasFreeInventorySlots)Condition).VariableType;
                 conditionVariableId = ((HasFreeInventorySlots)Condition).VariableId;
                 ConditionQuantity = ((HasFreeInventorySlots)Condition).Quantity;
                 break;
-            case ConditionTypes.HasItem:
+            case ConditionType.HasItem:
                 conditionVariableType = ((HasItemCondition)Condition).VariableType;
                 conditionVariableId = ((HasItemCondition)Condition).VariableId;
                 ConditionQuantity = ((HasItemCondition)Condition).Quantity;
@@ -1258,7 +1264,7 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SetupFormValues(HasItemCondition condition)
     {
-        cmbItem.SelectedIndex = ItemBase.ListIndex(condition.ItemId);
+        cmbItem.SelectedIndex = ItemDescriptor.ListIndex(condition.ItemId);
         nudItemAmount.Value = condition.Quantity;
         rdoVariable.Checked = condition.UseVariable;
         rdoInvGlobalVariable.Checked = condition.VariableType == VariableType.ServerVariable;
@@ -1269,12 +1275,12 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SetupFormValues(ClassIsCondition condition)
     {
-        cmbClass.SelectedIndex = ClassBase.ListIndex(condition.ClassId);
+        cmbClass.SelectedIndex = ClassDescriptor.ListIndex(condition.ClassId);
     }
 
     private void SetupFormValues(KnowsSpellCondition condition)
     {
-        cmbSpell.SelectedIndex = SpellBase.ListIndex(condition.SpellId);
+        cmbSpell.SelectedIndex = SpellDescriptor.ListIndex(condition.SpellId);
     }
 
     private void SetupFormValues(LevelOrStatCondition condition)
@@ -1304,12 +1310,12 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SetupFormValues(CanStartQuestCondition condition)
     {
-        cmbStartQuest.SelectedIndex = QuestBase.ListIndex(condition.QuestId);
+        cmbStartQuest.SelectedIndex = QuestDescriptor.ListIndex(condition.QuestId);
     }
 
     private void SetupFormValues(QuestInProgressCondition condition)
     {
-        cmbQuestInProgress.SelectedIndex = QuestBase.ListIndex(condition.QuestId);
+        cmbQuestInProgress.SelectedIndex = QuestDescriptor.ListIndex(condition.QuestId);
         cmbTaskModifier.SelectedIndex = (int)condition.Progress;
         if (cmbTaskModifier.SelectedIndex == -1)
         {
@@ -1319,7 +1325,7 @@ public partial class EventCommandConditionalBranch : UserControl
         if (cmbTaskModifier.SelectedIndex != 0)
         {
             //Get Quest Task Here
-            var quest = QuestBase.Get(QuestBase.IdFromList(cmbQuestInProgress.SelectedIndex));
+            var quest = QuestDescriptor.Get(QuestDescriptor.IdFromList(cmbQuestInProgress.SelectedIndex));
             if (quest != null)
             {
                 for (var i = 0; i < quest.Tasks.Count; i++)
@@ -1340,7 +1346,7 @@ public partial class EventCommandConditionalBranch : UserControl
         {
             lblNpc.Show();
             cmbNpcs.Show();
-            cmbNpcs.SelectedIndex = NpcBase.ListIndex(condition.NpcId);
+            cmbNpcs.SelectedIndex = NPCDescriptor.ListIndex(condition.NpcId);
         }
         else
         {
@@ -1351,7 +1357,7 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SetupFormValues(QuestCompletedCondition condition)
     {
-        cmbCompletedQuest.SelectedIndex = QuestBase.ListIndex(condition.QuestId);
+        cmbCompletedQuest.SelectedIndex = QuestDescriptor.ListIndex(condition.QuestId);
     }
 
     private void SetupFormValues(GenderIsCondition condition)
@@ -1366,7 +1372,7 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SetupFormValues(IsItemEquippedCondition condition)
     {
-        cmbEquippedItem.SelectedIndex = ItemBase.ListIndex(condition.ItemId);
+        cmbEquippedItem.SelectedIndex = ItemDescriptor.ListIndex(condition.ItemId);
     }
 
     private void SetupFormValues(HasFreeInventorySlots condition)
@@ -1444,7 +1450,7 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SaveFormValues(HasItemCondition condition)
     {
-        condition.ItemId = ItemBase.IdFromList(cmbItem.SelectedIndex);
+        condition.ItemId = ItemDescriptor.IdFromList(cmbItem.SelectedIndex);
         condition.Quantity = (int)nudItemAmount.Value;
         if (rdoInvPlayerVariable.Checked)
         {
@@ -1467,12 +1473,12 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SaveFormValues(ClassIsCondition condition)
     {
-        condition.ClassId = ClassBase.IdFromList(cmbClass.SelectedIndex);
+        condition.ClassId = ClassDescriptor.IdFromList(cmbClass.SelectedIndex);
     }
 
     private void SaveFormValues(KnowsSpellCondition condition)
     {
-        condition.SpellId = SpellBase.IdFromList(cmbSpell.SelectedIndex);
+        condition.SpellId = SpellDescriptor.IdFromList(cmbSpell.SelectedIndex);
     }
 
     private void SaveFormValues(LevelOrStatCondition condition)
@@ -1507,18 +1513,18 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SaveFormValues(CanStartQuestCondition condition)
     {
-        condition.QuestId = QuestBase.IdFromList(cmbStartQuest.SelectedIndex);
+        condition.QuestId = QuestDescriptor.IdFromList(cmbStartQuest.SelectedIndex);
     }
 
     private void SaveFormValues(QuestInProgressCondition condition)
     {
-        condition.QuestId = QuestBase.IdFromList(cmbQuestInProgress.SelectedIndex);
+        condition.QuestId = QuestDescriptor.IdFromList(cmbQuestInProgress.SelectedIndex);
         condition.Progress = (QuestProgressState)cmbTaskModifier.SelectedIndex;
         condition.TaskId = Guid.Empty;
         if (cmbTaskModifier.SelectedIndex != 0)
         {
             //Get Quest Task Here
-            var quest = QuestBase.Get(QuestBase.IdFromList(cmbQuestInProgress.SelectedIndex));
+            var quest = QuestDescriptor.Get(QuestDescriptor.IdFromList(cmbQuestInProgress.SelectedIndex));
             if (quest != null)
             {
                 if (cmbQuestTask.SelectedIndex > -1)
@@ -1531,13 +1537,13 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SaveFormValues(QuestCompletedCondition condition)
     {
-        condition.QuestId = QuestBase.IdFromList(cmbCompletedQuest.SelectedIndex);
+        condition.QuestId = QuestDescriptor.IdFromList(cmbCompletedQuest.SelectedIndex);
     }
 
     private void SaveFormValues(NoNpcsOnMapCondition condition)
     {
         condition.SpecificNpc = chkNpc.Checked;
-        condition.NpcId = condition.SpecificNpc ? NpcBase.IdFromList(cmbNpcs.SelectedIndex) : default;
+        condition.NpcId = condition.SpecificNpc ? NPCDescriptor.IdFromList(cmbNpcs.SelectedIndex) : default;
     }
 
     private void SaveFormValues(GenderIsCondition condition)
@@ -1552,7 +1558,7 @@ public partial class EventCommandConditionalBranch : UserControl
 
     private void SaveFormValues(IsItemEquippedCondition condition)
     {
-        condition.ItemId = ItemBase.IdFromList(cmbEquippedItem.SelectedIndex);
+        condition.ItemId = ItemDescriptor.IdFromList(cmbEquippedItem.SelectedIndex);
     }
 
     private void SaveFormValues(HasFreeInventorySlots condition)

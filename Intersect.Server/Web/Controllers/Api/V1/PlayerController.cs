@@ -1,5 +1,8 @@
 using System.Net;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
 using Intersect.Server.Collections.Indexing;
@@ -274,7 +277,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
                 return BadRequest(lookupKey.IsIdInvalid ? @"Invalid player id." : @"Invalid player name.");
             }
 
-            if (!ClassBase.TryGet(change.Id, out var _))
+            if (!ClassDescriptor.TryGet(change.Id, out var _))
             {
                 return BadRequest($@"Invalid class id {change.Id}.");
             }
@@ -418,7 +421,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
                 return BadRequest(lookupKey.IsIdInvalid ? @"Invalid player id." : @"Invalid player name.");
             }
 
-            if (!ItemBase.TryGet(itemInfo.ItemId, out var descriptor))
+            if (!ItemDescriptor.TryGet(itemInfo.ItemId, out var descriptor))
             {
                 return NotFound($"No item found with ID '{itemInfo.ItemId}'");
             }
@@ -477,7 +480,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
                 return NotFound($@"No player found for lookup key '{lookupKey}'");
             }
 
-            if (!ItemBase.TryGet(itemInfo.ItemId, out var descriptor))
+            if (!ItemDescriptor.TryGet(itemInfo.ItemId, out var descriptor))
             {
                 return NotFound($"No item found with ID '{itemInfo.ItemId}'");
             }
@@ -531,7 +534,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
                 return BadRequest(lookupKey.IsIdInvalid ? @"Invalid player id." : @"Invalid player name.");
             }
 
-            if (SpellBase.Get(spell.Id) == null)
+            if (SpellDescriptor.Get(spell.Id) == null)
             {
                 return BadRequest(@"Invalid spell id.");
             }
@@ -567,7 +570,7 @@ namespace Intersect.Server.Web.Controllers.Api.V1
                 return BadRequest(lookupKey.IsIdInvalid ? @"Invalid player id." : @"Invalid player name.");
             }
 
-            if (SpellBase.Get(spell.Id) == null)
+            if (SpellDescriptor.Get(spell.Id) == null)
             {
                 return BadRequest(@"Invalid spell id.");
             }

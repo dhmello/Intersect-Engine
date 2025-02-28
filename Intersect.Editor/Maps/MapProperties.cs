@@ -3,8 +3,9 @@ using Intersect.Editor.Content;
 using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
 using Intersect.Utilities;
 using Graphics = Intersect.Editor.Core.Graphics;
 
@@ -50,9 +51,9 @@ partial class CustomDescription : DescriptionAttribute
 partial class MapProperties
 {
 
-    private MapBase mMyMap;
+    private MapDescriptor mMyMap;
 
-    public MapProperties(MapBase map)
+    public MapProperties(MapDescriptor map)
     {
         mMyMap = map;
     }

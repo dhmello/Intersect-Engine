@@ -5,6 +5,8 @@ using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Items;
 using Intersect.GameObjects;
 using Graphics = System.Drawing.Graphics;
 
@@ -14,13 +16,13 @@ namespace Intersect.Editor.Forms.Editors;
 public partial class FrmProjectile : EditorForm
 {
 
-    private List<ProjectileBase> mChanged = new List<ProjectileBase>();
+    private List<ProjectileDescriptor> mChanged = new List<ProjectileDescriptor>();
 
     private string mCopiedItem;
 
     private Bitmap mDirectionGrid;
 
-    private ProjectileBase mEditorItem;
+    private ProjectileDescriptor mEditorItem;
 
     private List<string> mKnownFolders = new List<string>();
 
@@ -34,7 +36,7 @@ public partial class FrmProjectile : EditorForm
     }
     private void AssignEditorItem(Guid id)
     {
-        mEditorItem = ProjectileBase.Get(id);
+        mEditorItem = ProjectileDescriptor.Get(id);
         UpdateEditor();
     }
 
@@ -43,7 +45,7 @@ public partial class FrmProjectile : EditorForm
         if (type == GameObjectType.Projectile)
         {
             InitEditor();
-            if (mEditorItem != null && !ProjectileBase.Lookup.Values.Contains(mEditorItem))
+            if (mEditorItem != null && !ProjectileDescriptor.Lookup.Values.Contains(mEditorItem))
             {
                 mEditorItem = null;
                 UpdateEditor();
@@ -89,11 +91,11 @@ public partial class FrmProjectile : EditorForm
 
         cmbItem.Items.Clear();
         cmbItem.Items.Add(Strings.General.None);
-        cmbItem.Items.AddRange(ItemBase.Names);
+        cmbItem.Items.AddRange(ItemDescriptor.Names);
 
         cmbSpell.Items.Clear();
         cmbSpell.Items.Add(Strings.General.None);
-        cmbSpell.Items.AddRange(SpellBase.Names);
+        cmbSpell.Items.AddRange(SpellDescriptor.Names);
 
         InitLocalization();
         UpdateEditor();
@@ -170,14 +172,14 @@ public partial class FrmProjectile : EditorForm
             nudSpawn.Value = mEditorItem.Delay;
             nudAmount.Value = mEditorItem.Quantity;
             nudRange.Value = mEditorItem.Range;
-            cmbSpell.SelectedIndex = SpellBase.ListIndex(mEditorItem.SpellId) + 1;
+            cmbSpell.SelectedIndex = SpellDescriptor.ListIndex(mEditorItem.SpellId) + 1;
             nudKnockback.Value = mEditorItem.Knockback;
             chkIgnoreMapBlocks.Checked = mEditorItem.IgnoreMapBlocks;
             chkIgnoreActiveResources.Checked = mEditorItem.IgnoreActiveResources;
             chkIgnoreInactiveResources.Checked = mEditorItem.IgnoreExhaustedResources;
             chkIgnoreZDimensionBlocks.Checked = mEditorItem.IgnoreZDimension;
             chkPierce.Checked = mEditorItem.PierceTarget;
-            cmbItem.SelectedIndex = ItemBase.ListIndex(mEditorItem.AmmoItemId) + 1;
+            cmbItem.SelectedIndex = ItemDescriptor.ListIndex(mEditorItem.AmmoItemId) + 1;
             nudConsume.Value = mEditorItem.AmmoRequired;
 
             if (lstAnimations.SelectedIndex < 0)
@@ -334,16 +336,16 @@ public partial class FrmProjectile : EditorForm
         var gfx = Graphics.FromImage(img);
         gfx.FillRectangle(Brushes.White, new Rectangle(0, 0, picSpawns.Width, picSpawns.Height));
 
-        for (var x = 0; x < ProjectileBase.SPAWN_LOCATIONS_WIDTH; x++)
+        for (var x = 0; x < ProjectileDescriptor.SPAWN_LOCATIONS_WIDTH; x++)
         {
-            for (var y = 0; y < ProjectileBase.SPAWN_LOCATIONS_HEIGHT; y++)
+            for (var y = 0; y < ProjectileDescriptor.SPAWN_LOCATIONS_HEIGHT; y++)
             {
                 gfx.DrawImage(
                     mDirectionGrid, new Rectangle(x * 32, y * 32, 32, 32), new Rectangle(0, 0, 32, 32),
                     GraphicsUnit.Pixel
                 );
 
-                for (var i = 0; i < ProjectileBase.MAX_PROJECTILE_DIRECTIONS; i++)
+                for (var i = 0; i < ProjectileDescriptor.MAX_PROJECTILE_DIRECTIONS; i++)
                 {
                     if (mEditorItem.SpawnLocations[x, y].Directions[i] == true)
                     {
@@ -641,7 +643,7 @@ public partial class FrmProjectile : EditorForm
 
     private void cmbItem_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.Ammo = ItemBase.Get(ItemBase.IdFromList(cmbItem.SelectedIndex - 1));
+        mEditorItem.Ammo = ItemDescriptor.Get(ItemDescriptor.IdFromList(cmbItem.SelectedIndex - 1));
     }
 
     private void cmbAnimation_SelectedIndexChanged(object sender, EventArgs e)
@@ -687,7 +689,7 @@ public partial class FrmProjectile : EditorForm
     {
         if (cmbSpell.SelectedIndex > 0)
         {
-            mEditorItem.Spell = SpellBase.Get(SpellBase.IdFromList(cmbSpell.SelectedIndex - 1));
+            mEditorItem.Spell = SpellDescriptor.Get(SpellDescriptor.IdFromList(cmbSpell.SelectedIndex - 1));
         }
         else
         {
@@ -720,15 +722,15 @@ public partial class FrmProjectile : EditorForm
     {
         //Collect folders
         var mFolders = new List<string>();
-        foreach (var itm in ProjectileBase.Lookup)
+        foreach (var itm in ProjectileDescriptor.Lookup)
         {
-            if (!string.IsNullOrEmpty(((ProjectileBase)itm.Value).Folder) &&
-                !mFolders.Contains(((ProjectileBase)itm.Value).Folder))
+            if (!string.IsNullOrEmpty(((ProjectileDescriptor)itm.Value).Folder) &&
+                !mFolders.Contains(((ProjectileDescriptor)itm.Value).Folder))
             {
-                mFolders.Add(((ProjectileBase)itm.Value).Folder);
-                if (!mKnownFolders.Contains(((ProjectileBase)itm.Value).Folder))
+                mFolders.Add(((ProjectileDescriptor)itm.Value).Folder);
+                if (!mKnownFolders.Contains(((ProjectileDescriptor)itm.Value).Folder))
                 {
-                    mKnownFolders.Add(((ProjectileBase)itm.Value).Folder);
+                    mKnownFolders.Add(((ProjectileDescriptor)itm.Value).Folder);
                 }
             }
         }
@@ -739,8 +741,8 @@ public partial class FrmProjectile : EditorForm
         cmbFolder.Items.Add("");
         cmbFolder.Items.AddRange(mKnownFolders.ToArray());
 
-        var items = ProjectileBase.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
-            new KeyValuePair<string, string>(((ProjectileBase)pair.Value)?.Name ?? Models.DatabaseObject<ProjectileBase>.Deleted, ((ProjectileBase)pair.Value)?.Folder ?? ""))).ToArray();
+        var items = ProjectileDescriptor.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
+            new KeyValuePair<string, string>(((ProjectileDescriptor)pair.Value)?.Name ?? Models.DatabaseObject<ProjectileDescriptor>.Deleted, ((ProjectileDescriptor)pair.Value)?.Folder ?? ""))).ToArray();
         lstGameObjects.Repopulate(items, mFolders, btnAlphabetical.Checked, CustomSearch(), txtSearch.Text);
     }
 

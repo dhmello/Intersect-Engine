@@ -1,7 +1,7 @@
 ﻿using Intersect.Editor.Localization;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
-using Intersect.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Maps;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 
@@ -9,9 +9,9 @@ namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 public partial class EventCommandWaitForRouteCompletion : UserControl
 {
 
-    private readonly EventBase mEditingEvent;
+    private readonly EventDescriptor mEditingEvent;
 
-    private MapBase mCurrentMap;
+    private MapDescriptor mCurrentMap;
 
     private WaitForRouteCommand mEditingCommand;
 
@@ -20,8 +20,8 @@ public partial class EventCommandWaitForRouteCompletion : UserControl
     public EventCommandWaitForRouteCompletion(
         WaitForRouteCommand refCommand,
         FrmEvent eventEditor,
-        MapBase currentMap,
-        EventBase currentEvent
+        MapDescriptor currentMap,
+        EventDescriptor currentEvent
     )
     {
         InitializeComponent();

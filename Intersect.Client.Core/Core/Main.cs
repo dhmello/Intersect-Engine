@@ -5,8 +5,9 @@ using Intersect.Client.Networking;
 using Intersect.Configuration;
 using Intersect.Enums;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
 
 // ReSharper disable All
 
@@ -173,7 +174,7 @@ internal static partial class Main
 
         if (!_loadedTilesets && Globals.HasGameData)
         {
-            Globals.ContentManager.LoadTilesets(TilesetBase.GetNameList());
+            Globals.ContentManager.LoadTilesets(TilesetDescriptor.GetNameList());
             _loadedTilesets = true;
         }
 
@@ -324,7 +325,7 @@ internal static partial class Main
             en.Value.Dispose();
         }
 
-        MapBase.Lookup.Clear();
+        MapDescriptor.Lookup.Clear();
         MapInstance.Lookup.Clear();
 
         Globals.Entities.Clear();

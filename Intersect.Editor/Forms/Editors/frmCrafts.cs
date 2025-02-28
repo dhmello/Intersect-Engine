@@ -4,9 +4,10 @@ using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
 using Intersect.Models;
 
 namespace Intersect.Editor.Forms.Editors;
@@ -15,11 +16,11 @@ namespace Intersect.Editor.Forms.Editors;
 public partial class FrmCrafts : EditorForm
 {
 
-    private List<CraftBase> mChanged = new List<CraftBase>();
+    private List<CraftingRecipeDescriptor> mChanged = new List<CraftingRecipeDescriptor>();
 
     private string mCopiedItem;
 
-    private CraftBase mEditorItem;
+    private CraftingRecipeDescriptor mEditorItem;
 
     private List<string> mKnownFolders = new List<string>();
 
@@ -35,19 +36,19 @@ public partial class FrmCrafts : EditorForm
         lstGameObjects.GotFocus += itemList_FocusChanged;
         cmbResult.Items.Clear();
         cmbResult.Items.Add(Strings.General.None);
-        cmbResult.Items.AddRange(ItemBase.Names);
+        cmbResult.Items.AddRange(ItemDescriptor.Names);
         cmbIngredient.Items.Clear();
         cmbIngredient.Items.Add(Strings.General.None);
-        cmbIngredient.Items.AddRange(ItemBase.Names);
+        cmbIngredient.Items.AddRange(ItemDescriptor.Names);
         cmbEvent.Items.Clear();
         cmbEvent.Items.Add(Strings.General.None);
-        cmbEvent.Items.AddRange(EventBase.Names);
+        cmbEvent.Items.AddRange(EventDescriptor.Names);
 
         lstGameObjects.Init(UpdateToolStripItems, AssignEditorItem, toolStripItemNew_Click, toolStripItemCopy_Click, toolStripItemUndo_Click, toolStripItemPaste_Click, toolStripItemDelete_Click);
     }
     private void AssignEditorItem(Guid id)
     {
-        mEditorItem = CraftBase.Get(id);
+        mEditorItem = CraftingRecipeDescriptor.Get(id);
         UpdateEditor();
     }
 
@@ -56,7 +57,7 @@ public partial class FrmCrafts : EditorForm
         if (type == GameObjectType.Crafts)
         {
             InitEditor();
-            if (mEditorItem != null && !DatabaseObject<CraftBase>.Lookup.Values.Contains(mEditorItem))
+            if (mEditorItem != null && !DatabaseObject<CraftingRecipeDescriptor>.Lookup.Values.Contains(mEditorItem))
             {
                 mEditorItem = null;
                 UpdateEditor();
@@ -78,7 +79,7 @@ public partial class FrmCrafts : EditorForm
             nudSpeed.Value = mEditorItem.Time;
             nudFailureChance.Value = mEditorItem.FailureChance;
             nudItemLossChance.Value = mEditorItem.ItemLossChance;
-            cmbResult.SelectedIndex = ItemBase.ListIndex(mEditorItem.ItemId) + 1;
+            cmbResult.SelectedIndex = ItemDescriptor.ListIndex(mEditorItem.ItemId) + 1;
 
             nudCraftQuantity.Value = mEditorItem.Quantity;
 
@@ -93,7 +94,7 @@ public partial class FrmCrafts : EditorForm
                 {
                     lstIngredients.Items.Add(
                         Strings.CraftsEditor.ingredientlistitem.ToString(
-                            ItemBase.GetName(mEditorItem.Ingredients[i].ItemId), mEditorItem.Ingredients[i].Quantity
+                            ItemDescriptor.GetName(mEditorItem.Ingredients[i].ItemId), mEditorItem.Ingredients[i].Quantity
                         )
                     );
                 }
@@ -111,7 +112,7 @@ public partial class FrmCrafts : EditorForm
             {
                 lstIngredients.SelectedIndex = 0;
                 cmbIngredient.SelectedIndex =
-                    ItemBase.ListIndex(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId) + 1;
+                    ItemDescriptor.ListIndex(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId) + 1;
 
                 nudQuantity.Value = mEditorItem.Ingredients[lstIngredients.SelectedIndex].Quantity;
             }
@@ -122,7 +123,7 @@ public partial class FrmCrafts : EditorForm
                 mEditorItem.MakeBackup();
             }
 
-            cmbEvent.SelectedIndex = EventBase.ListIndex(mEditorItem.EventId) + 1;
+            cmbEvent.SelectedIndex = EventDescriptor.ListIndex(mEditorItem.EventId) + 1;
         }
         else
         {
@@ -151,7 +152,7 @@ public partial class FrmCrafts : EditorForm
             {
                 lstIngredients.Items[lstIngredients.SelectedIndex] =
                     Strings.CraftsEditor.ingredientlistitem.ToString(
-                        ItemBase.GetName(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId),
+                        ItemDescriptor.GetName(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId),
                         nudQuantity.Value
                     );
             }
@@ -184,7 +185,7 @@ public partial class FrmCrafts : EditorForm
 
     private void btnAdd_Click(object sender, EventArgs e)
     {
-        mEditorItem.Ingredients.Add(new CraftIngredient(Guid.Empty, 1));
+        mEditorItem.Ingredients.Add(new CraftingRecipeIngredient(Guid.Empty, 1));
         lstIngredients.Items.Add(Strings.General.None);
         lstIngredients.SelectedIndex = lstIngredients.Items.Count - 1;
         cmbIngredient_SelectedIndexChanged(null, null);
@@ -344,7 +345,7 @@ public partial class FrmCrafts : EditorForm
             lblQuantity.Show();
             lblIngredient.Show();
             cmbIngredient.SelectedIndex =
-                ItemBase.ListIndex(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId) + 1;
+                ItemDescriptor.ListIndex(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId) + 1;
 
             nudQuantity.Value = mEditorItem.Ingredients[lstIngredients.SelectedIndex].Quantity;
         }
@@ -363,7 +364,7 @@ public partial class FrmCrafts : EditorForm
         {
             mEditorItem.Ingredients.Insert(
                 lstIngredients.SelectedIndex,
-                new CraftIngredient(
+                new CraftingRecipeIngredient(
                     mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId,
                     mEditorItem.Ingredients[lstIngredients.SelectedIndex].Quantity
                 )
@@ -375,8 +376,8 @@ public partial class FrmCrafts : EditorForm
 
     private void cmbResult_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.ItemId = ItemBase.IdFromList(cmbResult.SelectedIndex - 1);
-        var itm = ItemBase.Get(mEditorItem.ItemId);
+        mEditorItem.ItemId = ItemDescriptor.IdFromList(cmbResult.SelectedIndex - 1);
+        var itm = ItemDescriptor.Get(mEditorItem.ItemId);
         if (itm == null || !itm.IsStackable)
         {
             nudCraftQuantity.Value = 1;
@@ -394,14 +395,14 @@ public partial class FrmCrafts : EditorForm
         if (lstIngredients.SelectedIndex > -1)
         {
             mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId =
-                ItemBase.IdFromList(cmbIngredient.SelectedIndex - 1);
+                ItemDescriptor.IdFromList(cmbIngredient.SelectedIndex - 1);
 
             updatingIngedients = true;
             if (cmbIngredient.SelectedIndex > 0)
             {
                 lstIngredients.Items[lstIngredients.SelectedIndex] =
                     Strings.CraftsEditor.ingredientlistitem.ToString(
-                        ItemBase.GetName(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId),
+                        ItemDescriptor.GetName(mEditorItem.Ingredients[lstIngredients.SelectedIndex].ItemId),
                         nudQuantity.Value
                     );
             }
@@ -468,7 +469,7 @@ public partial class FrmCrafts : EditorForm
 
     private void cmbEvent_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.Event = EventBase.Get(EventBase.IdFromList(cmbEvent.SelectedIndex - 1));
+        mEditorItem.Event = EventDescriptor.Get(EventDescriptor.IdFromList(cmbEvent.SelectedIndex - 1));
     }
 
     private void btnCraftRequirements_Click(object sender, EventArgs e)
@@ -483,15 +484,15 @@ public partial class FrmCrafts : EditorForm
     {
         //Collect folders
         var mFolders = new List<string>();
-        foreach (var itm in CraftBase.Lookup)
+        foreach (var itm in CraftingRecipeDescriptor.Lookup)
         {
-            if (!string.IsNullOrEmpty(((CraftBase) itm.Value).Folder) &&
-                !mFolders.Contains(((CraftBase) itm.Value).Folder))
+            if (!string.IsNullOrEmpty(((CraftingRecipeDescriptor) itm.Value).Folder) &&
+                !mFolders.Contains(((CraftingRecipeDescriptor) itm.Value).Folder))
             {
-                mFolders.Add(((CraftBase) itm.Value).Folder);
-                if (!mKnownFolders.Contains(((CraftBase) itm.Value).Folder))
+                mFolders.Add(((CraftingRecipeDescriptor) itm.Value).Folder);
+                if (!mKnownFolders.Contains(((CraftingRecipeDescriptor) itm.Value).Folder))
                 {
-                    mKnownFolders.Add(((CraftBase) itm.Value).Folder);
+                    mKnownFolders.Add(((CraftingRecipeDescriptor) itm.Value).Folder);
                 }
             }
         }
@@ -502,8 +503,8 @@ public partial class FrmCrafts : EditorForm
         cmbFolder.Items.Add("");
         cmbFolder.Items.AddRange(mKnownFolders.ToArray());
 
-        var items = CraftBase.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
-            new KeyValuePair<string, string>(((CraftBase)pair.Value)?.Name ?? Models.DatabaseObject<CraftBase>.Deleted, ((CraftBase)pair.Value)?.Folder ?? ""))).ToArray();
+        var items = CraftingRecipeDescriptor.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
+            new KeyValuePair<string, string>(((CraftingRecipeDescriptor)pair.Value)?.Name ?? Models.DatabaseObject<CraftingRecipeDescriptor>.Deleted, ((CraftingRecipeDescriptor)pair.Value)?.Folder ?? ""))).ToArray();
         lstGameObjects.Repopulate(items, mFolders, btnAlphabetical.Checked, CustomSearch(), txtSearch.Text);
     }
 

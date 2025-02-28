@@ -1,5 +1,6 @@
 using Intersect.Enums;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.GameObjects;
 using Intersect.Server.Entities.Combat;
 using Intersect.Server.Entities.Events;
@@ -19,7 +20,7 @@ public partial class ProjectileSpawn
 
     public Projectile Parent;
 
-    public ProjectileBase ProjectileBase;
+    public ProjectileDescriptor ProjectileDescriptor;
 
     public long TransmissionTimer = Timing.Global.Milliseconds;
 
@@ -42,7 +43,7 @@ public partial class ProjectileSpawn
         byte z,
         Guid mapId,
         Guid mapInstanceId,
-        ProjectileBase projectileBase,
+        ProjectileDescriptor projectileDescriptor,
         Projectile parent
     )
     {
@@ -52,10 +53,10 @@ public partial class ProjectileSpawn
         Y = y;
         Z = z;
         Dir = dir;
-        ProjectileBase = projectileBase;
+        ProjectileDescriptor = projectileDescriptor;
         Parent = parent;
         TransmissionTimer = Timing.Global.Milliseconds +
-                            (long)(ProjectileBase.Speed / (float)ProjectileBase.Range);
+                            (long)(ProjectileDescriptor.Speed / (float)ProjectileDescriptor.Range);
     }
 
     public bool IsAtLocation(Guid mapId, int x, int y, int z)
@@ -77,11 +78,11 @@ public partial class ProjectileSpawn
             // Have we collided with this entity before? If so, cancel out.
             if (_entitiesCollided.Contains(targetEntity.Id))
             {
-                if (!Parent.Base.PierceTarget)
+                if (!Parent.Descriptor.PierceTarget)
                 {
                     if (targetPlayer != null)
                     {
-                        if (targetPlayer.Map.ZoneType == Enums.MapZone.Safe ||
+                        if (targetPlayer.Map.ZoneType == MapZone.Safe ||
                             Parent.Owner is Player plyr && plyr.InParty(targetPlayer))
                         {
                             return false;
@@ -101,16 +102,16 @@ public partial class ProjectileSpawn
             {
                 if (Parent.Owner != Parent.Target)
                 {
-                    Parent.Owner.TryAttack(targetEntity, Parent.Base, Parent.Spell, Parent.Item, Dir);
+                    Parent.Owner.TryAttack(targetEntity, Parent.Descriptor, Parent.Spell, Parent.Item, Dir);
 
                     if (Dir <= Direction.Right && ShouldHook(targetEntity) && !Parent.HasGrappled)
                     {
                         HookEntity();
                     }
 
-                    if (!Parent.Base.PierceTarget)
+                    if (!Parent.Descriptor.PierceTarget)
                     {
-                        if (targetPlayer.Map.ZoneType == Enums.MapZone.Safe ||
+                        if (targetPlayer.Map.ZoneType == MapZone.Safe ||
                             Parent.Owner is Player plyr && plyr.InParty(targetPlayer))
                         {
                             return false;
@@ -124,14 +125,14 @@ public partial class ProjectileSpawn
             {
                 if (targetResource.IsDead)
                 {
-                    if (!ProjectileBase.IgnoreExhaustedResources)
+                    if (!ProjectileDescriptor.IgnoreExhaustedResources)
                     {
                         return true;
                     }
                 }
-                else if (!ProjectileBase.IgnoreActiveResources)
+                else if (!ProjectileDescriptor.IgnoreActiveResources)
                 {
-                    Parent.Owner.TryAttack(targetResource, Parent.Base, Parent.Spell, Parent.Item, Dir);
+                    Parent.Owner.TryAttack(targetResource, Parent.Descriptor, Parent.Spell, Parent.Item, Dir);
 
                     if (Dir <= Direction.Right && ShouldHook(targetResource) && !Parent.HasGrappled)
                     {
@@ -146,14 +147,14 @@ public partial class ProjectileSpawn
                 if (Parent.Owner is not Npc ownerNpc ||
                     ownerNpc.CanNpcCombat(targetEntity, Parent.Spell != null && Parent.Spell.Combat.Friendly))
                 {
-                    Parent.Owner.TryAttack(targetEntity, Parent.Base, Parent.Spell, Parent.Item, Dir);
+                    Parent.Owner.TryAttack(targetEntity, Parent.Descriptor, Parent.Spell, Parent.Item, Dir);
 
                     if (Dir <= Direction.Right && ShouldHook(targetEntity) && !Parent.HasGrappled)
                     {
                         HookEntity();
                     }
 
-                    if (!Parent.Base.PierceTarget)
+                    if (!Parent.Descriptor.PierceTarget)
                     {
                         return true;
                     }
@@ -178,9 +179,9 @@ public partial class ProjectileSpawn
 
         return en switch
         {
-            Player => ProjectileBase.GrappleHookOptions.Contains(Enums.GrappleOption.Player),
-            Npc => ProjectileBase.GrappleHookOptions.Contains(Enums.GrappleOption.NPC),
-            Resource => ProjectileBase.GrappleHookOptions.Contains(Enums.GrappleOption.Resource),
+            Player => ProjectileDescriptor.GrappleHookOptions.Contains(Enums.GrappleOption.Player),
+            Npc => ProjectileDescriptor.GrappleHookOptions.Contains(Enums.GrappleOption.NPC),
+            Resource => ProjectileDescriptor.GrappleHookOptions.Contains(Enums.GrappleOption.Resource),
             _ => throw new ArgumentException($"Unsupported entity type {en.GetType().FullName}", nameof(en)),
         };
     }
@@ -194,9 +195,9 @@ public partial class ProjectileSpawn
         Parent.HasGrappled = true;
         Parent.Owner.Dir = Dir;
         var _ = new Dash(
-            Parent.Owner, Distance, Parent.Owner.Dir, Parent.Base.IgnoreMapBlocks,
-            Parent.Base.IgnoreActiveResources, Parent.Base.IgnoreExhaustedResources,
-            Parent.Base.IgnoreZDimension
+            Parent.Owner, Distance, Parent.Owner.Dir, Parent.Descriptor.IgnoreMapBlocks,
+            Parent.Descriptor.IgnoreActiveResources, Parent.Descriptor.IgnoreExhaustedResources,
+            Parent.Descriptor.IgnoreZDimension
         );
     }
 

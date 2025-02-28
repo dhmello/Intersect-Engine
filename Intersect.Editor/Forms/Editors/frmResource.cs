@@ -6,9 +6,13 @@ using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
 using Intersect.Utilities;
+using EventDescriptor = Intersect.Framework.Core.GameObjects.Events.EventDescriptor;
 using Graphics = System.Drawing.Graphics;
 
 namespace Intersect.Editor.Forms.Editors;
@@ -16,11 +20,11 @@ namespace Intersect.Editor.Forms.Editors;
 public partial class FrmResource : EditorForm
 {
 
-    private List<ResourceBase> mChanged = [];
+    private List<ResourceDescriptor> mChanged = [];
 
     private string mCopiedItem;
 
-    private ResourceBase mEditorItem;
+    private ResourceDescriptor mEditorItem;
 
     private Bitmap mEndBitmap;
 
@@ -50,7 +54,7 @@ public partial class FrmResource : EditorForm
         cmbToolType.Items.AddRange(Options.Instance.Equipment.ToolTypes.ToArray());
         cmbEvent.Items.Clear();
         cmbEvent.Items.Add(Strings.General.None);
-        cmbEvent.Items.AddRange(EventBase.Names);
+        cmbEvent.Items.AddRange(EventDescriptor.Names);
 
         lstDrops.DataSource = _dropList;
         lstDrops.DisplayMember = nameof(NotifiableDrop.DisplayName);
@@ -59,7 +63,7 @@ public partial class FrmResource : EditorForm
     }
     private void AssignEditorItem(Guid id)
     {
-        mEditorItem = ResourceBase.Get(id);
+        mEditorItem = ResourceDescriptor.Get(id);
         UpdateEditor();
     }
 
@@ -68,7 +72,7 @@ public partial class FrmResource : EditorForm
         if (type == GameObjectType.Resource)
         {
             InitEditor();
-            if (mEditorItem != null && !ResourceBase.Lookup.Values.Contains(mEditorItem))
+            if (mEditorItem != null && !ResourceDescriptor.Lookup.Values.Contains(mEditorItem))
             {
                 mEditorItem = null;
                 UpdateEditor();
@@ -113,7 +117,7 @@ public partial class FrmResource : EditorForm
         cmbAnimation.Items.AddRange(AnimationDescriptor.Names);
         cmbDropItem.Items.Clear();
         cmbDropItem.Items.Add(Strings.General.None);
-        cmbDropItem.Items.AddRange(ItemBase.Names);
+        cmbDropItem.Items.AddRange(ItemDescriptor.Names);
         InitLocalization();
         UpdateEditor();
     }
@@ -253,7 +257,7 @@ public partial class FrmResource : EditorForm
             chkWalkableAfter.Checked = mEditorItem.WalkableAfter;
             chkInitialFromTileset.Checked = mEditorItem.Initial.GraphicFromTileset;
             chkExhaustedFromTileset.Checked = mEditorItem.Exhausted.GraphicFromTileset;
-            cmbEvent.SelectedIndex = EventBase.ListIndex(mEditorItem.EventId) + 1;
+            cmbEvent.SelectedIndex = EventDescriptor.ListIndex(mEditorItem.EventId) + 1;
             chkInitialBelowEntities.Checked = mEditorItem.Initial.RenderBelowEntities;
             chkExhaustedBelowEntities.Checked = mEditorItem.Exhausted.RenderBelowEntities;
             txtCannotHarvest.Text = mEditorItem.CannotHarvestMessage;
@@ -579,7 +583,7 @@ public partial class FrmResource : EditorForm
     {
         if (lstDrops.SelectedIndex > -1)
         {
-            cmbDropItem.SelectedIndex = ItemBase.ListIndex(mEditorItem.Drops[lstDrops.SelectedIndex].ItemId) + 1;
+            cmbDropItem.SelectedIndex = ItemDescriptor.ListIndex(mEditorItem.Drops[lstDrops.SelectedIndex].ItemId) + 1;
             nudDropMaxAmount.Value = mEditorItem.Drops[lstDrops.SelectedIndex].MaxQuantity;
             nudDropMinAmount.Value = mEditorItem.Drops[lstDrops.SelectedIndex].MinQuantity;
             nudDropChance.Value = (decimal)mEditorItem.Drops[lstDrops.SelectedIndex].Chance;
@@ -594,7 +598,7 @@ public partial class FrmResource : EditorForm
             return;
         }
 
-        mEditorItem.Drops[index].ItemId = ItemBase.IdFromList(cmbDropItem.SelectedIndex - 1);
+        mEditorItem.Drops[index].ItemId = ItemDescriptor.IdFromList(cmbDropItem.SelectedIndex - 1);
         _dropList[index].ItemId = mEditorItem.Drops[index].ItemId;
     }
 
@@ -638,7 +642,7 @@ public partial class FrmResource : EditorForm
     {
         var drop = new Drop()
         {
-            ItemId = ItemBase.IdFromList(cmbDropItem.SelectedIndex - 1),
+            ItemId = ItemDescriptor.IdFromList(cmbDropItem.SelectedIndex - 1),
             MaxQuantity = (int)nudDropMaxAmount.Value,
             MinQuantity = (int)nudDropMinAmount.Value,
             Chance = (double)nudDropChance.Value
@@ -866,7 +870,7 @@ public partial class FrmResource : EditorForm
 
     private void cmbEvent_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.Event = EventBase.Get(EventBase.IdFromList(cmbEvent.SelectedIndex - 1));
+        mEditorItem.Event = EventDescriptor.Get(EventDescriptor.IdFromList(cmbEvent.SelectedIndex - 1));
     }
 
     private void chkInitialBelowEntities_CheckedChanged(object sender, EventArgs e)
@@ -890,15 +894,15 @@ public partial class FrmResource : EditorForm
     {
         //Collect folders
         var mFolders = new List<string>();
-        foreach (var itm in ResourceBase.Lookup)
+        foreach (var itm in ResourceDescriptor.Lookup)
         {
-            if (!string.IsNullOrEmpty(((ResourceBase) itm.Value).Folder) &&
-                !mFolders.Contains(((ResourceBase) itm.Value).Folder))
+            if (!string.IsNullOrEmpty(((ResourceDescriptor) itm.Value).Folder) &&
+                !mFolders.Contains(((ResourceDescriptor) itm.Value).Folder))
             {
-                mFolders.Add(((ResourceBase) itm.Value).Folder);
-                if (!mKnownFolders.Contains(((ResourceBase) itm.Value).Folder))
+                mFolders.Add(((ResourceDescriptor) itm.Value).Folder);
+                if (!mKnownFolders.Contains(((ResourceDescriptor) itm.Value).Folder))
                 {
-                    mKnownFolders.Add(((ResourceBase) itm.Value).Folder);
+                    mKnownFolders.Add(((ResourceDescriptor) itm.Value).Folder);
                 }
             }
         }
@@ -909,8 +913,8 @@ public partial class FrmResource : EditorForm
         cmbFolder.Items.Add("");
         cmbFolder.Items.AddRange(mKnownFolders.ToArray());
 
-        var items = ResourceBase.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
-            new KeyValuePair<string, string>(((ResourceBase)pair.Value)?.Name ?? Models.DatabaseObject<ResourceBase>.Deleted, ((ResourceBase)pair.Value)?.Folder ?? ""))).ToArray();
+        var items = ResourceDescriptor.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
+            new KeyValuePair<string, string>(((ResourceDescriptor)pair.Value)?.Name ?? Models.DatabaseObject<ResourceDescriptor>.Deleted, ((ResourceDescriptor)pair.Value)?.Folder ?? ""))).ToArray();
         lstGameObjects.Repopulate(items, mFolders, btnAlphabetical.Checked, CustomSearch(), txtSearch.Text);
     }
 

@@ -1,9 +1,14 @@
 using System.Reflection;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Conditions.ConditionMetadata;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.Framework.Reflection;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
 using Intersect.Localization;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -112,27 +117,27 @@ public static partial class Strings
                     break;
             }
 
-            return EventConditionDesc.hasitem.ToString(amount, ItemBase.GetName(condition.ItemId));
+            return EventConditionDesc.hasitem.ToString(amount, ItemDescriptor.GetName(condition.ItemId));
         }
         else
         {
-            return EventConditionDesc.hasitem.ToString(condition.Quantity, ItemBase.GetName(condition.ItemId));
+            return EventConditionDesc.hasitem.ToString(condition.Quantity, ItemDescriptor.GetName(condition.ItemId));
         }
     }
 
     public static string GetEventConditionalDesc(IsItemEquippedCondition condition)
     {
-        return EventConditionDesc.hasitemequipped.ToString(ItemBase.GetName(condition.ItemId));
+        return EventConditionDesc.hasitemequipped.ToString(ItemDescriptor.GetName(condition.ItemId));
     }
 
     public static string GetEventConditionalDesc(ClassIsCondition condition)
     {
-        return EventConditionDesc.Class.ToString(ClassBase.GetName(condition.ClassId));
+        return EventConditionDesc.Class.ToString(ClassDescriptor.GetName(condition.ClassId));
     }
 
     public static string GetEventConditionalDesc(KnowsSpellCondition condition)
     {
-        return EventConditionDesc.knowsspell.ToString(SpellBase.GetName(condition.SpellId));
+        return EventConditionDesc.knowsspell.ToString(SpellDescriptor.GetName(condition.SpellId));
     }
 
     public static string GetEventConditionalDesc(LevelOrStatCondition condition)
@@ -208,10 +213,10 @@ public static partial class Strings
     {
         var timeRanges = new List<string>();
         var time = new DateTime(2000, 1, 1, 0, 0, 0);
-        for (var i = 0; i < 1440; i += TimeBase.GetTimeBase().RangeInterval)
+        for (var i = 0; i < 1440; i += DaylightCycleDescriptor.Instance.RangeInterval)
         {
             var addRange = time.ToString("h:mm:ss tt") + " to ";
-            time = time.AddMinutes(TimeBase.GetTimeBase().RangeInterval);
+            time = time.AddMinutes(DaylightCycleDescriptor.Instance.RangeInterval);
             addRange += time.ToString("h:mm:ss tt");
             timeRanges.Add(addRange);
         }
@@ -241,15 +246,15 @@ public static partial class Strings
 
     public static string GetEventConditionalDesc(CanStartQuestCondition condition)
     {
-        return EventConditionDesc.startquest.ToString(QuestBase.GetName(condition.QuestId));
+        return EventConditionDesc.startquest.ToString(QuestDescriptor.GetName(condition.QuestId));
     }
 
     public static string GetEventConditionalDesc(QuestInProgressCondition condition)
     {
-        var quest = QuestBase.Get(condition.QuestId);
+        var quest = QuestDescriptor.Get(condition.QuestId);
         if (quest != null)
         {
-            QuestBase.QuestTask task = null;
+            QuestTaskDescriptor task = null;
             foreach (var tsk in quest.Tasks)
             {
                 if (tsk.Id == condition.TaskId)
@@ -266,37 +271,37 @@ public static partial class Strings
             {
                 case QuestProgressState.BeforeTask:
                     return EventConditionDesc.questinprogress.ToString(
-                        QuestBase.GetName(condition.QuestId),
+                        QuestDescriptor.GetName(condition.QuestId),
                         EventConditionDesc.beforetask.ToString(taskName)
                     );
                 case QuestProgressState.AfterTask:
                     return EventConditionDesc.questinprogress.ToString(
-                        QuestBase.GetName(condition.QuestId),
+                        QuestDescriptor.GetName(condition.QuestId),
                         EventConditionDesc.aftertask.ToString(taskName)
                     );
                 case QuestProgressState.OnTask:
                     return EventConditionDesc.questinprogress.ToString(
-                        QuestBase.GetName(condition.QuestId), EventConditionDesc.ontask.ToString(taskName)
+                        QuestDescriptor.GetName(condition.QuestId), EventConditionDesc.ontask.ToString(taskName)
                     );
                 default: //On Any task
                     return EventConditionDesc.questinprogress.ToString(
-                        QuestBase.GetName(condition.QuestId), EventConditionDesc.onanytask
+                        QuestDescriptor.GetName(condition.QuestId), EventConditionDesc.onanytask
                     );
             }
         }
 
-        return EventConditionDesc.questinprogress.ToString(QuestBase.GetName(condition.QuestId));
+        return EventConditionDesc.questinprogress.ToString(QuestDescriptor.GetName(condition.QuestId));
     }
 
     public static string GetEventConditionalDesc(QuestCompletedCondition condition)
     {
-        return EventConditionDesc.questcompleted.ToString(QuestBase.GetName(condition.QuestId));
+        return EventConditionDesc.questcompleted.ToString(QuestDescriptor.GetName(condition.QuestId));
     }
 
     public static string GetEventConditionalDesc(NoNpcsOnMapCondition condition)
     {
         return condition.SpecificNpc
-            ? EventConditionDesc.NoNpcsOfTypeOnMap.ToString(NpcBase.GetName(condition.NpcId))
+            ? EventConditionDesc.NoNpcsOfTypeOnMap.ToString(NPCDescriptor.GetName(condition.NpcId))
             : EventConditionDesc.NoNpcsOnMap.ToString();
     }
 
@@ -309,7 +314,7 @@ public static partial class Strings
 
     public static string GetEventConditionalDesc(MapIsCondition condition)
     {
-        var map = GameObjects.Maps.MapList.MapList.List.FindMap(condition.MapId);
+        var map = Framework.Core.GameObjects.Maps.MapList.MapList.List.FindMap(condition.MapId);
         if (map != null)
         {
             return EventConditionDesc.map.ToString(map.Name);
@@ -3791,26 +3796,26 @@ Tick timer saved in server config.json.";
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static LocalizedString EventGroupLabel = @"Event";
 
-        public static Dictionary<ItemEventTriggers, LocalizedString> EventTriggerNames = new Dictionary<ItemEventTriggers, LocalizedString>
+        public static Dictionary<ItemEventTrigger, LocalizedString> EventTriggerNames = new Dictionary<ItemEventTrigger, LocalizedString>
         {
-            {ItemEventTriggers.OnPickup, @"On Pickup"},
-            {ItemEventTriggers.OnDrop, @"On Drop"},
-            {ItemEventTriggers.OnUse, @"On Use"},
-            {ItemEventTriggers.OnEquip, @"On Equip"},
-            {ItemEventTriggers.OnUnequip, @"On Unequip"},
-            {ItemEventTriggers.OnHit, @"On Hit"},
-            {ItemEventTriggers.OnDamageReceived, @"On Damage Received"},
+            {ItemEventTrigger.OnPickup, @"On Pickup"},
+            {ItemEventTrigger.OnDrop, @"On Drop"},
+            {ItemEventTrigger.OnUse, @"On Use"},
+            {ItemEventTrigger.OnEquip, @"On Equip"},
+            {ItemEventTrigger.OnUnequip, @"On Unequip"},
+            {ItemEventTrigger.OnHit, @"On Hit"},
+            {ItemEventTrigger.OnDamageReceived, @"On Damage Received"},
         };
 
-        public static Dictionary<ItemEventTriggers, LocalizedString> EventTriggerSelections = new Dictionary<ItemEventTriggers, LocalizedString>
+        public static Dictionary<ItemEventTrigger, LocalizedString> EventTriggerSelections = new Dictionary<ItemEventTrigger, LocalizedString>
         {
-            {ItemEventTriggers.OnPickup, @"On Pickup: {00}"},
-            {ItemEventTriggers.OnDrop, @"On Drop: {00}"},
-            {ItemEventTriggers.OnUse, @"On Use: {00}"},
-            {ItemEventTriggers.OnEquip, @"On Equip: {00}"},
-            {ItemEventTriggers.OnUnequip, @"On Unequip: {00}"},
-            {ItemEventTriggers.OnHit, @"On Hit: {00}"},
-            {ItemEventTriggers.OnDamageReceived, @"On Damage Received: {00}"},
+            {ItemEventTrigger.OnPickup, @"On Pickup: {00}"},
+            {ItemEventTrigger.OnDrop, @"On Drop: {00}"},
+            {ItemEventTrigger.OnUse, @"On Use: {00}"},
+            {ItemEventTrigger.OnEquip, @"On Equip: {00}"},
+            {ItemEventTrigger.OnUnequip, @"On Unequip: {00}"},
+            {ItemEventTrigger.OnHit, @"On Hit: {00}"},
+            {ItemEventTrigger.OnDamageReceived, @"On Damage Received: {00}"},
         };
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]

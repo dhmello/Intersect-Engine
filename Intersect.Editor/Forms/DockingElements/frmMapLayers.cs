@@ -4,9 +4,15 @@ using Intersect.Editor.Core;
 using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.Attributes;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Localization;
 using Intersect.Utilities;
 using Microsoft.Xna.Framework.Graphics;
@@ -282,7 +288,7 @@ public partial class FrmMapLayers : DockContent
     {
         Globals.MapLayersWindow.cmbTilesets.Items.Clear();
         var tilesetList = new List<string>();
-        tilesetList.AddRange(TilesetBase.Names);
+        tilesetList.AddRange(TilesetDescriptor.Names);
         tilesetList.Sort(new AlphanumComparatorFast());
         foreach (var filename in tilesetList)
         {
@@ -295,21 +301,21 @@ public partial class FrmMapLayers : DockContent
             }
         }
 
-        if (TilesetBase.Lookup.Count > 0)
+        if (TilesetDescriptor.Lookup.Count > 0)
         {
             if (Globals.MapLayersWindow.cmbTilesets.Items.Count > 0)
             {
                 Globals.MapLayersWindow.cmbTilesets.SelectedIndex = 0;
             }
 
-            Globals.CurrentTileset = (TilesetBase) TilesetBase.Lookup.Values.ToArray()[0];
+            Globals.CurrentTileset = (TilesetDescriptor) TilesetDescriptor.Lookup.Values.ToArray()[0];
         }
     }
 
     public void SetTileset(string name)
     {
-        TilesetBase tSet = null;
-        var tilesets = TilesetBase.Lookup;
+        TilesetDescriptor tSet = null;
+        var tilesets = TilesetDescriptor.Lookup;
         var id = Guid.Empty;
         foreach (var tileset in tilesets.Pairs)
         {
@@ -323,7 +329,7 @@ public partial class FrmMapLayers : DockContent
 
         if (id != Guid.Empty)
         {
-            tSet = TilesetBase.Get(id);
+            tSet = TilesetDescriptor.Get(id);
         }
 
         if (tSet != null)
@@ -466,7 +472,7 @@ public partial class FrmMapLayers : DockContent
         HideAttributeMenus();
         grpItem.Visible = true;
         cmbItemAttribute.Items.Clear();
-        cmbItemAttribute.Items.AddRange(ItemBase.Names);
+        cmbItemAttribute.Items.AddRange(ItemDescriptor.Names);
         if (cmbItemAttribute.Items.Count > 0)
         {
             cmbItemAttribute.SelectedIndex = 0;
@@ -525,7 +531,7 @@ public partial class FrmMapLayers : DockContent
     private void rbResource_CheckedChanged(object sender, EventArgs e)
     {
         cmbResourceAttribute.Items.Clear();
-        cmbResourceAttribute.Items.AddRange(ResourceBase.Names);
+        cmbResourceAttribute.Items.AddRange(ResourceDescriptor.Names);
         if (cmbResourceAttribute.Items.Count > 0)
         {
             cmbResourceAttribute.SelectedIndex = 0;
@@ -683,10 +689,10 @@ public partial class FrmMapLayers : DockContent
     }
 
     [Obsolete("The entire switch statement should be implemented as a parameterized CreateAttribute().")]
-    public GameObjects.Maps.MapAttribute CreateAttribute()
+    public MapAttribute CreateAttribute()
     {
         var attributeType = SelectedMapAttributeType;
-        var attribute = GameObjects.Maps.MapAttribute.CreateAttribute(attributeType);
+        var attribute = MapAttribute.CreateAttribute(attributeType);
         switch (SelectedMapAttributeType)
         {
             case MapAttributeType.Walkable:
@@ -697,7 +703,7 @@ public partial class FrmMapLayers : DockContent
 
             case MapAttributeType.Item:
                 var itemAttribute = attribute as MapItemAttribute;
-                itemAttribute.ItemId = ItemBase.IdFromList(cmbItemAttribute.SelectedIndex);
+                itemAttribute.ItemId = ItemDescriptor.IdFromList(cmbItemAttribute.SelectedIndex);
                 itemAttribute.Quantity = (int)nudItemQuantity.Value;
                 itemAttribute.RespawnTime = (long)nudItemRespawnTime.Value;
                 break;
@@ -728,7 +734,7 @@ public partial class FrmMapLayers : DockContent
 
             case MapAttributeType.Resource:
                 var resourceAttribute = attribute as MapResourceAttribute;
-                resourceAttribute.ResourceId = ResourceBase.IdFromList(cmbResourceAttribute.SelectedIndex);
+                resourceAttribute.ResourceId = ResourceDescriptor.IdFromList(cmbResourceAttribute.SelectedIndex);
                 resourceAttribute.SpawnLevel = (byte)(rbLevel1.Checked ? 0 : 1);
                 break;
 
@@ -763,7 +769,7 @@ public partial class FrmMapLayers : DockContent
         return attribute;
     }
 
-    public GameObjects.Maps.MapAttribute PlaceAttribute(MapBase mapDescriptor, int x, int y, GameObjects.Maps.MapAttribute attribute = null)
+    public MapAttribute PlaceAttribute(MapDescriptor mapDescriptor, int x, int y, MapAttribute attribute = null)
     {
         if (attribute == null)
         {
@@ -775,7 +781,7 @@ public partial class FrmMapLayers : DockContent
         return attribute;
     }
 
-    public bool RemoveAttribute(MapBase tmpMap, int x, int y)
+    public bool RemoveAttribute(MapDescriptor tmpMap, int x, int y)
     {
         if (tmpMap.Attributes[x, y] != null && tmpMap.Attributes[x, y].Type != MapAttributeType.Walkable)
         {
@@ -791,13 +797,13 @@ public partial class FrmMapLayers : DockContent
     {
         // Update the list incase npcs have been modified since form load.
         cmbNpc.Items.Clear();
-        cmbNpc.Items.AddRange(NpcBase.Names);
+        cmbNpc.Items.AddRange(NPCDescriptor.Names);
 
         // Add the map NPCs
         lstMapNpcs.Items.Clear();
         for (var i = 0; i < Globals.CurrentMap.Spawns.Count; i++)
         {
-            lstMapNpcs.Items.Add(NpcBase.GetName(Globals.CurrentMap.Spawns[i].NpcId));
+            lstMapNpcs.Items.Add(NPCDescriptor.GetName(Globals.CurrentMap.Spawns[i].NpcId));
         }
 
         // Don't select if there are no NPCs, to avoid crashes.
@@ -814,7 +820,7 @@ public partial class FrmMapLayers : DockContent
             if (lstMapNpcs.SelectedIndex < Globals.CurrentMap.Spawns.Count)
             {
                 cmbDir.SelectedIndex = (int) Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex].Direction;
-                cmbNpc.SelectedIndex = NpcBase.ListIndex(Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex].NpcId);
+                cmbNpc.SelectedIndex = NPCDescriptor.ListIndex(Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex].NpcId);
                 if (Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex].X >= 0)
                 {
                     rbDeclared.Checked = true;
@@ -838,13 +844,13 @@ public partial class FrmMapLayers : DockContent
         //Don't add nothing
         if (cmbNpc.SelectedIndex > -1)
         {
-            n.NpcId = NpcBase.IdFromList(cmbNpc.SelectedIndex);
+            n.NpcId = NPCDescriptor.IdFromList(cmbNpc.SelectedIndex);
             n.X = -1;
             n.Y = -1;
             n.Direction = NpcSpawnDirection.Random;
 
             Globals.CurrentMap.Spawns.Add(n);
-            lstMapNpcs.Items.Add(NpcBase.GetName(n.NpcId));
+            lstMapNpcs.Items.Add(NPCDescriptor.GetName(n.NpcId));
             lstMapNpcs.SelectedIndex = lstMapNpcs.Items.Count - 1;
         }
 
@@ -862,7 +868,7 @@ public partial class FrmMapLayers : DockContent
             lstMapNpcs.Items.Clear();
             for (var i = 0; i < Globals.CurrentMap.Spawns.Count; i++)
             {
-                lstMapNpcs.Items.Add(NpcBase.GetName(Globals.CurrentMap.Spawns[i].NpcId));
+                lstMapNpcs.Items.Add(NPCDescriptor.GetName(Globals.CurrentMap.Spawns[i].NpcId));
             }
 
             if (lstMapNpcs.Items.Count > 0)
@@ -900,7 +906,7 @@ public partial class FrmMapLayers : DockContent
 
         var selectedSpawn = Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex];
 
-        cmbNpc.SelectedIndex = NpcBase.ListIndex(selectedSpawn.NpcId);
+        cmbNpc.SelectedIndex = NPCDescriptor.ListIndex(selectedSpawn.NpcId);
         cmbDir.SelectedIndex = (int)selectedSpawn.Direction;
         rbDeclared.Checked = selectedSpawn.X >= 0;
         rbRandom.Checked = !rbDeclared.Checked;
@@ -941,14 +947,14 @@ public partial class FrmMapLayers : DockContent
 
         if (lstMapNpcs.SelectedIndex >= 0)
         {
-            Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex].NpcId = NpcBase.IdFromList(cmbNpc.SelectedIndex);
+            Globals.CurrentMap.Spawns[lstMapNpcs.SelectedIndex].NpcId = NPCDescriptor.IdFromList(cmbNpc.SelectedIndex);
 
             // Refresh List
             n = lstMapNpcs.SelectedIndex;
             lstMapNpcs.Items.Clear();
             for (var i = 0; i < Globals.CurrentMap.Spawns.Count; i++)
             {
-                lstMapNpcs.Items.Add(NpcBase.GetName(Globals.CurrentMap.Spawns[i].NpcId));
+                lstMapNpcs.Items.Add(NPCDescriptor.GetName(Globals.CurrentMap.Spawns[i].NpcId));
             }
 
             lstMapNpcs.SelectedIndex = n;

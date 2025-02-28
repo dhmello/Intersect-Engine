@@ -6,9 +6,11 @@ using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Utilities;
 using Graphics = System.Drawing.Graphics;
 
@@ -18,11 +20,11 @@ namespace Intersect.Editor.Forms.Editors;
 public partial class FrmSpell : EditorForm
 {
 
-    private List<SpellBase> mChanged = new List<SpellBase>();
+    private List<SpellDescriptor> mChanged = new List<SpellDescriptor>();
 
     private string mCopiedItem;
 
-    private SpellBase mEditorItem;
+    private SpellDescriptor mEditorItem;
 
     private List<string> mKnownFolders = new List<string>();
 
@@ -44,7 +46,7 @@ public partial class FrmSpell : EditorForm
     }
     private void AssignEditorItem(Guid id)
     {
-        mEditorItem = SpellBase.Get(id);
+        mEditorItem = SpellDescriptor.Get(id);
         UpdateEditor();
     }
 
@@ -53,7 +55,7 @@ public partial class FrmSpell : EditorForm
         if (type == GameObjectType.Spell)
         {
             InitEditor();
-            if (mEditorItem != null && !SpellBase.Lookup.Values.Contains(mEditorItem))
+            if (mEditorItem != null && !SpellDescriptor.Lookup.Values.Contains(mEditorItem))
             {
                 mEditorItem = null;
                 UpdateEditor();
@@ -91,7 +93,7 @@ public partial class FrmSpell : EditorForm
     private void frmSpell_Load(object sender, EventArgs e)
     {
         cmbProjectile.Items.Clear();
-        cmbProjectile.Items.AddRange(ProjectileBase.Names);
+        cmbProjectile.Items.AddRange(ProjectileDescriptor.Names);
         cmbCastAnimation.Items.Clear();
         cmbCastAnimation.Items.Add(Strings.General.None);
         cmbCastAnimation.Items.AddRange(AnimationDescriptor.Names);
@@ -100,7 +102,7 @@ public partial class FrmSpell : EditorForm
         cmbHitAnimation.Items.AddRange(AnimationDescriptor.Names);
         cmbEvent.Items.Clear();
         cmbEvent.Items.Add(Strings.General.None);
-        cmbEvent.Items.AddRange(EventBase.Names);
+        cmbEvent.Items.AddRange(EventDescriptor.Names);
         cmbTickAnimation.Items.Clear();
         cmbTickAnimation.Items.Add(Strings.General.None);
         cmbTickAnimation.Items.AddRange(AnimationDescriptor.Names);
@@ -406,7 +408,7 @@ public partial class FrmSpell : EditorForm
         if (cmbType.SelectedIndex == (int)SpellType.Event)
         {
             grpEvent.Show();
-            cmbEvent.SelectedIndex = EventBase.ListIndex(mEditorItem.EventId) + 1;
+            cmbEvent.SelectedIndex = EventDescriptor.ListIndex(mEditorItem.EventId) + 1;
             // Move our combat data down a little bit, it's not a very clean solution but it'll let us display it properly.
             grpCombat.Location = new System.Drawing.Point(grpEvent.Location.X, grpEvent.Location.Y + grpEvent.Size.Height + 5);
         }
@@ -463,7 +465,7 @@ public partial class FrmSpell : EditorForm
         {
             lblProjectile.Show();
             cmbProjectile.Show();
-            cmbProjectile.SelectedIndex = ProjectileBase.ListIndex(mEditorItem.Combat.ProjectileId);
+            cmbProjectile.SelectedIndex = ProjectileDescriptor.ListIndex(mEditorItem.Combat.ProjectileId);
         }
 
         if (cmbTargetType.SelectedIndex == (int)SpellTargetType.OnHit)
@@ -731,12 +733,12 @@ public partial class FrmSpell : EditorForm
 
     private void cmbProjectile_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.Combat.ProjectileId = ProjectileBase.IdFromList(cmbProjectile.SelectedIndex);
+        mEditorItem.Combat.ProjectileId = ProjectileDescriptor.IdFromList(cmbProjectile.SelectedIndex);
     }
 
     private void cmbEvent_SelectedIndexChanged(object sender, EventArgs e)
     {
-        mEditorItem.EventId = EventBase.IdFromList(cmbEvent.SelectedIndex - 1);
+        mEditorItem.EventId = EventDescriptor.IdFromList(cmbEvent.SelectedIndex - 1);
     }
 
     private void btnVisualMapSelector_Click(object sender, EventArgs e)
@@ -969,34 +971,34 @@ public partial class FrmSpell : EditorForm
     {
         //Collect folders
         var mFolders = new List<string>();
-        foreach (var itm in SpellBase.Lookup)
+        foreach (var itm in SpellDescriptor.Lookup)
         {
-            if (!string.IsNullOrEmpty(((SpellBase)itm.Value).Folder) &&
-                !mFolders.Contains(((SpellBase)itm.Value).Folder))
+            if (!string.IsNullOrEmpty(((SpellDescriptor)itm.Value).Folder) &&
+                !mFolders.Contains(((SpellDescriptor)itm.Value).Folder))
             {
-                mFolders.Add(((SpellBase)itm.Value).Folder);
-                if (!mKnownFolders.Contains(((SpellBase)itm.Value).Folder))
+                mFolders.Add(((SpellDescriptor)itm.Value).Folder);
+                if (!mKnownFolders.Contains(((SpellDescriptor)itm.Value).Folder))
                 {
-                    mKnownFolders.Add(((SpellBase)itm.Value).Folder);
+                    mKnownFolders.Add(((SpellDescriptor)itm.Value).Folder);
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(((SpellBase)itm.Value).CooldownGroup) &&
-                !mKnownCooldownGroups.Contains(((SpellBase)itm.Value).CooldownGroup))
+            if (!string.IsNullOrWhiteSpace(((SpellDescriptor)itm.Value).CooldownGroup) &&
+                !mKnownCooldownGroups.Contains(((SpellDescriptor)itm.Value).CooldownGroup))
             {
-                mKnownCooldownGroups.Add(((SpellBase)itm.Value).CooldownGroup);
+                mKnownCooldownGroups.Add(((SpellDescriptor)itm.Value).CooldownGroup);
             }
         }
 
         // Do we add item cooldown groups as well?
         if (Options.Instance.Combat.LinkSpellAndItemCooldowns)
         {
-            foreach (var itm in ItemBase.Lookup)
+            foreach (var itm in ItemDescriptor.Lookup)
             {
-                if (!string.IsNullOrWhiteSpace(((ItemBase)itm.Value).CooldownGroup) &&
-                !mKnownCooldownGroups.Contains(((ItemBase)itm.Value).CooldownGroup))
+                if (!string.IsNullOrWhiteSpace(((ItemDescriptor)itm.Value).CooldownGroup) &&
+                !mKnownCooldownGroups.Contains(((ItemDescriptor)itm.Value).CooldownGroup))
                 {
-                    mKnownCooldownGroups.Add(((ItemBase)itm.Value).CooldownGroup);
+                    mKnownCooldownGroups.Add(((ItemDescriptor)itm.Value).CooldownGroup);
                 }
             }
         }
@@ -1012,8 +1014,8 @@ public partial class FrmSpell : EditorForm
         cmbCooldownGroup.Items.Add(string.Empty);
         cmbCooldownGroup.Items.AddRange(mKnownCooldownGroups.ToArray());
 
-        var items = SpellBase.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
-            new KeyValuePair<string, string>(((SpellBase)pair.Value)?.Name ?? Models.DatabaseObject<SpellBase>.Deleted, ((SpellBase)pair.Value)?.Folder ?? ""))).ToArray();
+        var items = SpellDescriptor.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
+            new KeyValuePair<string, string>(((SpellDescriptor)pair.Value)?.Name ?? Models.DatabaseObject<SpellDescriptor>.Deleted, ((SpellDescriptor)pair.Value)?.Folder ?? ""))).ToArray();
         lstGameObjects.Repopulate(items, mFolders, btnAlphabetical.Checked, CustomSearch(), txtSearch.Text);
     }
 

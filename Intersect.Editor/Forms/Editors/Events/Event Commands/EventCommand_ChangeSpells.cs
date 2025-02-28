@@ -1,7 +1,7 @@
 ﻿using Intersect.Editor.Localization;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 
@@ -23,9 +23,9 @@ public partial class EventCommandChangeSpells : UserControl
         mCurrentPage = refPage;
         InitLocalization();
         cmbSpell.Items.Clear();
-        cmbSpell.Items.AddRange(SpellBase.Names);
+        cmbSpell.Items.AddRange(SpellDescriptor.Names);
         cmbAction.SelectedIndex = refCommand.Add ? 0 : 1;
-        cmbSpell.SelectedIndex = SpellBase.ListIndex(mMyCommand.SpellId);
+        cmbSpell.SelectedIndex = SpellDescriptor.ListIndex(mMyCommand.SpellId);
         chkRemoveBound.Checked = mMyCommand.RemoveBoundSpell;
     }
 
@@ -48,7 +48,7 @@ public partial class EventCommandChangeSpells : UserControl
     private void btnSave_Click(object sender, EventArgs e)
     {
         mMyCommand.Add = !Convert.ToBoolean(cmbAction.SelectedIndex);
-        mMyCommand.SpellId = SpellBase.IdFromList(cmbSpell.SelectedIndex);
+        mMyCommand.SpellId = SpellDescriptor.IdFromList(cmbSpell.SelectedIndex);
         mMyCommand.RemoveBoundSpell = chkRemoveBound.Checked;
         mEventEditor.FinishCommandEdit();
     }

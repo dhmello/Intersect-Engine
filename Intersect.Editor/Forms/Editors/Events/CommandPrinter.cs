@@ -2,13 +2,18 @@ using System.Text;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Maps;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
-using Intersect.GameObjects.Maps.MapList;
 using Microsoft.Extensions.Logging;
-using VariableMod = Intersect.GameObjects.Events.VariableMod;
+using VariableMod = Intersect.Framework.Core.GameObjects.Events.VariableMod;
 
 namespace Intersect.Editor.Forms.Editors.Events;
 
@@ -765,10 +770,10 @@ public static partial class CommandPrinter
     {
         if (command.AllInInstance)
         {
-            return Strings.EventCommandList.CommonEventInstanced.ToString(EventBase.GetName(command.EventId), command.AllowInOverworld);
+            return Strings.EventCommandList.CommonEventInstanced.ToString(EventDescriptor.GetName(command.EventId), command.AllowInOverworld);
         }
 
-        return Strings.EventCommandList.commonevent.ToString(EventBase.GetName(command.EventId));
+        return Strings.EventCommandList.commonevent.ToString(EventDescriptor.GetName(command.EventId));
     }
 
     private static string GetCommandText(RestoreHpCommand command, MapInstance map)
@@ -836,12 +841,12 @@ public static partial class CommandPrinter
         if (command.Add)
         {
             return Strings.EventCommandList.changespells.ToString(
-                Strings.EventCommandList.teach.ToString(SpellBase.GetName(command.SpellId))
+                Strings.EventCommandList.teach.ToString(SpellDescriptor.GetName(command.SpellId))
             );
         }
 
         return Strings.EventCommandList.changespells.ToString(
-            Strings.EventCommandList.forget.ToString(SpellBase.GetName(command.SpellId))
+            Strings.EventCommandList.forget.ToString(SpellDescriptor.GetName(command.SpellId))
         );
     }
 
@@ -850,12 +855,12 @@ public static partial class CommandPrinter
         if (command.Add)
         {
             return Strings.EventCommandList.changeitems.ToString(
-                Strings.EventCommandList.give.ToString(ItemBase.GetName(command.ItemId))
+                Strings.EventCommandList.give.ToString(ItemDescriptor.GetName(command.ItemId))
             );
         }
 
         return Strings.EventCommandList.changeitems.ToString(
-            Strings.EventCommandList.take.ToString(ItemBase.GetName(command.ItemId))
+            Strings.EventCommandList.take.ToString(ItemDescriptor.GetName(command.ItemId))
         );
     }
 
@@ -865,13 +870,13 @@ public static partial class CommandPrinter
 
         if(!command.Unequip)
         {
-            commandText = Strings.EventCommandList.equipitem.ToString(ItemBase.GetName(command.ItemId));
+            commandText = Strings.EventCommandList.equipitem.ToString(ItemDescriptor.GetName(command.ItemId));
         }
         else
         {
             if (command.IsItem)
             {
-                 commandText = Strings.EventCommandList.unequipitem.ToString(ItemBase.GetName(command.ItemId));
+                 commandText = Strings.EventCommandList.unequipitem.ToString(ItemDescriptor.GetName(command.ItemId));
             }
             else
             {
@@ -1033,7 +1038,7 @@ public static partial class CommandPrinter
                 if (orderedMap.MapId == command.MapId)
                 {
                     return Strings.EventCommandList.spawnnpc.ToString(
-                        NpcBase.GetName(command.NpcId),
+                        NPCDescriptor.GetName(command.NpcId),
                         Strings.EventCommandList.spawnonmap.ToString(
                             orderedMap.Name, command.X, command.Y, Strings.Direction.dir?[command.Dir]
                         )
@@ -1042,7 +1047,7 @@ public static partial class CommandPrinter
             }
 
             return Strings.EventCommandList.spawnnpc.ToString(
-                NpcBase.GetName(command.NpcId),
+                NPCDescriptor.GetName(command.NpcId),
                 Strings.EventCommandList.spawnonmap.ToString(
                     Strings.EventCommandList.mapnotfound, command.X, command.Y, Strings.Direction.dir[command.Dir]
                 )
@@ -1060,7 +1065,7 @@ public static partial class CommandPrinter
         if (command.EntityId == Guid.Empty)
         {
             return Strings.EventCommandList.spawnnpc.ToString(
-                NpcBase.GetName(command.NpcId),
+                NPCDescriptor.GetName(command.NpcId),
                 Strings.EventCommandList.spawnonplayer.ToString(command.X, command.Y, retain)
             );
         }
@@ -1068,13 +1073,13 @@ public static partial class CommandPrinter
         if (map.LocalEvents.TryGetValue(command.EntityId, out var localEvent))
         {
             return Strings.EventCommandList.spawnnpc.ToString(
-                NpcBase.GetName(command.NpcId),
+                NPCDescriptor.GetName(command.NpcId),
                 Strings.EventCommandList.spawnonevent.ToString(localEvent.Name, command.X, command.Y, retain)
             );
         }
 
         return Strings.EventCommandList.spawnnpc.ToString(
-            NpcBase.GetName(command.NpcId),
+            NPCDescriptor.GetName(command.NpcId),
             Strings.EventCommandList.spawnonevent.ToString(
                 Strings.EventCommandList.deletedevent, command.X, command.Y, retain
             )
@@ -1213,19 +1218,19 @@ public static partial class CommandPrinter
 
     private static string GetCommandText(OpenShopCommand command, MapInstance map)
     {
-        return Strings.EventCommandList.openshop.ToString(ShopBase.GetName(command.ShopId));
+        return Strings.EventCommandList.openshop.ToString(ShopDescriptor.GetName(command.ShopId));
     }
 
     private static string GetCommandText(OpenCraftingTableCommand command, MapInstance map)
     {
         return command.JournalMode ?
-            Strings.EventCommandList.OpenCraftingJournal.ToString(CraftingTableBase.GetName(command.CraftingTableId)) :
-            Strings.EventCommandList.opencrafting.ToString(CraftingTableBase.GetName(command.CraftingTableId));
+            Strings.EventCommandList.OpenCraftingJournal.ToString(CraftingTableDescriptor.GetName(command.CraftingTableId)) :
+            Strings.EventCommandList.opencrafting.ToString(CraftingTableDescriptor.GetName(command.CraftingTableId));
     }
 
     private static string GetCommandText(SetClassCommand command, MapInstance map)
     {
-        return Strings.EventCommandList.setclass.ToString(ClassBase.GetName(command.ClassId));
+        return Strings.EventCommandList.setclass.ToString(ClassDescriptor.GetName(command.ClassId));
     }
 
     private static string GetCommandText(StartQuestCommand command, MapInstance map)
@@ -1233,20 +1238,20 @@ public static partial class CommandPrinter
         if (!command.Offer)
         {
             return Strings.EventCommandList.startquest.ToString(
-                QuestBase.GetName(command.QuestId), Strings.EventCommandList.forcedstart
+                QuestDescriptor.GetName(command.QuestId), Strings.EventCommandList.forcedstart
             );
         }
         else
         {
             return Strings.EventCommandList.startquest.ToString(
-                QuestBase.GetName(command.QuestId), Strings.EventCommandList.showoffer
+                QuestDescriptor.GetName(command.QuestId), Strings.EventCommandList.showoffer
             );
         }
     }
 
     private static string GetCommandText(CompleteQuestTaskCommand command, MapInstance map)
     {
-        var quest = QuestBase.Get(command.QuestId);
+        var quest = QuestDescriptor.Get(command.QuestId);
         if (quest != null)
         {
             //Try to find task
@@ -1255,14 +1260,14 @@ public static partial class CommandPrinter
                 if (task.Id == command.TaskId)
                 {
                     return Strings.EventCommandList.completetask.ToString(
-                        QuestBase.GetName(command.QuestId), task.GetTaskString(Strings.TaskEditor.descriptions)
+                        QuestDescriptor.GetName(command.QuestId), task.GetTaskString(Strings.TaskEditor.descriptions)
                     );
                 }
             }
         }
 
         return Strings.EventCommandList.completetask.ToString(
-            QuestBase.GetName(command.QuestId), Strings.EventCommandList.taskundefined
+            QuestDescriptor.GetName(command.QuestId), Strings.EventCommandList.taskundefined
         );
     }
 
@@ -1271,12 +1276,12 @@ public static partial class CommandPrinter
         if (!command.SkipCompletionEvent)
         {
             return Strings.EventCommandList.endquest.ToString(
-                QuestBase.GetName(command.QuestId), Strings.EventCommandList.runcompletionevent
+                QuestDescriptor.GetName(command.QuestId), Strings.EventCommandList.runcompletionevent
             );
         }
 
         return Strings.EventCommandList.endquest.ToString(
-            QuestBase.GetName(command.QuestId), Strings.EventCommandList.skipcompletionevent
+            QuestDescriptor.GetName(command.QuestId), Strings.EventCommandList.skipcompletionevent
         );
     }
 
@@ -1312,7 +1317,7 @@ public static partial class CommandPrinter
 
     private static string GetCommandText(CastSpellOn command, MapInstance map)
     {
-        return Strings.EventCommandList.CastSpellOn.ToString(SpellBase.GetName(command.SpellId), command.Self, command.PartyMembers, command.GuildMembers);
+        return Strings.EventCommandList.CastSpellOn.ToString(SpellDescriptor.GetName(command.SpellId), command.Self, command.PartyMembers, command.GuildMembers);
     }
 
     private static string GetCommandText(ScreenFadeCommand command, MapInstance map)

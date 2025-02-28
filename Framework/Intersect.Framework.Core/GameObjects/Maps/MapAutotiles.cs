@@ -1,7 +1,7 @@
 ﻿using Intersect.Core;
 using Microsoft.Extensions.Logging;
 
-namespace Intersect.GameObjects.Maps;
+namespace Intersect.Framework.Core.GameObjects.Maps;
 
 public partial class MapAutotiles
 {
@@ -61,45 +61,45 @@ public partial class MapAutotiles
 
     public const byte XPW = 10;
 
-    public static PointStruct[] AutoCxp = new PointStruct[6];
+    public static Point16i[] AutoCxp = new Point16i[6];
 
-    public static PointStruct[] AutoExp = new PointStruct[6];
+    public static Point16i[] AutoExp = new Point16i[6];
 
-    public static PointStruct[] AutoInner = new PointStruct[6];
+    public static Point16i[] AutoInner = new Point16i[6];
 
     // XP autotiling
-    public static PointStruct[] AutoInnerXp = new PointStruct[6];
+    public static Point16i[] AutoInnerXp = new Point16i[6];
 
-    public static PointStruct[] AutoNe = new PointStruct[6];
+    public static Point16i[] AutoNe = new Point16i[6];
 
-    public static PointStruct[] AutoNeXp = new PointStruct[6];
+    public static Point16i[] AutoNeXp = new Point16i[6];
 
-    public static PointStruct[] AutoNw = new PointStruct[6];
+    public static Point16i[] AutoNw = new Point16i[6];
 
-    public static PointStruct[] AutoNwXp = new PointStruct[6];
+    public static Point16i[] AutoNwXp = new Point16i[6];
 
-    public static PointStruct[] AutoNxp = new PointStruct[6];
+    public static Point16i[] AutoNxp = new Point16i[6];
 
-    public static PointStruct[] AutoSe = new PointStruct[6];
+    public static Point16i[] AutoSe = new Point16i[6];
 
-    public static PointStruct[] AutoSeXp = new PointStruct[6];
+    public static Point16i[] AutoSeXp = new Point16i[6];
 
-    public static PointStruct[] AutoSw = new PointStruct[6];
+    public static Point16i[] AutoSw = new Point16i[6];
 
-    public static PointStruct[] AutoSwXp = new PointStruct[6];
+    public static Point16i[] AutoSwXp = new Point16i[6];
 
-    public static PointStruct[] AutoSxp = new PointStruct[6];
+    public static Point16i[] AutoSxp = new Point16i[6];
 
-    public static PointStruct[] AutoWxp = new PointStruct[6];
+    public static Point16i[] AutoWxp = new Point16i[6];
 
     // autotiling
     private static bool sLoadedTemplates = false;
 
-    private readonly MapBase mMyMap;
+    private readonly MapDescriptor mMyMap;
 
-    public Dictionary<string, QuarterTileCls[,]> Layers;
+    public Dictionary<string, Autotile[,]> Layers;
 
-    public MapAutotiles(MapBase map)
+    public MapAutotiles(MapDescriptor map)
     {
         mMyMap = map;
         if (!sLoadedTemplates)
@@ -372,22 +372,22 @@ public partial class MapAutotiles
 
     private void CreateFields()
     {
-        Layers = new Dictionary<string, QuarterTileCls[,]>();
+        Layers = new Dictionary<string, Autotile[,]>();
         foreach (var layerName in Options.Instance.Map.Layers.All)
         {
-            var layer = new QuarterTileCls[Options.Instance.Map.MapWidth, Options.Instance.Map.MapHeight];
+            var layer = new Autotile[Options.Instance.Map.MapWidth, Options.Instance.Map.MapHeight];
             for (var x = 0; x < Options.Instance.Map.MapWidth; x++)
             {
                 for (var y = 0; y < Options.Instance.Map.MapHeight; y++)
                 {
-                    layer[x, y] = new QuarterTileCls() { QuarterTile = new PointStruct[5] };
+                    layer[x, y] = new Autotile() { QuarterTile = new Point16i[5] };
                 }
             }
             Layers.Add(layerName, layer);
         }
     }
 
-    public void InitAutotiles(MapBase[,] surroundingMaps)
+    public void InitAutotiles(MapDescriptor[,] surroundingMaps)
     {
         lock (mMyMap.MapLock)
         {
@@ -413,7 +413,7 @@ public partial class MapAutotiles
         }
     }
 
-    public bool UpdateAutoTiles(int x, int y, MapBase[,] surroundingMaps)
+    public bool UpdateAutoTiles(int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var changed = false;
         lock (mMyMap.MapLock)
@@ -453,7 +453,7 @@ public partial class MapAutotiles
         return changed;
     }
 
-    public void UpdateAutoTiles(int x, int y, string layerName, MapBase[,] surroundingMaps)
+    public void UpdateAutoTiles(int x, int y, string layerName, MapDescriptor[,] surroundingMaps)
     {
         lock (mMyMap.MapLock)
         {
@@ -481,7 +481,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void UpdateCliffAutotiles(MapBase curMap, string layerName)
+    public void UpdateCliffAutotiles(MapDescriptor curMap, string layerName)
     {
         if (!curMap.Layers.ContainsKey(layerName))
         {
@@ -507,7 +507,7 @@ public partial class MapAutotiles
         }
     }
 
-    public bool UpdateAutoTile(int x, int y, string layerName, MapBase[,] surroundingMaps)
+    public bool UpdateAutoTile(int x, int y, string layerName, MapDescriptor[,] surroundingMaps)
     {
         if (x < 0 || x >= Options.Instance.Map.MapWidth || y < 0 || y >= Options.Instance.Map.MapHeight)
         {
@@ -588,7 +588,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateAutotile(int x, int y, string layerName, MapBase[,] surroundingMaps)
+    public void CalculateAutotile(int x, int y, string layerName, MapDescriptor[,] surroundingMaps)
     {
         // Right, so we//ve split the tile block in to an easy to remember
         // collection of letters. We now need to do the calculations to find
@@ -829,7 +829,7 @@ public partial class MapAutotiles
     }
 
     // Normal autotiling
-    public void CalculateNW_Normal(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateNW_Normal(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4];
         byte situation = 1;
@@ -908,7 +908,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateNE_Normal(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateNE_Normal(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4];
         byte situation = 1;
@@ -987,7 +987,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateSW_Normal(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateSW_Normal(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4];
         byte situation = 1;
@@ -1066,7 +1066,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateSE_Normal(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateSE_Normal(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4];
         byte situation = 1;
@@ -1146,7 +1146,7 @@ public partial class MapAutotiles
     }
 
     // Waterfall autotiling
-    public void CalculateNW_Waterfall(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateNW_Waterfall(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = CheckTileMatch(layerName, x, y, x - 1, y, surroundingMaps);
 
@@ -1163,7 +1163,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateNE_Waterfall(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateNE_Waterfall(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = CheckTileMatch(layerName, x, y, x + 1, y, surroundingMaps);
 
@@ -1180,7 +1180,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateSW_Waterfall(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateSW_Waterfall(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = CheckTileMatch(layerName, x, y, x - 1, y, surroundingMaps);
 
@@ -1197,7 +1197,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateSE_Waterfall(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateSE_Waterfall(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = CheckTileMatch(layerName, x, y, x + 1, y, surroundingMaps);
 
@@ -1219,7 +1219,7 @@ public partial class MapAutotiles
         string layerName,
         int x,
         int y,
-        MapBase[,] surroundingMaps,
+        MapDescriptor[,] surroundingMaps,
         int cliffStart,
         int cliffHeight,
         int adjacentStart,
@@ -1318,7 +1318,7 @@ public partial class MapAutotiles
         string layerName,
         int x,
         int y,
-        MapBase[,] surroundingMaps,
+        MapDescriptor[,] surroundingMaps,
         int cliffStart,
         int cliffHeight,
         int adjacentStart,
@@ -1416,7 +1416,7 @@ public partial class MapAutotiles
         string layerName,
         int x,
         int y,
-        MapBase[,] surroundingMaps,
+        MapDescriptor[,] surroundingMaps,
         int cliffStart,
         int cliffHeight,
         int adjacentStart,
@@ -1521,7 +1521,7 @@ public partial class MapAutotiles
         string layerName,
         int x,
         int y,
-        MapBase[,] surroundingMaps,
+        MapDescriptor[,] surroundingMaps,
         int cliffStart,
         int cliffHeight,
         int adjacentStart,
@@ -1623,7 +1623,7 @@ public partial class MapAutotiles
     }
 
     // Normal autotiling
-    public void CalculateNW_XP(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateNW_XP(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4, 4];
         byte situation = 1;
@@ -1745,7 +1745,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateNE_XP(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateNE_XP(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4, 4];
         byte situation = 1;
@@ -1873,7 +1873,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateSW_XP(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateSW_XP(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4, 4];
         byte situation = 1;
@@ -2001,7 +2001,7 @@ public partial class MapAutotiles
         }
     }
 
-    public void CalculateSE_XP(string layerName, int x, int y, MapBase[,] surroundingMaps)
+    public void CalculateSE_XP(string layerName, int x, int y, MapDescriptor[,] surroundingMaps)
     {
         var tmpTile = new bool[4, 4];
         byte situation = 1;
@@ -2141,7 +2141,7 @@ public partial class MapAutotiles
         }
     }
 
-    public bool CheckTileMatch(string layerName, int x1, int y1, int x2, int y2, MapBase[,] surroundingMaps)
+    public bool CheckTileMatch(string layerName, int x1, int y1, int x2, int y2, MapDescriptor[,] surroundingMaps)
     {
         Tile targetTile;
         targetTile.TilesetId = Guid.Empty;
@@ -2229,7 +2229,7 @@ public partial class MapAutotiles
         return true;
     }
 
-    private int CalculateCliffHeight(string layerName, int x, int y, MapBase[,] surroundingMaps, out int cliffStart)
+    private int CalculateCliffHeight(string layerName, int x, int y, MapDescriptor[,] surroundingMaps, out int cliffStart)
     {
         Tile sourceTile;
         sourceTile.TilesetId = Guid.Empty;
@@ -2314,7 +2314,7 @@ public partial class MapAutotiles
 
     public void PlaceAutotile(string layerName, int x, int y, byte tileQuarter, string autoTileLetter)
     {
-        var quarterTile = new PointStruct();
+        var quarterTile = new Point16i();
         switch (autoTileLetter)
         {
             case "a":
@@ -2423,7 +2423,7 @@ public partial class MapAutotiles
 
     public void PlaceAutotileXp(string layerName, int x, int y, byte tileQuarter, string autoTileLetter)
     {
-        var quarterTile = new PointStruct();
+        var quarterTile = new Point16i();
         switch (autoTileLetter)
         {
             case "a":
@@ -2630,60 +2630,5 @@ public partial class MapAutotiles
                 break;
         }
         Layers[layerName][x, y].QuarterTile[tileQuarter] = quarterTile;
-    }
-}
-
-public partial struct PointStruct
-{
-    public Int16 X;
-
-    public Int16 Y;
-}
-
-public partial class QuarterTileCls
-{
-    public PointStruct[] QuarterTile = new PointStruct[5];
-
-    public byte RenderState;
-
-    public QuarterTileCls Copy()
-    {
-        var autotile = new QuarterTileCls();
-
-        autotile.RenderState = RenderState;
-
-        for (var z = 0; z < 5; z++)
-        {
-            autotile.QuarterTile[z] = new PointStruct()
-            {
-                X = QuarterTile[z].X,
-                Y = QuarterTile[z].Y
-            };
-        }
-
-        return autotile;
-    }
-
-    public bool Equals(QuarterTileCls quarterTile)
-    {
-        if (quarterTile.RenderState != RenderState)
-        {
-            return false;
-        }
-
-        for (var z = 0; z < 5; z++)
-        {
-            if (quarterTile.QuarterTile[z].X != QuarterTile[z].X)
-            {
-                return false;
-            }
-
-            if (quarterTile.QuarterTile[z].Y != QuarterTile[z].Y)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

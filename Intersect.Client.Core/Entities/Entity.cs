@@ -18,8 +18,11 @@ using Intersect.Core;
 using Intersect.Enums;
 using Intersect.Framework.Core;
 using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.Attributes;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
 using Intersect.Network.Packets.Server;
 using Intersect.Utilities;
 using Microsoft.Extensions.Logging;
@@ -832,7 +835,7 @@ public partial class Entity : IEntity
                         itemId = Equipment[z];
                     }
 
-                    if (ItemBase.TryGet(itemId, out var itemDescriptor) &&
+                    if (ItemDescriptor.TryGet(itemId, out var itemDescriptor) &&
                         itemDescriptor.EquipmentAnimation is { } animationDescriptor)
                     {
                         if (equipmentAnimation != null &&
@@ -1292,8 +1295,8 @@ public partial class Entity : IEntity
                             itemId = Equipment[equipSlot];
                         }
 
-                        var item = ItemBase.Get(itemId);
-                        if (ItemBase.TryGet(itemId, out var itemDescriptor))
+                        var item = ItemDescriptor.Get(itemId);
+                        if (ItemDescriptor.TryGet(itemId, out var itemDescriptor))
                         {
                             var itemPaperdoll = Gender == 0
                                 ? itemDescriptor.MalePaperdoll
@@ -1930,7 +1933,7 @@ public partial class Entity : IEntity
             return;
         }
 
-        var castingSpell = SpellBase.Get(SpellCast);
+        var castingSpell = SpellDescriptor.Get(SpellCast);
         if (castingSpell == null)
         {
             return;
@@ -2105,7 +2108,7 @@ public partial class Entity : IEntity
                         itemId = Equipment[Options.Instance.Equipment.WeaponSlot];
                     }
 
-                    var item = ItemBase.Get(itemId);
+                    var item = ItemDescriptor.Get(itemId);
                     if (item != null)
                     {
                         if (AnimatedTextures.TryGetValue(SpriteAnimations.Weapon, out _))
@@ -2140,7 +2143,7 @@ public partial class Entity : IEntity
 
         if (IsCasting)
         {
-            var spell = SpellBase.Get(SpellCast);
+            var spell = SpellDescriptor.Get(SpellCast);
             if (spell != null)
             {
                 var duration = spell.CastDuration;
@@ -2224,7 +2227,7 @@ public partial class Entity : IEntity
                 break;
 
             case SpriteAnimations.Attack:
-                if (this is Player player && ClassBase.TryGet(player.Class, out var classDescriptor))
+                if (this is Player player && ClassDescriptor.TryGet(player.Class, out var classDescriptor))
                 {
                     textureOverride = classDescriptor.AttackSpriteOverride;
                 }
@@ -2237,7 +2240,7 @@ public partial class Entity : IEntity
                     break;
                 }
 
-                if (ItemBase.TryGet(weaponId, out var shootItemDescriptor))
+                if (ItemDescriptor.TryGet(weaponId, out var shootItemDescriptor))
                 {
                     textureOverride = shootItemDescriptor.WeaponSpriteOverride;
                 }
@@ -2250,7 +2253,7 @@ public partial class Entity : IEntity
                 break;
 
             case SpriteAnimations.Cast:
-                if (SpellBase.TryGet(SpellCast, out var spellDescriptor))
+                if (SpellDescriptor.TryGet(SpellCast, out var spellDescriptor))
                 {
                     textureOverride = spellDescriptor.CastSpriteOverride;
                 }
@@ -2268,7 +2271,7 @@ public partial class Entity : IEntity
                     break;
                 }
 
-                if (ItemBase.TryGet(weaponId, out var weaponItemDescriptor))
+                if (ItemDescriptor.TryGet(weaponId, out var weaponItemDescriptor))
                 {
                     textureOverride = weaponItemDescriptor.WeaponSpriteOverride;
                 }
@@ -2449,27 +2452,30 @@ public partial class Entity : IEntity
                             switch (en.Value)
                             {
                                 case Resource resource:
-                                    var resourceBase = resource.Descriptor;
-                                    if (resourceBase != null)
+                                    var resourceDescriptor = resource.Descriptor;
+                                    if (resourceDescriptor == null)
                                     {
-                                        if (projectileTrigger)
+                                        break;
+                                    }
+
+                                    if (projectileTrigger)
+                                    {
+                                        bool isDead = resource.IsDead;
+                                        if ((ignoreAliveResources || isDead) && (ignoreDeadResources || !isDead))
                                         {
-                                            bool isDead = resource.IsDead;
-                                            if (!ignoreAliveResources && !isDead || !ignoreDeadResources && isDead)
-                                            {
-                                                blockedBy = en.Value;
-
-                                                return -6;
-                                            }
-
                                             return -1;
                                         }
 
-                                        if (resourceBase.WalkableAfter && resource.IsDead ||
-                                            resourceBase.WalkableBefore && !resource.IsDead)
-                                        {
-                                            continue;
-                                        }
+                                        blockedBy = en.Value;
+
+                                        return -6;
+
+                                    }
+
+                                    if (resourceDescriptor.WalkableAfter && resource.IsDead ||
+                                        resourceDescriptor.WalkableBefore && !resource.IsDead)
+                                    {
+                                        continue;
                                     }
 
                                     break;

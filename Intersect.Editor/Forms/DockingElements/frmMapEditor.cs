@@ -10,9 +10,11 @@ using Intersect.Editor.Localization;
 using Intersect.Editor.Maps;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Lighting;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
 using Microsoft.Extensions.Logging;
 using Microsoft.Xna.Framework.Graphics;
 using WeifenLuo.WinFormsUI.Docking;
@@ -246,7 +248,7 @@ public partial class FrmMapEditor : DockContent
                     {
                         if (tmpMap.Layers[layer][Globals.CurTileX, Globals.CurTileY].TilesetId != Guid.Empty)
                         {
-                            Globals.MapLayersWindow.SetTileset(TilesetBase.GetName(tmpMap.Layers[layer][Globals.CurTileX, Globals.CurTileY].TilesetId));
+                            Globals.MapLayersWindow.SetTileset(TilesetDescriptor.GetName(tmpMap.Layers[layer][Globals.CurTileX, Globals.CurTileY].TilesetId));
 
                             Globals.CurSelW = 0;
                             Globals.CurSelH = 0;
@@ -458,7 +460,7 @@ public partial class FrmMapEditor : DockContent
                 }
                 else if (Globals.CurrentLayer == LayerOptions.Lights)
                 {
-                    LightBase tmpLight;
+                    LightDescriptor tmpLight;
                     if ((tmpLight = Globals.CurrentMap.FindLightAt(Globals.CurTileX, Globals.CurTileY)) != null)
                     {
                         Globals.CurrentMap.Lights.Remove(tmpLight);
@@ -468,7 +470,7 @@ public partial class FrmMapEditor : DockContent
                 }
                 else if (Globals.CurrentLayer == LayerOptions.Events)
                 {
-                    EventBase tmpEvent;
+                    EventDescriptor tmpEvent;
                     if ((tmpEvent = Globals.CurrentMap.FindEventAt(Globals.CurTileX, Globals.CurTileY)) != null)
                     {
                         Globals.CurrentMap.LocalEvents.Remove(tmpEvent.Id);
@@ -1187,10 +1189,10 @@ public partial class FrmMapEditor : DockContent
             //Lights
             case LayerOptions.Lights:
                 {
-                    LightBase tmpLight;
+                    LightDescriptor tmpLight;
                     if ((tmpLight = Globals.CurrentMap.FindLightAt(Globals.CurTileX, Globals.CurTileY)) == null)
                     {
-                        tmpLight = new LightBase(Globals.CurTileX, Globals.CurTileY)
+                        tmpLight = new LightDescriptor(Globals.CurTileX, Globals.CurTileY)
                         {
                             Size = 50
                         };
@@ -1200,7 +1202,7 @@ public partial class FrmMapEditor : DockContent
 
                     Globals.MapLayersWindow.btnLightsHeader_Click(null, null);
                     Globals.MapLayersWindow.lightEditor.Show();
-                    Globals.BackupLight = new LightBase(tmpLight);
+                    Globals.BackupLight = new LightDescriptor(tmpLight);
                     Globals.MapLayersWindow.lightEditor.LoadEditor(tmpLight);
                     Globals.EditingLight = tmpLight;
                     mMapChanged = true;
@@ -1215,7 +1217,7 @@ public partial class FrmMapEditor : DockContent
                     FrmEvent tmpEventEditor;
                     if (tmpEvent == null)
                     {
-                        tmpEvent = new EventBase(
+                        tmpEvent = new EventDescriptor(
                             Guid.NewGuid(), Globals.CurrentMap.Id, Globals.CurTileX, Globals.CurTileY
                         );
 
@@ -1577,7 +1579,7 @@ public partial class FrmMapEditor : DockContent
         }
     }
 
-    private void SmartFillAttribute(int x, int y, string data = null, GameObjects.Maps.MapAttribute newAttribute = null)
+    private void SmartFillAttribute(int x, int y, string data = null, MapAttribute newAttribute = null)
     {
         if (x < 0 || x >= Options.Instance.Map.MapWidth || y < 0 || y >= Options.Instance.Map.MapHeight)
         {
@@ -1881,7 +1883,7 @@ public partial class FrmMapEditor : DockContent
                     }
 
                     //Lights
-                    LightBase lightCopy;
+                    LightDescriptor lightCopy;
                     if (Globals.SelectionType != (int)SelectionTypes.CurrentLayer ||
                         Globals.CurrentLayer == LayerOptions.Lights)
                     {
@@ -1892,7 +1894,7 @@ public partial class FrmMapEditor : DockContent
                                 tmpMap.Lights.Remove(tmpMap.FindLightAt(x0, y0));
                             }
 
-                            lightCopy = new LightBase(Globals.SelectionSource.FindLightAt(x0 - dragxoffset, y0 - dragyoffset))
+                            lightCopy = new LightDescriptor(Globals.SelectionSource.FindLightAt(x0 - dragxoffset, y0 - dragyoffset))
                             {
                                 TileX = x0,
                                 TileY = y0
@@ -1903,7 +1905,7 @@ public partial class FrmMapEditor : DockContent
                     }
 
                     //Events
-                    EventBase eventCopy;
+                    EventDescriptor eventCopy;
                     if (Globals.SelectionType != (int)SelectionTypes.CurrentLayer ||
                         Globals.CurrentLayer == LayerOptions.Events)
                     {
@@ -1919,7 +1921,7 @@ public partial class FrmMapEditor : DockContent
                             tmpMap.LocalEvents.Remove(eventOnTemporaryMap.Id);
                         }
 
-                        eventCopy = new EventBase(
+                        eventCopy = new EventDescriptor(
                             Guid.NewGuid(),
                             eventAtPosition
                         )
@@ -1936,7 +1938,7 @@ public partial class FrmMapEditor : DockContent
         }
     }
 
-    private void WipeCurrentSelection(MapBase tmpMap)
+    private void WipeCurrentSelection(MapDescriptor tmpMap)
     {
         int selX = Globals.CurMapSelX,
             selY = Globals.CurMapSelY,

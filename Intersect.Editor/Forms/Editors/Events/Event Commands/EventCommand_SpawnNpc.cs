@@ -1,11 +1,12 @@
 using Intersect.Editor.Forms.Helpers;
 using Intersect.Editor.Localization;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 
@@ -15,9 +16,9 @@ public partial class EventCommandSpawnNpc : UserControl
 
     private readonly FrmEvent mEventEditor;
 
-    private MapBase mCurrentMap;
+    private MapDescriptor mCurrentMap;
 
-    private EventBase mEditingEvent;
+    private EventDescriptor mEditingEvent;
 
     private SpawnNpcCommand mMyCommand;
 
@@ -29,8 +30,8 @@ public partial class EventCommandSpawnNpc : UserControl
 
     public EventCommandSpawnNpc(
         FrmEvent eventEditor,
-        MapBase currentMap,
-        EventBase currentEvent,
+        MapDescriptor currentMap,
+        EventDescriptor currentEvent,
         SpawnNpcCommand editingCommand
     )
     {
@@ -41,8 +42,8 @@ public partial class EventCommandSpawnNpc : UserControl
         mCurrentMap = currentMap;
         InitLocalization();
         cmbNpc.Items.Clear();
-        cmbNpc.Items.AddRange(NpcBase.Names);
-        cmbNpc.SelectedIndex = NpcBase.ListIndex(mMyCommand.NpcId);
+        cmbNpc.Items.AddRange(NPCDescriptor.Names);
+        cmbNpc.SelectedIndex = NPCDescriptor.ListIndex(mMyCommand.NpcId);
         if (mMyCommand.MapId != Guid.Empty)
         {
             cmbConditionType.SelectedIndex = 0;
@@ -181,7 +182,7 @@ public partial class EventCommandSpawnNpc : UserControl
 
     private void btnSave_Click(object sender, EventArgs e)
     {
-        mMyCommand.NpcId = NpcBase.IdFromList(cmbNpc.SelectedIndex);
+        mMyCommand.NpcId = NPCDescriptor.IdFromList(cmbNpc.SelectedIndex);
         switch (cmbConditionType.SelectedIndex)
         {
             case 0: //Tile Spawn

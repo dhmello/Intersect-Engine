@@ -9,6 +9,7 @@ using Intersect.Client.General;
 using Intersect.Client.Interface.Game.DescriptionWindows;
 using Intersect.Client.Localization;
 using Intersect.Configuration;
+using Intersect.Framework.Core.GameObjects.Items;
 using Intersect.GameObjects;
 using Intersect.Network.Packets.Server;
 
@@ -89,7 +90,7 @@ public partial class ShopItem : ImagePanel
             return;
         }
 
-        if (!ItemBase.TryGet(gameShop.SellingItems[_mySlot].CostItemId, out var item))
+        if (!ItemDescriptor.TryGet(gameShop.SellingItems[_mySlot].CostItemId, out var item))
         {
             return;
         }
@@ -130,7 +131,7 @@ public partial class ShopItem : ImagePanel
 
         if (ClientConfiguration.Instance.EnableContextMenus)
         {
-            OpenContextMenu(_mySlot);
+            _openContextMenu(_mySlot);
         }
         else
         {
@@ -154,14 +155,14 @@ public partial class ShopItem : ImagePanel
         base.Dispose(disposing);
     }
 
-    public void OpenContextMenu(int slot)
+    private void _openContextMenu(int slot)
     {
         if (Globals.GameShop is not { SellingItems.Count: > 0 } gameShop)
         {
             return;
         }
 
-        if (!ItemBase.TryGet(gameShop.SellingItems[slot].ItemId, out var item))
+        if (!ItemDescriptor.TryGet(gameShop.SellingItems[slot].ItemId, out var item))
         {
             return;
         }
@@ -177,7 +178,7 @@ public partial class ShopItem : ImagePanel
             return;
         }
 
-        if (!ItemBase.TryGet(gameShop.SellingItems[_mySlot].ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(gameShop.SellingItems[_mySlot].ItemId, out var itemDescriptor))
         {
             return;
         }

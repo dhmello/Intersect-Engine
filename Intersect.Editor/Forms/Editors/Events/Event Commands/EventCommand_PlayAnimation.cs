@@ -1,11 +1,12 @@
 using Intersect.Editor.Forms.Helpers;
 using Intersect.Editor.Localization;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 
@@ -15,9 +16,9 @@ public partial class EventCommandPlayAnimation : UserControl
 
     private readonly FrmEvent mEventEditor;
 
-    private MapBase mCurrentMap;
+    private MapDescriptor mCurrentMap;
 
-    private EventBase mEditingEvent;
+    private EventDescriptor mEditingEvent;
 
     private PlayAnimationCommand mMyCommand;
 
@@ -29,8 +30,8 @@ public partial class EventCommandPlayAnimation : UserControl
 
     public EventCommandPlayAnimation(
         FrmEvent eventEditor,
-        MapBase currentMap,
-        EventBase currentEvent,
+        MapDescriptor currentMap,
+        EventDescriptor currentEvent,
         PlayAnimationCommand editingCommand
     )
     {

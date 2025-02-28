@@ -1,5 +1,5 @@
-using Intersect.GameObjects.Events;
 using System.Reflection;
+using Intersect.Framework.Core.GameObjects.Conditions.ConditionMetadata;
 using Intersect.Framework.Core.GameObjects.Variables;
 
 namespace Intersect.Server.Entities.Events;

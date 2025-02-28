@@ -7,11 +7,12 @@ using Intersect.Editor.Localization;
 using Intersect.Editor.Maps;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
-using Intersect.GameObjects.Maps;
 using Intersect.Utilities;
 using Newtonsoft.Json;
 using Graphics = System.Drawing.Graphics;
@@ -28,7 +29,7 @@ public partial class FrmEvent : Form
 
     private readonly List<CommandListProperties> mCommandProperties = new List<CommandListProperties>();
 
-    private readonly MapBase mCurrentMap;
+    private readonly MapDescriptor mCurrentMap;
 
     public EventPage CurrentPage;
 
@@ -48,7 +49,7 @@ public partial class FrmEvent : Form
 
     private List<DarkButton> mPageTabs = new List<DarkButton>();
 
-    public EventBase MyEvent;
+    public EventDescriptor MyEvent;
 
     public MapInstance MyMap;
 
@@ -788,7 +789,7 @@ public partial class FrmEvent : Form
 
     #region "Form Events"
 
-    public FrmEvent(MapBase currentMap)
+    public FrmEvent(MapDescriptor currentMap)
     {
         InitializeComponent();
         Icon = Program.Icon;
@@ -1021,7 +1022,7 @@ public partial class FrmEvent : Form
 
             cmbTriggerVal.Items.Clear();
             cmbTriggerVal.Items.Add(Strings.General.None);
-            cmbTriggerVal.Items.AddRange(ProjectileBase.Names);
+            cmbTriggerVal.Items.AddRange(ProjectileDescriptor.Names);
         }
 
         chkIsGlobal.Checked = Convert.ToBoolean(MyEvent.Global);

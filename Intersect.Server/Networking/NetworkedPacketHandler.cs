@@ -1,12 +1,18 @@
 using Intersect.Core;
 using Intersect.Enums;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Models;
 using Intersect.Network.Packets.Client;
 using Intersect.Server.Admin.Actions;
@@ -190,7 +196,7 @@ internal sealed partial class NetworkedPacketHandler
             {
                 if (!map.LocalEvents.ContainsKey(id))
                 {
-                    var evt = EventBase.Get(id);
+                    var evt = EventDescriptor.Get(id);
                     if (evt != null)
                     {
                         DbInterface.DeleteGameObject(evt);
@@ -207,10 +213,10 @@ internal sealed partial class NetworkedPacketHandler
 
             foreach (var evt in map.LocalEvents)
             {
-                var dbObj = EventBase.Get(evt.Key);
+                var dbObj = EventDescriptor.Get(evt.Key);
                 if (dbObj == null)
                 {
-                    dbObj = (EventBase)DbInterface.AddGameObject(GameObjectType.Event, evt.Key);
+                    dbObj = (EventDescriptor)DbInterface.AddGameObject(GameObjectType.Event, evt.Key);
                 }
 
                 dbObj.Load(evt.Value.JsonData);
@@ -277,7 +283,7 @@ internal sealed partial class NetworkedPacketHandler
                     destType = -1;
                     if (destType == -1)
                     {
-                        MapList.List.AddMap(newMapId, tmpMap.TimeCreated, MapBase.Lookup);
+                        MapList.List.AddMap(newMapId, tmpMap.TimeCreated, MapDescriptor.Lookup);
                     }
 
                     DbInterface.SaveMapList();
@@ -437,11 +443,11 @@ internal sealed partial class NetworkedPacketHandler
                         var folderDir = MapList.List.FindMapParent(relativeMap, null);
                         if (folderDir != null)
                         {
-                            folderDir.Children.AddMap(newMapId, MapController.Get(newMapId).TimeCreated, MapBase.Lookup);
+                            folderDir.Children.AddMap(newMapId, MapController.Get(newMapId).TimeCreated, MapDescriptor.Lookup);
                         }
                         else
                         {
-                            MapList.List.AddMap(newMapId, MapController.Get(newMapId).TimeCreated, MapBase.Lookup);
+                            MapList.List.AddMap(newMapId, MapController.Get(newMapId).TimeCreated, MapDescriptor.Lookup);
                         }
 
                         DbInterface.SaveMapList();
@@ -710,9 +716,9 @@ internal sealed partial class NetworkedPacketHandler
                                         PacketSender.SendError(
                                             client,
                                             Strings.Mapping.LinkFailureError.ToString(
-                                                MapBase.GetName(linkMapId), MapBase.GetName(adjacentMapId),
-                                                MapBase.GetName(adjacentGrid.MapIdGrid[x, y]),
-                                                MapBase.GetName(linkGrid.MapIdGrid[x + xOffset, y + yOffset])
+                                                MapDescriptor.GetName(linkMapId), MapDescriptor.GetName(adjacentMapId),
+                                                MapDescriptor.GetName(adjacentGrid.MapIdGrid[x, y]),
+                                                MapDescriptor.GetName(linkGrid.MapIdGrid[x + xOffset, y + yOffset])
                                             ), Strings.Mapping.LinkFailure
                                         );
 
@@ -815,12 +821,12 @@ internal sealed partial class NetworkedPacketHandler
             switch(type)
             {
                 case GameObjectType.Event:
-                    ((EventBase)obj).CommonEvent = true;
+                    ((EventDescriptor)obj).CommonEvent = true;
                     changed = true;
 
                     break;
                 case GameObjectType.Item:
-                    ((ItemBase)obj).DropChanceOnDeath = Options.Instance.Player.ItemDropChance;
+                    ((ItemDescriptor)obj).DropChanceOnDeath = Options.Instance.Player.ItemDropChance;
                     changed = true;
 
                     break;
@@ -870,58 +876,58 @@ internal sealed partial class NetworkedPacketHandler
                     break;
 
                 case GameObjectType.Class:
-                    if (ClassBase.Lookup.Count == 1)
+                    if (ClassDescriptor.Lookup.Count == 1)
                     {
                         PacketSender.SendError(client, Strings.Classes.LastClassError, Strings.Classes.LastClass);
 
                         return;
                     }
 
-                    obj = DatabaseObject<ClassBase>.Lookup.Get(id);
+                    obj = DatabaseObject<ClassDescriptor>.Lookup.Get(id);
 
                     break;
 
                 case GameObjectType.Item:
-                    obj = ItemBase.Get(id);
+                    obj = ItemDescriptor.Get(id);
 
                     break;
                 case GameObjectType.Npc:
-                    obj = NpcBase.Get(id);
+                    obj = NPCDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Projectile:
-                    obj = ProjectileBase.Get(id);
+                    obj = ProjectileDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Quest:
-                    obj = QuestBase.Get(id);
+                    obj = QuestDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Resource:
-                    obj = ResourceBase.Get(id);
+                    obj = ResourceDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Shop:
-                    obj = ShopBase.Get(id);
+                    obj = ShopDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Spell:
-                    obj = SpellBase.Get(id);
+                    obj = SpellDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.CraftTables:
-                    obj = DatabaseObject<CraftingTableBase>.Lookup.Get(id);
+                    obj = DatabaseObject<CraftingTableDescriptor>.Lookup.Get(id);
 
                     break;
 
                 case GameObjectType.Crafts:
-                    obj = DatabaseObject<CraftBase>.Lookup.Get(id);
+                    obj = DatabaseObject<CraftingRecipeDescriptor>.Lookup.Get(id);
 
                     break;
 
@@ -929,7 +935,7 @@ internal sealed partial class NetworkedPacketHandler
                     break;
 
                 case GameObjectType.Event:
-                    obj = EventBase.Get(id);
+                    obj = EventDescriptor.Get(id);
 
                     break;
 
@@ -968,16 +974,16 @@ internal sealed partial class NetworkedPacketHandler
                 switch (obj)
                 {
                     //if Item or Resource, kill all global entities of that kind
-                    case ItemBase itemDescriptor:
+                    case ItemDescriptor itemDescriptor:
                         MapController.DespawnInstancesOf(itemDescriptor);
                         break;
-                    case NpcBase npcDescriptor:
+                    case NPCDescriptor npcDescriptor:
                         MapController.DespawnInstancesOf(npcDescriptor);
                         break;
-                    case ProjectileBase projectileDescriptor:
+                    case ProjectileDescriptor projectileDescriptor:
                         MapController.DespawnInstancesOf(projectileDescriptor);
                         break;
-                    case ResourceBase resourceDescriptor:
+                    case ResourceDescriptor resourceDescriptor:
                         MapController.DespawnInstancesOf(resourceDescriptor);
                         break;
                 }
@@ -1009,51 +1015,51 @@ internal sealed partial class NetworkedPacketHandler
                     break;
 
                 case GameObjectType.Class:
-                    obj = DatabaseObject<ClassBase>.Lookup.Get(id);
+                    obj = DatabaseObject<ClassDescriptor>.Lookup.Get(id);
 
                     break;
 
                 case GameObjectType.Item:
-                    obj = ItemBase.Get(id);
+                    obj = ItemDescriptor.Get(id);
 
                     break;
                 case GameObjectType.Npc:
-                    obj = NpcBase.Get(id);
+                    obj = NPCDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Projectile:
-                    obj = ProjectileBase.Get(id);
+                    obj = ProjectileDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Quest:
-                    obj = QuestBase.Get(id);
+                    obj = QuestDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Resource:
-                    obj = ResourceBase.Get(id);
+                    obj = ResourceDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Shop:
-                    obj = ShopBase.Get(id);
+                    obj = ShopDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.Spell:
-                    obj = SpellBase.Get(id);
+                    obj = SpellDescriptor.Get(id);
 
                     break;
 
                 case GameObjectType.CraftTables:
-                    obj = DatabaseObject<CraftingTableBase>.Lookup.Get(id);
+                    obj = DatabaseObject<CraftingTableDescriptor>.Lookup.Get(id);
 
                     break;
 
                 case GameObjectType.Crafts:
-                    obj = DatabaseObject<CraftBase>.Lookup.Get(id);
+                    obj = DatabaseObject<CraftingRecipeDescriptor>.Lookup.Get(id);
 
                     break;
 
@@ -1061,7 +1067,7 @@ internal sealed partial class NetworkedPacketHandler
                     break;
 
                 case GameObjectType.Event:
-                    obj = EventBase.Get(id);
+                    obj = EventDescriptor.Get(id);
 
                     break;
 
@@ -1104,16 +1110,16 @@ internal sealed partial class NetworkedPacketHandler
                     //if Item or Resource, kill all global entities of that kind
                     switch (obj)
                     {
-                        case ItemBase itemDescriptor:
+                        case ItemDescriptor itemDescriptor:
                             MapController.DespawnInstancesOf(itemDescriptor);
                             break;
-                        case NpcBase npcDescriptor:
+                        case NPCDescriptor npcDescriptor:
                             MapController.DespawnInstancesOf(npcDescriptor);
                             break;
-                        case ProjectileBase projectileDescriptor:
+                        case ProjectileDescriptor projectileDescriptor:
                             MapController.DespawnInstancesOf(projectileDescriptor);
                             break;
-                        case ResourceBase resourceDescriptor:
+                        case ResourceDescriptor resourceDescriptor:
                             MapController.DespawnInstancesOf(resourceDescriptor);
                             break;
                     }
@@ -1122,10 +1128,10 @@ internal sealed partial class NetworkedPacketHandler
 
                     if (type == GameObjectType.Quest)
                     {
-                        var qst = (QuestBase)obj;
+                        var qst = (QuestDescriptor)obj;
                         foreach (var evt in qst.RemoveEvents)
                         {
-                            var evtb = EventBase.Get(evt);
+                            var evtb = EventDescriptor.Get(evt);
                             if (evtb != null)
                             {
                                 DbInterface.DeleteGameObject(evtb);
@@ -1134,7 +1140,7 @@ internal sealed partial class NetworkedPacketHandler
 
                         foreach (var evt in qst.AddEvents)
                         {
-                            var evtb = (EventBase)DbInterface.AddGameObject(GameObjectType.Event, evt.Key);
+                            var evtb = (EventDescriptor)DbInterface.AddGameObject(GameObjectType.Event, evt.Key);
                             evtb.Load(evt.Value.JsonData);
 
                             foreach (var tsk in qst.Tasks)
@@ -1194,7 +1200,7 @@ internal sealed partial class NetworkedPacketHandler
                 return;
             }
 
-            TimeBase.GetTimeBase().LoadFromJson(packet.TimeJson);
+            DaylightCycleDescriptor.Instance.LoadFromJson(packet.TimeJson);
             DbInterface.SaveTime();
             Time.Init();
             PacketSender.SendTimeBaseToAllEditors();
@@ -1212,7 +1218,7 @@ internal sealed partial class NetworkedPacketHandler
             {
                 var value = tileset.Trim().ToLower();
                 var found = false;
-                foreach (var tset in TilesetBase.Lookup)
+                foreach (var tset in TilesetDescriptor.Lookup)
                 {
                     if (tset.Value.Name.Trim().ToLower() == value)
                     {
@@ -1223,7 +1229,7 @@ internal sealed partial class NetworkedPacketHandler
                 if (!found)
                 {
                     var obj = DbInterface.AddGameObject(GameObjectType.Tileset);
-                    ((TilesetBase)obj).Name = value;
+                    ((TilesetDescriptor)obj).Name = value;
                     DbInterface.SaveGameObject(obj);
                     PacketSender.CacheGameDataPacket();
                     PacketSender.SendGameObjectToAll(obj);

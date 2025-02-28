@@ -11,6 +11,7 @@ using Intersect.Client.Interface.Shared;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Core;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Reflection;
 using Intersect.GameObjects;
 using Intersect.Utilities;
@@ -211,7 +212,7 @@ public partial class CharacterCreationWindow : Window
 
         _classCombobox.ClearItems();
 
-        var classDescriptors = ClassBase.Lookup.Values.OfType<ClassBase>()
+        var classDescriptors = ClassDescriptor.Lookup.Values.OfType<ClassDescriptor>()
             .Where(classDescriptor => !classDescriptor.Locked)
             .ToArray();
 
@@ -367,14 +368,14 @@ public partial class CharacterCreationWindow : Window
         }
     }
 
-    private ClassBase? GetClass()
+    private ClassDescriptor? GetClass()
     {
         if (_classCombobox.SelectedItem == null)
         {
             return null;
         }
 
-        return ClassBase.Lookup.Values.OfType<ClassBase>().FirstOrDefault(
+        return ClassDescriptor.Lookup.Values.OfType<ClassDescriptor>().FirstOrDefault(
             descriptor =>
                 !descriptor.Locked &&
                 string.Equals(_classCombobox.SelectedItem.Text, descriptor.Name, StringComparison.Ordinal)

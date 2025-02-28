@@ -4,6 +4,8 @@ using Intersect.Editor.Forms.Editors;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Maps;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Lighting;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
 using Intersect.GameObjects;
 
 namespace Intersect.Editor.General;
@@ -17,7 +19,7 @@ public static partial class Globals
     //Animation Frame Variables
     public static int Autotilemode = 0;
 
-    public static LightBase BackupLight;
+    public static LightDescriptor BackupLight;
 
     public static bool ClosingEditor;
 
@@ -47,7 +49,7 @@ public static partial class Globals
     //Editor Variables
     public static MapInstance? CurrentMap { get; set; }
 
-    public static TilesetBase? CurrentTileset { get; set; }
+    public static TilesetDescriptor? CurrentTileset { get; set; }
 
     public static EditingTool _currentTool = EditingTool.Brush;
 
@@ -80,7 +82,7 @@ public static partial class Globals
 
     public static bool Dragging = false;
 
-    public static LightBase EditingLight;
+    public static LightDescriptor EditingLight;
 
     //Editor Loop Variables
     public static Thread EditorThread;

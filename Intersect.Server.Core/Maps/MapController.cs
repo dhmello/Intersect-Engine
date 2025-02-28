@@ -4,9 +4,11 @@ using System.Diagnostics.CodeAnalysis;
 using Intersect.Compression;
 using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Items;
 using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
 using Intersect.Network.Packets.Server;
 using Intersect.Server.Database;
 using Intersect.Server.Entities;
@@ -33,9 +35,9 @@ namespace Intersect.Server.Maps;
 /// </para>
 /// </remarks>
 /// </summary>
-public partial class MapController : MapBase
+public partial class MapController : MapDescriptor
 {
-    public static void DespawnInstancesOf(ResourceBase resource)
+    public static void DespawnInstancesOf(ResourceDescriptor resource)
     {
         var allMapControllers = Lookup.Values.OfType<MapController>().ToArray();
         foreach (var map in allMapControllers)
@@ -44,7 +46,7 @@ public partial class MapController : MapBase
         }
     }
 
-    public static void DespawnInstancesOf(NpcBase npc)
+    public static void DespawnInstancesOf(NPCDescriptor npc)
     {
         var allMapControllers = Lookup.Values.OfType<MapController>().ToArray();
         foreach (var map in allMapControllers)
@@ -53,7 +55,7 @@ public partial class MapController : MapBase
         }
     }
 
-    public static void DespawnInstancesOf(ProjectileBase projectile)
+    public static void DespawnInstancesOf(ProjectileDescriptor projectile)
     {
         var allMapControllers = Lookup.Values.OfType<MapController>().ToArray();
         foreach (var map in allMapControllers)
@@ -62,7 +64,7 @@ public partial class MapController : MapBase
         }
     }
 
-    public static void DespawnInstancesOf(ItemBase item)
+    public static void DespawnInstancesOf(ItemDescriptor item)
     {
         var allMapControllers = Lookup.Values.OfType<MapController>().ToArray();
         foreach (var map in allMapControllers)
@@ -237,12 +239,12 @@ public partial class MapController : MapBase
     }
 
     /// <summary>
-    /// Quick reference for DB lookup of the relevant <see cref="MapBase"/>
+    /// Quick reference for DB lookup of the relevant <see cref="MapDescriptor"/>
     /// </summary>
-    public new static MapControllers Lookup => sLookup = sLookup ?? new MapControllers(MapBase.Lookup);
+    public new static MapControllers Lookup => sLookup = sLookup ?? new MapControllers(MapDescriptor.Lookup);
 
     /// <summary>
-    /// Quick reference to get a Map Controller from its <see cref="MapBase"/> ID
+    /// Quick reference to get a Map Controller from its <see cref="MapDescriptor"/> ID
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
@@ -252,7 +254,7 @@ public partial class MapController : MapBase
     }
 
     /// <summary>
-    /// Tries to get a Map Controller from its <see cref="MapBase"/> ID
+    /// Tries to get a Map Controller from its <see cref="MapDescriptor"/> ID
     /// </summary>
     /// <param name="id"></param>
     /// <param name="mapController">The retrieved Map Controller, if successful</param>
@@ -353,14 +355,14 @@ public partial class MapController : MapBase
     }
 
     /// <summary>
-    /// Despawns NPCs of a given <see cref="NpcBase"/> from all instances of this controller.
+    /// Despawns NPCs of a given <see cref="NPCDescriptor"/> from all instances of this controller.
     /// </summary>
-    /// <param name="npcBase">The <see cref="NpcBase"/> to despawn</param>
-    public void DespawnNpcAcrossInstances(NpcBase npcBase)
+    /// <param name="npcDescriptor">The <see cref="NPCDescriptor"/> to despawn</param>
+    public void DespawnNpcAcrossInstances(NPCDescriptor npcDescriptor)
     {
         foreach (var entity in GetEntitiesOnAllInstances())
         {
-            if (entity is Npc npc && npc.Base == npcBase)
+            if (entity is Npc npc && npc.Descriptor == npcDescriptor)
             {
                 lock (npc.EntityLock)
                 {
@@ -371,14 +373,14 @@ public partial class MapController : MapBase
     }
 
     /// <summary>
-    /// Despawns resources of a given <see cref="ResourceBase"/> from all instances of this controller.
+    /// Despawns resources of a given <see cref="ResourceDescriptor"/> from all instances of this controller.
     /// </summary>
-    /// <param name="resourceBase">The <see cref="ResourceBase"/> to despawn</param>
-    public void DespawnResourceAcrossInstances(ResourceBase resourceBase)
+    /// <param name="resourceDescriptor">The <see cref="ResourceDescriptor"/> to despawn</param>
+    public void DespawnResourceAcrossInstances(ResourceDescriptor resourceDescriptor)
     {
         foreach (var entity in GetEntitiesOnAllInstances())
         {
-            if (entity is Resource res && res.Descriptor == resourceBase)
+            if (entity is Resource res && res.Descriptor == resourceDescriptor)
             {
                 lock (res.EntityLock)
                 {
@@ -389,15 +391,15 @@ public partial class MapController : MapBase
     }
 
     /// <summary>
-    /// Despawns projectiles of a given <see cref="ProjectileBase"/> from all instances of this controller.
+    /// Despawns projectiles of a given <see cref="ProjectileDescriptor"/> from all instances of this controller.
     /// </summary>
-    /// <param name="projectileBase">The <see cref="ProjectileBase"/> to despawn</param>
-    public void DespawnProjectileAcrossInstances(ProjectileBase projectileBase)
+    /// <param name="projectileDescriptor">The <see cref="ProjectileDescriptor"/> to despawn</param>
+    public void DespawnProjectileAcrossInstances(ProjectileDescriptor projectileDescriptor)
     {
         var guids = new List<Guid>();
         foreach (var entity in GetEntitiesOnAllInstances())
         {
-            if (entity is Projectile proj && proj.Base == projectileBase)
+            if (entity is Projectile proj && proj.Descriptor == projectileDescriptor)
             {
                 lock (proj.EntityLock)
                 {
@@ -410,16 +412,16 @@ public partial class MapController : MapBase
     }
 
     /// <summary>
-    /// Despawns items of a given <see cref="ItemBase"/> from all instances of this controller.
+    /// Despawns items of a given <see cref="ItemDescriptor"/> from all instances of this controller.
     /// </summary>
-    /// <param name="itemBase">The <see cref="ItemBase"/> to despawn</param>
-    public void DespawnItemAcrossInstances(ItemBase itemBase)
+    /// <param name="itemDescriptor">The <see cref="ItemDescriptor"/> to despawn</param>
+    public void DespawnItemAcrossInstances(ItemDescriptor itemDescriptor)
     {
         foreach(var mapInstance in mInstances.Values)
         {
             foreach (var item in mapInstance.AllMapItems.Values)
             {
-                if (ItemBase.Get(item.ItemId) == itemBase)
+                if (ItemDescriptor.Get(item.ItemId) == itemDescriptor)
                 {
                     mapInstance.RemoveItem(item);
                 }

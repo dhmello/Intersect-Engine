@@ -14,8 +14,6 @@ using Intersect.Configuration;
 using Intersect.Core;
 using Intersect.Enums;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Network;
 using Intersect.Network.Packets;
 using Intersect.Network.Packets.Server;
@@ -25,6 +23,12 @@ using Intersect.Models;
 using Intersect.Client.Interface.Shared;
 using Intersect.Framework.Core;
 using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.Attributes;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
 using Microsoft.Extensions.Logging;
 
 namespace Intersect.Client.Networking;
@@ -198,17 +202,17 @@ internal sealed partial class PacketHandler
     public void HandlePacket(IPacketSender packetSender, MapAreaIdsPacket packet)
     {
         // TODO: Background all of this?
-        List<ObjectCacheKey<MapBase>> cacheKeys = new(packet.MapIds.Length);
+        List<ObjectCacheKey<MapDescriptor>> cacheKeys = new(packet.MapIds.Length);
         List<MapPacket> loadedCachedMaps = new(packet.MapIds.Length);
         foreach (var mapId in packet.MapIds)
         {
-            if (ObjectDataDiskCache<MapBase>.TryLoad(mapId, out var cacheData))
+            if (ObjectDataDiskCache<MapDescriptor>.TryLoad(mapId, out var cacheData))
             {
-                ObjectCacheKey<MapBase> cacheKey = new(cacheData.Id);
+                ObjectCacheKey<MapDescriptor> cacheKey = new(cacheData.Id);
                 var deserializedCachedPacket = MessagePacker.Instance.Deserialize<MapPacket>(cacheData.Data, silent: true);
                 if (deserializedCachedPacket != default)
                 {
-                    cacheKey = new ObjectCacheKey<MapBase>(
+                    cacheKey = new ObjectCacheKey<MapDescriptor>(
                         cacheData.Id,
                         cacheData.Checksum,
                         cacheData.Version
@@ -221,7 +225,7 @@ internal sealed partial class PacketHandler
                 ApplicationContext.Context.Value?.Logger.LogWarning($"Failed to deserialized cached data for {cacheKey}, will fetch again");
             }
 
-            cacheKeys.Add(new ObjectCacheKey<MapBase>(new Id<MapBase>(mapId)));
+            cacheKeys.Add(new ObjectCacheKey<MapDescriptor>(new Id<MapDescriptor>(mapId)));
         }
 
         PacketSender.SendNeedMap(cacheKeys.ToArray());
@@ -248,15 +252,15 @@ internal sealed partial class PacketHandler
                 $"[{string.Join(", ", packet.CameraHolds ?? [])}]"
             );
 
-            ObjectCacheData<MapBase> cacheData = new()
+            ObjectCacheData<MapDescriptor> cacheData = new()
             {
-                Id = new Id<MapBase>(mapId),
+                Id = new Id<MapDescriptor>(mapId),
                 Data = (packet as IntersectPacket).Data,
                 Version = packet.CacheVersion,
             };
-            ObjectCacheKey<MapBase> cacheKey = new(new Id<MapBase>(mapId), cacheData.Checksum, cacheData.Version);
+            ObjectCacheKey<MapDescriptor> cacheKey = new(new Id<MapDescriptor>(mapId), cacheData.Checksum, cacheData.Version);
 
-            if (!ObjectDataDiskCache<MapBase>.TrySave(cacheData))
+            if (!ObjectDataDiskCache<MapDescriptor>.TrySave(cacheData))
             {
                 ApplicationContext.CurrentContext.Logger.LogWarning("Failed to save cache for {CacheKey}", cacheKey);
             }
@@ -653,7 +657,7 @@ internal sealed partial class PacketHandler
     public void HandlePacket(IPacketSender packetSender, MapListPacket packet)
     {
         MapList.List.JsonData = packet.MapListData;
-        MapList.List.PostLoad(MapBase.Lookup, false, true);
+        MapList.List.PostLoad(MapDescriptor.Lookup, false, true);
 
         //TODO ? If admin window is open update it
     }
@@ -1412,9 +1416,9 @@ internal sealed partial class PacketHandler
     {
         var entityId = packet.EntityId;
         var spellId = packet.SpellId;
-        if (SpellBase.Get(spellId) != null && Globals.Entities.ContainsKey(entityId))
+        if (SpellDescriptor.Get(spellId) != null && Globals.Entities.ContainsKey(entityId))
         {
-            Globals.Entities[entityId].CastTime = Timing.Global.Milliseconds + SpellBase.Get(spellId).CastDuration;
+            Globals.Entities[entityId].CastTime = Timing.Global.Milliseconds + SpellDescriptor.Get(spellId).CastDuration;
             Globals.Entities[entityId].SpellCast = spellId;
         }
     }
@@ -1708,7 +1712,7 @@ internal sealed partial class PacketHandler
 
         if (packet.ShopData != null)
         {
-            Globals.GameShop = new ShopBase();
+            Globals.GameShop = new ShopDescriptor();
             Globals.GameShop.Load(packet.ShopData);
             Interface.Interface.EnqueueInGame(gameInterface => gameInterface.NotifyOpenShop());
         }
@@ -1724,7 +1728,7 @@ internal sealed partial class PacketHandler
     {
         if (!packet.Close)
         {
-            Globals.ActiveCraftingTable = new CraftingTableBase();
+            Globals.ActiveCraftingTable = new CraftingTableDescriptor();
             Globals.ActiveCraftingTable.Load(packet.TableData);
             Interface.Interface.EnqueueInGame(gameInterface => gameInterface.NotifyOpenCraftingTable(packet.JournalMode));
         }
@@ -1788,12 +1792,12 @@ internal sealed partial class PacketHandler
                 //Handled in a different packet
                 break;
             case GameObjectType.Tileset:
-                var obj = new TilesetBase(objectId);
+                var obj = new TilesetDescriptor(objectId);
                 obj.Load(json);
-                TilesetBase.Lookup.Set(objectId, obj);
+                TilesetDescriptor.Lookup.Set(objectId, obj);
                 if (Globals.HasGameData && !another)
                 {
-                    Globals.ContentManager.LoadTilesets(TilesetBase.GetNameList());
+                    Globals.ContentManager.LoadTilesets(TilesetDescriptor.GetNameList());
                 }
 
                 break;
@@ -2354,13 +2358,13 @@ internal sealed partial class PacketHandler
     {
         switch (packet.FadeType)
         {
-            case GameObjects.Events.FadeType.None:
+            case FadeType.None:
                 Fade.Cancel();
                 break;
-            case GameObjects.Events.FadeType.FadeIn:
+            case FadeType.FadeIn:
                 Fade.FadeIn(packet.DurationMs, packet.WaitForCompletion);
                 break;
-            case GameObjects.Events.FadeType.FadeOut:
+            case FadeType.FadeOut:
                 Fade.FadeOut(packet.DurationMs, packet.WaitForCompletion);
                 break;
         }

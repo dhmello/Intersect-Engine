@@ -1,6 +1,7 @@
 ﻿using Intersect.Editor.Localization;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events.Commands;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 
@@ -19,8 +20,8 @@ public partial class EventCommandSetClass : UserControl
         mEventEditor = editor;
         InitLocalization();
         cmbClass.Items.Clear();
-        cmbClass.Items.AddRange(ClassBase.Names);
-        cmbClass.SelectedIndex = ClassBase.ListIndex(mMyCommand.ClassId);
+        cmbClass.Items.AddRange(ClassDescriptor.Names);
+        cmbClass.SelectedIndex = ClassDescriptor.ListIndex(mMyCommand.ClassId);
     }
 
     private void InitLocalization()
@@ -35,7 +36,7 @@ public partial class EventCommandSetClass : UserControl
     {
         if (cmbClass.SelectedIndex > -1)
         {
-            mMyCommand.ClassId = ClassBase.IdFromList(cmbClass.SelectedIndex);
+            mMyCommand.ClassId = ClassDescriptor.IdFromList(cmbClass.SelectedIndex);
         }
 
         mEventEditor.FinishCommandEdit();

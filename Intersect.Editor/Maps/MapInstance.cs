@@ -4,16 +4,18 @@ using Intersect.Editor.Classes.Maps;
 using Intersect.Editor.Core;
 using Intersect.Editor.Entities;
 using Intersect.Editor.General;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Lighting;
+using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
 using Newtonsoft.Json;
 using Graphics = Intersect.Editor.Core.Graphics;
 
 namespace Intersect.Editor.Maps;
 
 
-public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
+public partial class MapInstance : MapDescriptor, IGameObject<Guid, MapInstance>
 {
 
     private static MapControllers sLookup;
@@ -31,7 +33,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
         }
     }
 
-    public MapInstance(MapBase mapStruct) : base(mapStruct)
+    public MapInstance(MapDescriptor mapStruct) : base(mapStruct)
     {
         lock (MapLock)
         {
@@ -46,7 +48,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
         }
     }
 
-    public new static MapControllers Lookup => sLookup = sLookup ?? new MapControllers(MapBase.Lookup);
+    public new static MapControllers Lookup => sLookup = sLookup ?? new MapControllers(MapDescriptor.Lookup);
 
     //World Position
     public int MapGridX { get; set; }
@@ -78,7 +80,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
                 LocalEvents.Clear();
                 foreach (var id in EventIds)
                 {
-                    var evt = EventBase.Get(id);
+                    var evt = EventDescriptor.Get(id);
                     LocalEvents.Add(id, evt);
                 }
             }
@@ -237,9 +239,9 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
     }
 
     //Helper Functions
-    public override MapBase[,] GenerateAutotileGrid()
+    public override MapDescriptor[,] GenerateAutotileGrid()
     {
-        var mapBase = new MapBase[3, 3];
+        var mapBase = new MapDescriptor[3, 3];
         if (Globals.MapGrid != null && Globals.MapGrid.Contains(Id))
         {
             for (var x = -1; x <= 1; x++)
@@ -299,7 +301,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
         }
     }
 
-    public EventBase? FindEventAt(int x, int y)
+    public EventDescriptor? FindEventAt(int x, int y)
     {
         if (LocalEvents.Count <= 0)
         {
@@ -317,7 +319,7 @@ public partial class MapInstance : MapBase, IGameObject<Guid, MapInstance>
         return null;
     }
 
-    public LightBase FindLightAt(int x, int y)
+    public LightDescriptor FindLightAt(int x, int y)
     {
         if (Lights.Count <= 0)
         {

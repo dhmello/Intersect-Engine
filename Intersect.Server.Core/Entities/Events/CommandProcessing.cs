@@ -1,10 +1,14 @@
 using System.Text;
 using Intersect.Enums;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Events.Commands;
 using Intersect.Server.Core.MapInstancing;
 using Intersect.Server.Database;
 using Intersect.Server.Database.PlayerData.Players;
@@ -217,7 +221,7 @@ public static partial class CommandProcessing
                 var evts = instance.GlobalEventInstances.Values.ToList();
                 for (var i = 0; i < evts.Count; i++)
                 {
-                    if (evts[i] != null && evts[i].BaseEvent == eventInstance.BaseEvent)
+                    if (evts[i] != null && evts[i].Descriptor == eventInstance.Descriptor)
                     {
                         evts[i].SelfSwitch[command.SwitchId] = command.Value;
                     }
@@ -325,7 +329,7 @@ public static partial class CommandProcessing
         Stack<CommandInstance> callStack
     )
     {
-        if (!EventBase.TryGet(command.EventId, out var commonEvent))
+        if (!EventDescriptor.TryGet(command.EventId, out var commonEvent))
         {
             return;
         }
@@ -607,7 +611,7 @@ public static partial class CommandProcessing
         Stack<CommandInstance> callStack
     )
     {
-        var itm = ItemBase.Get(command.ItemId);
+        var itm = ItemDescriptor.Get(command.ItemId);
 
         if (command.Unequip)
         {
@@ -623,7 +627,7 @@ public static partial class CommandProcessing
         else
         {
             if (itm == null) return;
-            player.EquipItem(ItemBase.Get(command.ItemId), updateCooldown: command.TriggerCooldown);
+            player.EquipItem(ItemDescriptor.Get(command.ItemId), updateCooldown: command.TriggerCooldown);
         }
     }
 
@@ -800,7 +804,7 @@ public static partial class CommandProcessing
         {
             foreach (var evt in player.EventLookup)
             {
-                if (evt.Value.BaseEvent.Id == command.Route.Target)
+                if (evt.Value.Descriptor.Id == command.Route.Target)
                 {
                     if (evt.Value.PageInstance != null)
                     {
@@ -834,9 +838,9 @@ public static partial class CommandProcessing
         {
             foreach (var evt in player.EventLookup)
             {
-                if (evt.Value.BaseEvent.Id == command.TargetId)
+                if (evt.Value.Descriptor.Id == command.TargetId)
                 {
-                    stackInfo.WaitingForRoute = evt.Value.BaseEvent.Id;
+                    stackInfo.WaitingForRoute = evt.Value.Descriptor.Id;
                     stackInfo.WaitingForRouteMap = evt.Value.MapId;
 
                     break;
@@ -877,7 +881,7 @@ public static partial class CommandProcessing
                         continue;
                     }
 
-                    if (evt.Value.BaseEvent.Id == command.EntityId)
+                    if (evt.Value.Descriptor.Id == command.EntityId)
                     {
                         targetEntity = evt.Value.PageInstance;
 
@@ -992,7 +996,7 @@ public static partial class CommandProcessing
                         continue;
                     }
 
-                    if (evt.Value.BaseEvent.Id == command.EntityId)
+                    if (evt.Value.Descriptor.Id == command.EntityId)
                     {
                         targetEntity = evt.Value.PageInstance;
 
@@ -1091,7 +1095,7 @@ public static partial class CommandProcessing
     )
     {
         instance.HoldingPlayer = true;
-        PacketSender.SendHoldPlayer(player, instance.BaseEvent.Id, instance.BaseEvent.MapId);
+        PacketSender.SendHoldPlayer(player, instance.Descriptor.Id, instance.Descriptor.MapId);
     }
 
     //Release Player Command
@@ -1104,7 +1108,7 @@ public static partial class CommandProcessing
     )
     {
         instance.HoldingPlayer = false;
-        PacketSender.SendReleasePlayer(player, instance.BaseEvent.Id);
+        PacketSender.SendReleasePlayer(player, instance.Descriptor.Id);
     }
 
     //Hide Player Command
@@ -1250,7 +1254,7 @@ public static partial class CommandProcessing
         Stack<CommandInstance> callStack
     )
     {
-        player.OpenShop(ShopBase.Get(command.ShopId));
+        player.OpenShop(ShopDescriptor.Get(command.ShopId));
         callStack.Peek().WaitingForResponse = CommandInstance.EventResponse.Shop;
     }
 
@@ -1263,7 +1267,7 @@ public static partial class CommandProcessing
         Stack<CommandInstance> callStack
     )
     {
-        player.OpenCraftingTable(CraftingTableBase.Get(command.CraftingTableId), command.JournalMode);
+        player.OpenCraftingTable(CraftingTableDescriptor.Get(command.CraftingTableId), command.JournalMode);
         callStack.Peek().WaitingForResponse = CommandInstance.EventResponse.Crafting;
     }
 
@@ -1276,7 +1280,7 @@ public static partial class CommandProcessing
         Stack<CommandInstance> callStack
     )
     {
-        if (ClassBase.Get(command.ClassId) != null)
+        if (ClassDescriptor.Get(command.ClassId) != null)
         {
             player.ClassId = command.ClassId;
             player.RecalculateStatsAndPoints();
@@ -1296,7 +1300,7 @@ public static partial class CommandProcessing
     )
     {
         var success = false;
-        var quest = QuestBase.Get(command.QuestId);
+        var quest = QuestDescriptor.Get(command.QuestId);
         if (quest != null)
         {
             if (player.CanStartQuest(quest))
@@ -1842,7 +1846,7 @@ public static partial class CommandProcessing
 
     private static void ProcessVariableModification(
         SetVariableCommand command,
-        GameObjects.Events.VariableMod mod,
+        VariableMod mod,
         Player player,
         Event instance
     )

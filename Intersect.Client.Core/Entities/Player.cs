@@ -23,9 +23,13 @@ using Intersect.Core;
 using Intersect.Enums;
 using Intersect.Extensions;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.Attributes;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.Framework.Reflection;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
 using Intersect.Network.Packets.Server;
 using Intersect.Utilities;
 using Microsoft.Extensions.Logging;
@@ -379,7 +383,7 @@ public partial class Player : Entity, IPlayer
 
         if (
             fromSlot.ItemId == toSlot.ItemId
-            && ItemBase.TryGet(toSlot.ItemId, out var itemInSlot)
+            && ItemDescriptor.TryGet(toSlot.ItemId, out var itemInSlot)
             && itemInSlot.IsStackable
             && fromSlot.Quantity < itemInSlot.MaxInventoryStack
             && toSlot.Quantity < itemInSlot.MaxInventoryStack
@@ -405,7 +409,7 @@ public partial class Player : Entity, IPlayer
     public void TryDropItem(int inventorySlotIndex)
     {
         var inventorySlot = Inventory[inventorySlotIndex];
-        if (!ItemBase.TryGet(inventorySlot.ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(inventorySlot.ItemId, out var itemDescriptor))
         {
             return;
         }
@@ -540,39 +544,41 @@ public partial class Player : Entity, IPlayer
                 if (itm != null && itm.ItemId == hotbarInstance.ItemOrSpellId)
                 {
                     bestMatch = i;
-                    var itemBase = ItemBase.Get(itm.ItemId);
-                    if (itemBase != null)
+                    var itemDescriptor = ItemDescriptor.Get(itm.ItemId);
+                    if (itemDescriptor == null)
                     {
-                        if (itemBase.ItemType == ItemType.Bag)
+                        continue;
+                    }
+
+                    if (itemDescriptor.ItemType == ItemType.Bag)
+                    {
+                        if (hotbarInstance.BagId == itm.BagId)
                         {
-                            if (hotbarInstance.BagId == itm.BagId)
+                            break;
+                        }
+                    }
+                    else if (itemDescriptor.ItemType == ItemType.Equipment)
+                    {
+                        if (hotbarInstance.PreferredStatBuffs != null)
+                        {
+                            var statMatch = true;
+                            for (var s = 0; s < hotbarInstance.PreferredStatBuffs.Length; s++)
+                            {
+                                if (itm.ItemProperties.StatModifiers[s] != hotbarInstance.PreferredStatBuffs[s])
+                                {
+                                    statMatch = false;
+                                }
+                            }
+
+                            if (statMatch)
                             {
                                 break;
                             }
                         }
-                        else if (itemBase.ItemType == ItemType.Equipment)
-                        {
-                            if (hotbarInstance.PreferredStatBuffs != null)
-                            {
-                                var statMatch = true;
-                                for (var s = 0; s < hotbarInstance.PreferredStatBuffs.Length; s++)
-                                {
-                                    if (itm.ItemProperties.StatModifiers[s] != hotbarInstance.PreferredStatBuffs[s])
-                                    {
-                                        statMatch = false;
-                                    }
-                                }
-
-                                if (statMatch)
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
+                    }
+                    else
+                    {
+                        break;
                     }
                 }
             }
@@ -596,46 +602,62 @@ public partial class Player : Entity, IPlayer
 
     public bool IsItemOnCooldown(int slot)
     {
-        if (Inventory[slot] != null)
+        if (Inventory[slot] is not {} inventorySlot)
         {
-            var itm = Inventory[slot];
-            if (itm.ItemId != Guid.Empty)
-            {
-                if (ItemCooldowns.TryGetValue(itm.ItemId, out var value) && value > Timing.Global.Milliseconds)
-                {
-                    return true;
-                }
-
-                if ((ItemBase.TryGet(itm.ItemId, out var itemBase) && !itemBase.IgnoreGlobalCooldown) && Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds)
-                {
-                    return true;
-                }
-            }
+            return false;
         }
 
-        return false;
+        if (inventorySlot.ItemId == Guid.Empty)
+        {
+            return false;
+        }
+
+        if (ItemCooldowns.TryGetValue(inventorySlot.ItemId, out var cooldownEndTime) &&
+            cooldownEndTime > Timing.Global.Milliseconds)
+        {
+            return true;
+        }
+
+        return ItemDescriptor.TryGet(inventorySlot.ItemId, out var itemDescriptor) &&
+               !itemDescriptor.IgnoreGlobalCooldown &&
+               Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds;
     }
 
     public long GetItemRemainingCooldown(int slot)
     {
-        if (Inventory[slot] != null)
+        if (Inventory[slot] is not { } inventorySlot)
         {
-            var itm = Inventory[slot];
-            if (itm.ItemId != Guid.Empty)
-            {
-                if (ItemCooldowns.TryGetValue(itm.ItemId, out var value) && value > Timing.Global.Milliseconds)
-                {
-                    return value - Timing.Global.Milliseconds;
-                }
-
-                if ((ItemBase.TryGet(itm.ItemId, out var itemBase) && !itemBase.IgnoreGlobalCooldown) && Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds)
-                {
-                    return Globals.Me.GlobalCooldown - Timing.Global.Milliseconds;
-                }
-            }
+            return 0;
         }
 
-        return 0;
+        if (inventorySlot.ItemId == Guid.Empty)
+        {
+            return 0;
+        }
+
+        if (ItemCooldowns.TryGetValue(inventorySlot.ItemId, out var cooldownEndTime) &&
+            cooldownEndTime > Timing.Global.Milliseconds)
+        {
+            return cooldownEndTime - Timing.Global.Milliseconds;
+        }
+
+        if (!ItemDescriptor.TryGet(inventorySlot.ItemId, out var itemDescriptor))
+        {
+            return 0;
+        }
+
+        if (itemDescriptor.IgnoreGlobalCooldown)
+        {
+            return 0;
+        }
+
+        if (Globals.Me is not { } player)
+        {
+            return 0;
+        }
+
+        var itemRemainingCooldown = player.GlobalCooldown - Timing.Global.Milliseconds;
+        return Math.Max(0, itemRemainingCooldown);
     }
 
     public bool IsSpellOnCooldown(int slot)
@@ -650,7 +672,7 @@ public partial class Player : Entity, IPlayer
                     return true;
                 }
 
-                if ((SpellBase.TryGet(spl.Id, out var spellBase) && !spellBase.IgnoreGlobalCooldown) && Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds)
+                if ((SpellDescriptor.TryGet(spl.Id, out var spellBase) && !spellBase.IgnoreGlobalCooldown) && Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds)
                 {
                     return true;
                 }
@@ -686,7 +708,7 @@ public partial class Player : Entity, IPlayer
             return cd - now;
         }
 
-        if (SpellBase.TryGet(spell.Id, out var spellBase) && !spellBase.IgnoreGlobalCooldown && Globals.Me?.GlobalCooldown > now)
+        if (SpellDescriptor.TryGet(spell.Id, out var spellBase) && !spellBase.IgnoreGlobalCooldown && Globals.Me?.GlobalCooldown > now)
         {
             return Globals.Me.GlobalCooldown - now;
         }
@@ -697,7 +719,7 @@ public partial class Player : Entity, IPlayer
     public void TrySellItem(int inventorySlotIndex)
     {
         var inventorySlot = Inventory[inventorySlotIndex];
-        if (!ItemBase.TryGet(inventorySlot.ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(inventorySlot.ItemId, out var itemDescriptor))
         {
             return;
         }
@@ -776,7 +798,7 @@ public partial class Player : Entity, IPlayer
     {
         //Confirm the purchase
         var shopSlot = Globals.GameShop?.SellingItems[shopSlotIndex];
-        if (shopSlot == default || !ItemBase.TryGet(shopSlot.ItemId, out var itemDescriptor))
+        if (shopSlot == default || !ItemDescriptor.TryGet(shopSlot.ItemId, out var itemDescriptor))
         {
             return;
         }
@@ -860,7 +882,7 @@ public partial class Player : Entity, IPlayer
         }
 
         slot ??= Inventory[inventorySlotIndex];
-        if (!ItemBase.TryGet(slot.ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(slot.ItemId, out var itemDescriptor))
         {
             ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to move item that does not exist from slot {inventorySlotIndex}: {itemDescriptor.Id}");
             return false;
@@ -987,7 +1009,7 @@ public partial class Player : Entity, IPlayer
         }
 
         slot ??= Globals.BankSlots[bankSlotIndex];
-        if (!ItemBase.TryGet(slot.ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(slot.ItemId, out var itemDescriptor))
         {
             ApplicationContext.Context.Value?.Logger.LogWarning($"Tried to move item that does not exist from slot {bankSlotIndex}: {itemDescriptor.Id}");
             return false;
@@ -1092,7 +1114,7 @@ public partial class Player : Entity, IPlayer
     public void TryStoreItemInBag(int inventorySlotIndex, int bagSlotIndex)
     {
         var inventorySlot = Inventory[inventorySlotIndex];
-        if (!ItemBase.TryGet(inventorySlot.ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(inventorySlot.ItemId, out var itemDescriptor))
         {
             return;
         }
@@ -1144,7 +1166,7 @@ public partial class Player : Entity, IPlayer
             return;
         }
 
-        if (!ItemBase.TryGet(bagSlot.ItemId, out var itemDescriptor))
+        if (!ItemDescriptor.TryGet(bagSlot.ItemId, out var itemDescriptor))
         {
             return;
         }
@@ -1193,7 +1215,7 @@ public partial class Player : Entity, IPlayer
     {
         var slot = Inventory[index];
         var quantity = slot.Quantity;
-        var tradingItem = ItemBase.Get(slot.ItemId);
+        var tradingItem = ItemDescriptor.Get(slot.ItemId);
         if (tradingItem == null)
         {
             return;
@@ -1239,7 +1261,7 @@ public partial class Player : Entity, IPlayer
     {
         var slot = Globals.Trade[0, index];
         var quantity = slot.Quantity;
-        var revokedItem = ItemBase.Get(slot.ItemId);
+        var revokedItem = ItemDescriptor.Get(slot.ItemId);
         if (revokedItem == null)
         {
             return;
@@ -1291,7 +1313,7 @@ public partial class Player : Entity, IPlayer
     public void TryForgetSpell(int spellIndex)
     {
         var spellSlot = Spells[spellIndex];
-        if (SpellBase.TryGet(spellSlot.Id, out var spellDescriptor))
+        if (SpellDescriptor.TryGet(spellSlot.Id, out var spellDescriptor))
         {
             _ = new InputBox(
                 title: Strings.Spells.ForgetSpell,
@@ -1331,7 +1353,7 @@ public partial class Player : Entity, IPlayer
             return;
         }
 
-        if (!SpellBase.TryGet(spell.Id, out var spellDescriptor))
+        if (!SpellDescriptor.TryGet(spell.Id, out var spellDescriptor))
         {
             return;
         }
@@ -1354,7 +1376,7 @@ public partial class Player : Entity, IPlayer
             return cd;
         }
 
-        if ((SpellBase.TryGet(id, out var spellBase) && !spellBase.IgnoreGlobalCooldown) && Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds)
+        if ((SpellDescriptor.TryGet(id, out var spellBase) && !spellBase.IgnoreGlobalCooldown) && Globals.Me?.GlobalCooldown > Timing.Global.Milliseconds)
         {
             return Globals.Me.GlobalCooldown;
         }
@@ -1382,7 +1404,7 @@ public partial class Player : Entity, IPlayer
 
     public int FindHotbarSpell(IHotbarInstance hotbarInstance)
     {
-        if (hotbarInstance.ItemOrSpellId != Guid.Empty && SpellBase.Get(hotbarInstance.ItemOrSpellId) != null)
+        if (hotbarInstance.ItemOrSpellId != Guid.Empty && SpellDescriptor.Get(hotbarInstance.ItemOrSpellId) != null)
         {
             for (var i = 0; i < Spells.Length; i++)
             {
@@ -1921,7 +1943,7 @@ public partial class Player : Entity, IPlayer
         }
 
         // Return false if the shield item descriptor could not be retrieved.
-        if (!ItemBase.TryGet(Inventory[myShieldIndex].ItemId, out _))
+        if (!ItemDescriptor.TryGet(Inventory[myShieldIndex].ItemId, out _))
         {
             return false;
         }
@@ -2347,10 +2369,10 @@ public partial class Player : Entity, IPlayer
 
     public override int CalculateAttackTime()
     {
-        ItemBase? weapon = null;
+        ItemDescriptor? weapon = null;
         var attackTime = base.CalculateAttackTime();
 
-        var cls = ClassBase.Get(Class);
+        var cls = ClassDescriptor.Get(Class);
         if (cls != null && cls.AttackSpeedModifier == 1) //Static
         {
             attackTime = cls.AttackSpeedValue;
@@ -2362,7 +2384,7 @@ public partial class Player : Entity, IPlayer
                 Options.Instance.Equipment.WeaponSlot < Equipment.Length &&
                 MyEquipment[Options.Instance.Equipment.WeaponSlot] >= 0)
             {
-                weapon = ItemBase.Get(Inventory[MyEquipment[Options.Instance.Equipment.WeaponSlot]].ItemId);
+                weapon = ItemDescriptor.Get(Inventory[MyEquipment[Options.Instance.Equipment.WeaponSlot]].ItemId);
             }
         }
         else
@@ -2371,7 +2393,7 @@ public partial class Player : Entity, IPlayer
                 Options.Instance.Equipment.WeaponSlot < Equipment.Length &&
                 Equipment[Options.Instance.Equipment.WeaponSlot] != Guid.Empty)
             {
-                weapon = ItemBase.Get(Equipment[Options.Instance.Equipment.WeaponSlot]);
+                weapon = ItemDescriptor.Get(Equipment[Options.Instance.Equipment.WeaponSlot]);
             }
         }
 

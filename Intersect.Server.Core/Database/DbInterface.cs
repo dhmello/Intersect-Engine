@@ -10,13 +10,19 @@ using Intersect.Collections;
 using Intersect.Config;
 using Intersect.Core;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.Framework.Reflection;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Models;
 using Intersect.Server.Core;
 using Intersect.Server.Database.GameData;
@@ -605,7 +611,7 @@ public static partial class DbInterface
         {
             if (bag.Slots[i] != null)
             {
-                var item = ItemBase.Get(bag.Slots[i].ItemId);
+                var item = ItemDescriptor.Get(bag.Slots[i].ItemId);
                 if (item != null)
                 {
                     return false;
@@ -641,51 +647,51 @@ public static partial class DbInterface
 
                 break;
             case GameObjectType.Class:
-                ClassBase.Lookup.Clear();
+                ClassDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Item:
-                ItemBase.Lookup.Clear();
+                ItemDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Npc:
-                NpcBase.Lookup.Clear();
+                NPCDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Projectile:
-                ProjectileBase.Lookup.Clear();
+                ProjectileDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Quest:
-                QuestBase.Lookup.Clear();
+                QuestDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Resource:
-                ResourceBase.Lookup.Clear();
+                ResourceDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Shop:
-                ShopBase.Lookup.Clear();
+                ShopDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Spell:
-                SpellBase.Lookup.Clear();
+                SpellDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.CraftTables:
-                CraftingTableBase.Lookup.Clear();
+                CraftingTableDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Crafts:
-                CraftBase.Lookup.Clear();
+                CraftingRecipeDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Map:
-                MapBase.Lookup.Clear();
+                MapDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Event:
-                EventBase.Lookup.Clear();
+                EventDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.PlayerVariable:
@@ -697,7 +703,7 @@ public static partial class DbInterface
 
                 break;
             case GameObjectType.Tileset:
-                TilesetBase.Lookup.Clear();
+                TilesetDescriptor.Lookup.Clear();
 
                 break;
             case GameObjectType.Time:
@@ -734,7 +740,7 @@ public static partial class DbInterface
                     case GameObjectType.Class:
                         foreach (var cls in context.Classes)
                         {
-                            ClassBase.Lookup.Set(cls.Id, cls);
+                            ClassDescriptor.Lookup.Set(cls.Id, cls);
                         }
 
                         break;
@@ -745,63 +751,63 @@ public static partial class DbInterface
 
                         foreach (var itm in loadedItems)
                         {
-                            ItemBase.Lookup.Set(itm.Id, itm);
+                            ItemDescriptor.Lookup.Set(itm.Id, itm);
                         }
 
                         break;
                     case GameObjectType.Npc:
                         foreach (var npc in context.Npcs)
                         {
-                            NpcBase.Lookup.Set(npc.Id, npc);
+                            NPCDescriptor.Lookup.Set(npc.Id, npc);
                         }
 
                         break;
                     case GameObjectType.Projectile:
                         foreach (var proj in context.Projectiles)
                         {
-                            ProjectileBase.Lookup.Set(proj.Id, proj);
+                            ProjectileDescriptor.Lookup.Set(proj.Id, proj);
                         }
 
                         break;
                     case GameObjectType.Quest:
                         foreach (var qst in context.Quests)
                         {
-                            QuestBase.Lookup.Set(qst.Id, qst);
+                            QuestDescriptor.Lookup.Set(qst.Id, qst);
                         }
 
                         break;
                     case GameObjectType.Resource:
                         foreach (var res in context.Resources)
                         {
-                            ResourceBase.Lookup.Set(res.Id, res);
+                            ResourceDescriptor.Lookup.Set(res.Id, res);
                         }
 
                         break;
                     case GameObjectType.Shop:
                         foreach (var shp in context.Shops)
                         {
-                            ShopBase.Lookup.Set(shp.Id, shp);
+                            ShopDescriptor.Lookup.Set(shp.Id, shp);
                         }
 
                         break;
                     case GameObjectType.Spell:
                         foreach (var spl in context.Spells)
                         {
-                            SpellBase.Lookup.Set(spl.Id, spl);
+                            SpellDescriptor.Lookup.Set(spl.Id, spl);
                         }
 
                         break;
                     case GameObjectType.CraftTables:
                         foreach (var craft in context.CraftingTables)
                         {
-                            CraftingTableBase.Lookup.Set(craft.Id, craft);
+                            CraftingTableDescriptor.Lookup.Set(craft.Id, craft);
                         }
 
                         break;
                     case GameObjectType.Crafts:
                         foreach (var craft in context.Crafts)
                         {
-                            CraftBase.Lookup.Set(craft.Id, craft);
+                            CraftingRecipeDescriptor.Lookup.Set(craft.Id, craft);
                         }
 
                         break;
@@ -819,7 +825,7 @@ public static partial class DbInterface
                     case GameObjectType.Event:
                         foreach (var evt in context.Events)
                         {
-                            EventBase.Lookup.Set(evt.Id, evt);
+                            EventDescriptor.Lookup.Set(evt.Id, evt);
                         }
 
                         break;
@@ -840,7 +846,7 @@ public static partial class DbInterface
                     case GameObjectType.Tileset:
                         foreach (var psw in context.Tilesets)
                         {
-                            TilesetBase.Lookup.Set(psw.Id, psw);
+                            TilesetDescriptor.Lookup.Set(psw.Id, psw);
                         }
 
                         break;
@@ -883,7 +889,7 @@ public static partial class DbInterface
         
         foreach (var (mapId, databaseObject) in MapController.Lookup)
         {
-            if (databaseObject is not MapBase mapDescriptor)
+            if (databaseObject is not MapDescriptor mapDescriptor)
             {
                 ApplicationContext.CurrentContext.Logger.LogError(
                     "Found an invalid database object in the MapDescriptor lookup ({InvalidObjectType}, {InvalidObjectId}, '{InvalidObjectName}'",
@@ -906,7 +912,7 @@ public static partial class DbInterface
             
             foreach (var eventId in mapDescriptor.EventIds)
             {
-                if (!EventBase.TryGet(eventId, out var eventDescriptor))
+                if (!EventDescriptor.TryGet(eventId, out var eventDescriptor))
                 {
                     ApplicationContext.CurrentContext.Logger.LogWarning(
                         "Map {MapId} references missing event {EventId}, unexpected behavior may occur",
@@ -997,39 +1003,39 @@ public static partial class DbInterface
 
                 break;
             case GameObjectType.Class:
-                dbObj = new ClassBase(predefinedid);
+                dbObj = new ClassDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Item:
-                dbObj = new ItemBase(predefinedid);
+                dbObj = new ItemDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Npc:
-                dbObj = new NpcBase(predefinedid);
+                dbObj = new NPCDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Projectile:
-                dbObj = new ProjectileBase(predefinedid);
+                dbObj = new ProjectileDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Resource:
-                dbObj = new ResourceBase(predefinedid);
+                dbObj = new ResourceDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Shop:
-                dbObj = new ShopBase(predefinedid);
+                dbObj = new ShopDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Spell:
-                dbObj = new SpellBase(predefinedid);
+                dbObj = new SpellDescriptor(predefinedid);
 
                 break;
             case GameObjectType.CraftTables:
-                dbObj = new CraftingTableBase(predefinedid);
+                dbObj = new CraftingTableDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Crafts:
-                dbObj = new CraftBase(predefinedid);
+                dbObj = new CraftingRecipeDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Map:
@@ -1037,7 +1043,7 @@ public static partial class DbInterface
 
                 break;
             case GameObjectType.Event:
-                dbObj = new EventBase(predefinedid);
+                dbObj = new EventDescriptor(predefinedid);
 
                 break;
             case GameObjectType.PlayerVariable:
@@ -1049,18 +1055,18 @@ public static partial class DbInterface
 
                 break;
             case GameObjectType.Tileset:
-                dbObj = new TilesetBase(predefinedid);
+                dbObj = new TilesetDescriptor(predefinedid);
 
                 break;
             case GameObjectType.Time:
                 break;
 
             case GameObjectType.Quest:
-                dbObj = new QuestBase(predefinedid);
-                ((QuestBase)dbObj).StartEvent = (EventBase)AddGameObject(GameObjectType.Event);
-                ((QuestBase)dbObj).EndEvent = (EventBase)AddGameObject(GameObjectType.Event);
-                ((QuestBase)dbObj).StartEvent.CommonEvent = false;
-                ((QuestBase)dbObj).EndEvent.CommonEvent = false;
+                dbObj = new QuestDescriptor(predefinedid);
+                ((QuestDescriptor)dbObj).StartEvent = (EventDescriptor)AddGameObject(GameObjectType.Event);
+                ((QuestDescriptor)dbObj).EndEvent = (EventDescriptor)AddGameObject(GameObjectType.Event);
+                ((QuestDescriptor)dbObj).StartEvent.CommonEvent = false;
+                ((QuestDescriptor)dbObj).EndEvent.CommonEvent = false;
 
                 break;
 
@@ -1096,61 +1102,61 @@ public static partial class DbInterface
                         break;
 
                     case GameObjectType.Class:
-                        context.Classes.Add((ClassBase)dbObj);
-                        ClassBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Classes.Add((ClassDescriptor)dbObj);
+                        ClassDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Item:
-                        context.Items.Add((ItemBase)dbObj);
-                        ItemBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Items.Add((ItemDescriptor)dbObj);
+                        ItemDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
                     case GameObjectType.Npc:
-                        context.Npcs.Add((NpcBase)dbObj);
-                        NpcBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Npcs.Add((NPCDescriptor)dbObj);
+                        NPCDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Projectile:
-                        context.Projectiles.Add((ProjectileBase)dbObj);
-                        ProjectileBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Projectiles.Add((ProjectileDescriptor)dbObj);
+                        ProjectileDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Quest:
-                        context.Quests.Add((QuestBase)dbObj);
-                        QuestBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Quests.Add((QuestDescriptor)dbObj);
+                        QuestDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Resource:
-                        context.Resources.Add((ResourceBase)dbObj);
-                        ResourceBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Resources.Add((ResourceDescriptor)dbObj);
+                        ResourceDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Shop:
-                        context.Shops.Add((ShopBase)dbObj);
-                        ShopBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Shops.Add((ShopDescriptor)dbObj);
+                        ShopDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Spell:
-                        context.Spells.Add((SpellBase)dbObj);
-                        SpellBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Spells.Add((SpellDescriptor)dbObj);
+                        SpellDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.CraftTables:
-                        context.CraftingTables.Add((CraftingTableBase)dbObj);
-                        CraftingTableBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.CraftingTables.Add((CraftingTableDescriptor)dbObj);
+                        CraftingTableDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
                     case GameObjectType.Crafts:
-                        context.Crafts.Add((CraftBase)dbObj);
-                        CraftBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Crafts.Add((CraftingRecipeDescriptor)dbObj);
+                        CraftingRecipeDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
@@ -1161,8 +1167,8 @@ public static partial class DbInterface
                         break;
 
                     case GameObjectType.Event:
-                        context.Events.Add((EventBase)dbObj);
-                        EventBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Events.Add((EventDescriptor)dbObj);
+                        EventDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
@@ -1179,8 +1185,8 @@ public static partial class DbInterface
                         break;
 
                     case GameObjectType.Tileset:
-                        context.Tilesets.Add((TilesetBase)dbObj);
-                        TilesetBase.Lookup.Set(dbObj.Id, dbObj);
+                        context.Tilesets.Add((TilesetDescriptor)dbObj);
+                        TilesetDescriptor.Lookup.Set(dbObj.Id, dbObj);
 
                         break;
 
@@ -1234,75 +1240,75 @@ public static partial class DbInterface
 
                         break;
                     case GameObjectType.Class:
-                        context.Classes.Remove((ClassBase)gameObject);
+                        context.Classes.Remove((ClassDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Item:
-                        context.Items.Remove((ItemBase)gameObject);
+                        context.Items.Remove((ItemDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Npc:
-                        context.Npcs.Remove((NpcBase)gameObject);
+                        context.Npcs.Remove((NPCDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Projectile:
-                        context.Projectiles.Remove((ProjectileBase)gameObject);
+                        context.Projectiles.Remove((ProjectileDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Quest:
 
-                        if (((QuestBase)gameObject).StartEvent != null)
+                        if (((QuestDescriptor)gameObject).StartEvent != null)
                         {
-                            context.Events.Remove(((QuestBase)gameObject).StartEvent);
-                            context.Entry(((QuestBase)gameObject).StartEvent).State = EntityState.Deleted;
-                            EventBase.Lookup.Delete(((QuestBase)gameObject).StartEvent);
+                            context.Events.Remove(((QuestDescriptor)gameObject).StartEvent);
+                            context.Entry(((QuestDescriptor)gameObject).StartEvent).State = EntityState.Deleted;
+                            EventDescriptor.Lookup.Delete(((QuestDescriptor)gameObject).StartEvent);
                         }
 
-                        if (((QuestBase)gameObject).EndEvent != null)
+                        if (((QuestDescriptor)gameObject).EndEvent != null)
                         {
-                            context.Events.Remove(((QuestBase)gameObject).EndEvent);
-                            context.Entry(((QuestBase)gameObject).EndEvent).State = EntityState.Deleted;
-                            EventBase.Lookup.Delete(((QuestBase)gameObject).EndEvent);
+                            context.Events.Remove(((QuestDescriptor)gameObject).EndEvent);
+                            context.Entry(((QuestDescriptor)gameObject).EndEvent).State = EntityState.Deleted;
+                            EventDescriptor.Lookup.Delete(((QuestDescriptor)gameObject).EndEvent);
                         }
 
-                        foreach (var tsk in ((QuestBase)gameObject).Tasks)
+                        foreach (var tsk in ((QuestDescriptor)gameObject).Tasks)
                         {
                             if (tsk.CompletionEvent != null)
                             {
                                 context.Events.Remove(tsk.CompletionEvent);
                                 context.Entry(tsk.CompletionEvent).State = EntityState.Deleted;
-                                EventBase.Lookup.Delete(tsk.CompletionEvent);
+                                EventDescriptor.Lookup.Delete(tsk.CompletionEvent);
                             }
                         }
 
-                        context.Quests.Remove((QuestBase)gameObject);
+                        context.Quests.Remove((QuestDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Resource:
-                        context.Resources.Remove((ResourceBase)gameObject);
+                        context.Resources.Remove((ResourceDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Shop:
-                        context.Shops.Remove((ShopBase)gameObject);
+                        context.Shops.Remove((ShopDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Spell:
-                        context.Spells.Remove((SpellBase)gameObject);
+                        context.Spells.Remove((SpellDescriptor)gameObject);
 
                         break;
                     case GameObjectType.CraftTables:
-                        context.CraftingTables.Remove((CraftingTableBase)gameObject);
+                        context.CraftingTables.Remove((CraftingTableDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Crafts:
-                        context.Crafts.Remove((CraftBase)gameObject);
+                        context.Crafts.Remove((CraftingRecipeDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Map:
                         //Delete all map events first
                         foreach (var evtId in ((MapController)gameObject).EventIds)
                         {
-                            var evt = EventBase.Get(evtId);
+                            var evt = EventDescriptor.Get(evtId);
                             if (evt != null)
                             {
                                 DeleteGameObject(evt);
@@ -1313,7 +1319,7 @@ public static partial class DbInterface
 
                         break;
                     case GameObjectType.Event:
-                        context.Events.Remove((EventBase)gameObject);
+                        context.Events.Remove((EventDescriptor)gameObject);
 
                         break;
                     case GameObjectType.PlayerVariable:
@@ -1325,7 +1331,7 @@ public static partial class DbInterface
 
                         break;
                     case GameObjectType.Tileset:
-                        context.Tilesets.Remove((TilesetBase)gameObject);
+                        context.Tilesets.Remove((TilesetDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Time:
@@ -1380,12 +1386,12 @@ public static partial class DbInterface
 
                         break;
                     case GameObjectType.Class:
-                        context.Classes.Update((ClassBase)gameObject);
+                        context.Classes.Update((ClassDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Item:
                     {
-                        if (gameObject is not ItemBase itemDescriptor)
+                        if (gameObject is not ItemDescriptor itemDescriptor)
                         {
                             throw new InvalidOperationException();
                         }
@@ -1413,26 +1419,26 @@ public static partial class DbInterface
                         break;
                     }
                     case GameObjectType.Npc:
-                        context.Npcs.Update((NpcBase)gameObject);
+                        context.Npcs.Update((NPCDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Projectile:
-                        context.Projectiles.Update((ProjectileBase)gameObject);
+                        context.Projectiles.Update((ProjectileDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Quest:
 
-                        if (((QuestBase)gameObject).StartEvent != null)
+                        if (((QuestDescriptor)gameObject).StartEvent != null)
                         {
-                            context.Events.Update(((QuestBase)gameObject).StartEvent);
+                            context.Events.Update(((QuestDescriptor)gameObject).StartEvent);
                         }
 
-                        if (((QuestBase)gameObject).EndEvent != null)
+                        if (((QuestDescriptor)gameObject).EndEvent != null)
                         {
-                            context.Events.Update(((QuestBase)gameObject).EndEvent);
+                            context.Events.Update(((QuestDescriptor)gameObject).EndEvent);
                         }
 
-                        foreach (var tsk in ((QuestBase)gameObject).Tasks)
+                        foreach (var tsk in ((QuestDescriptor)gameObject).Tasks)
                         {
                             if (tsk.CompletionEvent != null)
                             {
@@ -1440,27 +1446,27 @@ public static partial class DbInterface
                             }
                         }
 
-                        context.Quests.Update((QuestBase)gameObject);
+                        context.Quests.Update((QuestDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Resource:
-                        context.Resources.Update((ResourceBase)gameObject);
+                        context.Resources.Update((ResourceDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Shop:
-                        context.Shops.Update((ShopBase)gameObject);
+                        context.Shops.Update((ShopDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Spell:
-                        context.Spells.Update((SpellBase)gameObject);
+                        context.Spells.Update((SpellDescriptor)gameObject);
 
                         break;
                     case GameObjectType.CraftTables:
-                        context.CraftingTables.Update((CraftingTableBase)gameObject);
+                        context.CraftingTables.Update((CraftingTableDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Crafts:
-                        context.Crafts.Update((CraftBase)gameObject);
+                        context.Crafts.Update((CraftingRecipeDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Map:
@@ -1468,7 +1474,7 @@ public static partial class DbInterface
 
                         break;
                     case GameObjectType.Event:
-                        context.Events.Update((EventBase)gameObject);
+                        context.Events.Update((EventDescriptor)gameObject);
 
                         break;
                     case GameObjectType.PlayerVariable:
@@ -1480,7 +1486,7 @@ public static partial class DbInterface
 
                         break;
                     case GameObjectType.Tileset:
-                        context.Tilesets.Update((TilesetBase)gameObject);
+                        context.Tilesets.Update((TilesetDescriptor)gameObject);
 
                         break;
                     case GameObjectType.Time:
@@ -1515,7 +1521,7 @@ public static partial class DbInterface
     //Post Loading Functions
     private static void OnMapsLoaded()
     {
-        if (MapBase.Lookup.Count == 0)
+        if (MapDescriptor.Lookup.Count == 0)
         {
             Console.WriteLine(Strings.Database.NoMaps);
             AddGameObject(GameObjectType.Map);
@@ -1533,10 +1539,10 @@ public static partial class DbInterface
 
     private static void OnClassesLoaded()
     {
-        if (ClassBase.Lookup.Count == 0)
+        if (ClassDescriptor.Lookup.Count == 0)
         {
             Console.WriteLine(Strings.Database.NoClasses);
-            var cls = (ClassBase)AddGameObject(GameObjectType.Class);
+            var cls = (ClassDescriptor)AddGameObject(GameObjectType.Class);
             cls.Name = Strings.Database.Default;
             var defaultMale = new ClassSprite()
             {
@@ -1792,15 +1798,15 @@ public static partial class DbInterface
             throw;
         }
 
-        foreach (var map in MapBase.Lookup)
+        foreach (var map in MapDescriptor.Lookup)
         {
             if (MapList.List.FindMap(map.Value.Id) == null)
             {
-                MapList.List.AddMap(map.Value.Id, map.Value.TimeCreated, MapBase.Lookup);
+                MapList.List.AddMap(map.Value.Id, map.Value.TimeCreated, MapDescriptor.Lookup);
             }
         }
 
-        MapList.List.PostLoad(MapBase.Lookup, true, true);
+        MapList.List.PostLoad(MapDescriptor.Lookup, true, true);
         PacketSender.SendMapListToAll();
     }
 
@@ -1832,13 +1838,13 @@ public static partial class DbInterface
                 var time = context.Time.OrderBy(t => t.Id).FirstOrDefault();
                 if (time == null)
                 {
-                    context.Time.Add(TimeBase.GetTimeBase());
+                    context.Time.Add(DaylightCycleDescriptor.Instance);
                     context.ChangeTracker.DetectChanges();
                     context.SaveChanges();
                 }
                 else
                 {
-                    TimeBase.SetStaticTime(time);
+                    DaylightCycleDescriptor.Instance = time;
                 }
             }
             Time.Init();
@@ -1856,7 +1862,7 @@ public static partial class DbInterface
         {
             using (var context = CreateGameContext(readOnly: false))
             {
-                context.Time.Update(TimeBase.GetTimeBase());
+                context.Time.Update(DaylightCycleDescriptor.Instance);
                 context.ChangeTracker.DetectChanges();
                 context.SaveChanges();
             }

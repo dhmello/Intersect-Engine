@@ -1,8 +1,9 @@
 using DarkUI.Controls;
 using Intersect.Editor.Localization;
 using Intersect.Enums;
-using Intersect.GameObjects.Events.Commands;
-using Intersect.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.Events.Commands;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
 
 namespace Intersect.Editor.Forms.Editors.Events.Event_Commands;
 

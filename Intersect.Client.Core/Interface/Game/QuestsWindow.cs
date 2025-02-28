@@ -7,6 +7,9 @@ using Intersect.Client.Interface.Shared;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.Quests;
 using Intersect.GameObjects;
 using Intersect.Utilities;
 
@@ -35,7 +38,7 @@ public partial class QuestsWindow
 
     private readonly Button mQuitButton;
 
-    private QuestBase mSelectedQuest;
+    private QuestDescriptor mSelectedQuest;
 
     //Init
     public QuestsWindow(Canvas gameCanvas)
@@ -175,11 +178,11 @@ public partial class QuestsWindow
         _questList.RemoveAllRows();
         if (Globals.Me != null)
         {
-            var quests = QuestBase.Lookup.Values;
+            var quests = QuestDescriptor.Lookup.Values;
 
-            var dict = new Dictionary<string, List<Tuple<QuestBase, int, Color>>>();
+            var dict = new Dictionary<string, List<Tuple<QuestDescriptor, int, Color>>>();
 
-            foreach (QuestBase quest in quests)
+            foreach (QuestDescriptor quest in quests)
             {
                 if (quest != null)
                 {
@@ -213,7 +216,7 @@ public partial class QuestsWindow
         }
     }
 
-    private void AddQuestToDict(Dictionary<string, List<Tuple<QuestBase, int, Color>>> dict, QuestBase quest)
+    private void AddQuestToDict(Dictionary<string, List<Tuple<QuestDescriptor, int, Color>>> dict, QuestDescriptor quest)
     {
         var category = string.Empty;
         var add = false;
@@ -267,10 +270,10 @@ public partial class QuestsWindow
         {
             if (!dict.ContainsKey(category))
             {
-                dict.Add(category, new List<Tuple<QuestBase, int, Color>>());
+                dict.Add(category, new List<Tuple<QuestDescriptor, int, Color>>());
             }
 
-            dict[category].Add(new Tuple<QuestBase, int, Color>(quest, orderVal, color));
+            dict[category].Add(new Tuple<QuestDescriptor, int, Color>(quest, orderVal, color));
         }
     }
 
@@ -304,7 +307,7 @@ public partial class QuestsWindow
             return;
         }
 
-        if (!QuestBase.TryGet(questId, out var questDescriptor))
+        if (!QuestDescriptor.TryGet(questId, out var questDescriptor))
         {
             _questList.UnselectAll();
             return;
@@ -370,7 +373,7 @@ public partial class QuestsWindow
                                     Strings.QuestLog.TaskItem.ToString(
                                         Globals.Me.QuestProgress[mSelectedQuest.Id].TaskProgress,
                                         mSelectedQuest.Tasks[i].Quantity,
-                                        ItemBase.GetName(mSelectedQuest.Tasks[i].TargetId)
+                                        ItemDescriptor.GetName(mSelectedQuest.Tasks[i].TargetId)
                                     ), mQuestDescTemplateLabel
                                 );
                             }
@@ -380,7 +383,7 @@ public partial class QuestsWindow
                                     Strings.QuestLog.TaskNpc.ToString(
                                         Globals.Me.QuestProgress[mSelectedQuest.Id].TaskProgress,
                                         mSelectedQuest.Tasks[i].Quantity,
-                                        NpcBase.GetName(mSelectedQuest.Tasks[i].TargetId)
+                                        NPCDescriptor.GetName(mSelectedQuest.Tasks[i].TargetId)
                                     ), mQuestDescTemplateLabel
                                 );
                             }

@@ -1,8 +1,14 @@
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Crafting;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Mapping.Tilesets;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.Framework.Core.GameObjects.Variables;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Crafting;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Server.Maps;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,15 +18,15 @@ public interface IGameContext : IDbContext
 {
     DbSet<AnimationDescriptor> Animations { get; set; }
 
-    DbSet<CraftBase> Crafts { get; set; }
+    DbSet<CraftingRecipeDescriptor> Crafts { get; set; }
 
-    DbSet<CraftingTableBase> CraftingTables { get; set; }
+    DbSet<CraftingTableDescriptor> CraftingTables { get; set; }
 
-    DbSet<ClassBase> Classes { get; set; }
+    DbSet<ClassDescriptor> Classes { get; set; }
 
-    DbSet<EventBase> Events { get; set; }
+    DbSet<EventDescriptor> Events { get; set; }
 
-    DbSet<ItemBase> Items { get; set; }
+    DbSet<ItemDescriptor> Items { get; set; }
 
     DbSet<EquipmentProperties> Items_EquipmentProperties { get; set; }
 
@@ -28,21 +34,21 @@ public interface IGameContext : IDbContext
 
     DbSet<MapList> MapFolders { get; set; }
 
-    DbSet<NpcBase> Npcs { get; set; }
+    DbSet<NPCDescriptor> Npcs { get; set; }
 
-    DbSet<ProjectileBase> Projectiles { get; set; }
+    DbSet<ProjectileDescriptor> Projectiles { get; set; }
 
-    DbSet<QuestBase> Quests { get; set; }
+    DbSet<QuestDescriptor> Quests { get; set; }
 
-    DbSet<ResourceBase> Resources { get; set; }
+    DbSet<ResourceDescriptor> Resources { get; set; }
 
-    DbSet<ShopBase> Shops { get; set; }
+    DbSet<ShopDescriptor> Shops { get; set; }
 
-    DbSet<SpellBase> Spells { get; set; }
+    DbSet<SpellDescriptor> Spells { get; set; }
 
     DbSet<ServerVariableDescriptor> ServerVariables { get; set; }
 
-    DbSet<TilesetBase> Tilesets { get; set; }
+    DbSet<TilesetDescriptor> Tilesets { get; set; }
 
-    DbSet<TimeBase> Time { get; set; }
+    DbSet<DaylightCycleDescriptor> Time { get; set; }
 }

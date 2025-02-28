@@ -2,9 +2,13 @@ using System.Collections.Concurrent;
 using Intersect.Core;
 using Intersect.Enums;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Events;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.Attributes;
+using Intersect.Framework.Core.GameObjects.NPCs;
+using Intersect.Framework.Core.GameObjects.Resources;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Events;
-using Intersect.GameObjects.Maps;
 using Intersect.Network.Packets.Server;
 using Intersect.Server.Database;
 using Intersect.Server.Entities.Events;
@@ -139,8 +143,8 @@ public partial class MapInstance : IMapInstance
     /* Processing Layers have Global Events - these are global to the PROCESSING instance, NOT to the MapController.
      * As of the initial "Add Instancing" refactor, this is what the stock "Is Global?" event tick box in the editor
      * will enable - an "Instance-Global" event */
-    public ConcurrentDictionary<EventBase, Event> GlobalEventInstances = new ConcurrentDictionary<EventBase, Event>();
-    public List<EventBase> EventsCache = new List<EventBase>();
+    public ConcurrentDictionary<EventDescriptor, Event> GlobalEventInstances = new ConcurrentDictionary<EventDescriptor, Event>();
+    public List<EventDescriptor> EventsCache = new List<EventDescriptor>();
 
     // Animations & Text
     private MapActionMessages mActionMessages = new MapActionMessages();
@@ -448,7 +452,7 @@ public partial class MapInstance : IMapInstance
             return;
         }
 
-        var npcBase = NpcBase.Get(spawn.NpcId);
+        var npcBase = NPCDescriptor.Get(spawn.NpcId);
         if (npcBase != null)
         {
             if (!NpcSpawnInstances.TryGetValue(spawn, out var npcSpawnInstance))
@@ -518,7 +522,7 @@ public partial class MapInstance : IMapInstance
     /// <returns></returns>
     public Npc SpawnNpc(byte tileX, byte tileY, Direction dir, Guid npcId, bool despawnable = false)
     {
-        var npcBase = NpcBase.Get(npcId);
+        var npcBase = NPCDescriptor.Get(npcId);
         if (npcBase != null)
         {
             var processLayer = this.MapInstanceId;
@@ -674,7 +678,7 @@ public partial class MapInstance : IMapInstance
 
         if (resourceSpawnInstance.Entity == default)
         {
-            if (ResourceBase.TryGet(spawn.ResourceId, out var resourceDescriptor))
+            if (ResourceDescriptor.TryGet(spawn.ResourceId, out var resourceDescriptor))
             {
                 var res = new Resource(resourceDescriptor)
                 {
@@ -770,7 +774,7 @@ public partial class MapInstance : IMapInstance
             return;
         }
 
-        var itemDescriptor = ItemBase.Get(item.ItemId);
+        var itemDescriptor = ItemDescriptor.Get(item.ItemId);
         if (itemDescriptor == null)
         {
             ApplicationContext.Context.Value?.Logger.LogWarning($"No item found for {item.ItemId}.");
@@ -942,7 +946,7 @@ public partial class MapInstance : IMapInstance
     /// <param name="y">Y co-ordinate to spawn</param>
     private void SpawnAttributeItem(int x, int y)
     {
-        var item = ItemBase.Get(((MapItemAttribute)mMapController.Attributes[x, y]).ItemId);
+        var item = ItemDescriptor.Get(((MapItemAttribute)mMapController.Attributes[x, y]).ItemId);
         if (item != null)
         {
             var mapItem = new MapItem(item.Id, ((MapItemAttribute)mMapController.Attributes[x, y]).Quantity, x, y, ((MapItemAttribute)mMapController.Attributes[x, y]).RespawnTime);
@@ -1008,9 +1012,9 @@ public partial class MapInstance : IMapInstance
     /// <param name="target">The target of the projectil</param>
     public void SpawnMapProjectile(
         Entity owner,
-        ProjectileBase projectile,
-        SpellBase parentSpell,
-        ItemBase parentItem,
+        ProjectileDescriptor projectile,
+        SpellDescriptor parentSpell,
+        ItemDescriptor parentItem,
         Guid mapId,
         byte x,
         byte y,
@@ -1051,7 +1055,7 @@ public partial class MapInstance : IMapInstance
         MapProjectilesCached = MapProjectiles.Values.ToArray();
     }
 
-    public void SpawnTrap(Entity owner, SpellBase parentSpell, byte x, byte y, byte z)
+    public void SpawnTrap(Entity owner, SpellDescriptor parentSpell, byte x, byte y, byte z)
     {
         var trap = new MapTrapInstance(owner, parentSpell, mMapController.Id, MapInstanceId, x, y, z);
         MapTraps.TryAdd(trap.Id, trap);
@@ -1078,7 +1082,7 @@ public partial class MapInstance : IMapInstance
         GlobalEventInstances.Clear();
         foreach (var id in mMapController.EventIds)
         {
-            var evt = EventBase.Get(id);
+            var evt = EventDescriptor.Get(id);
             if (evt != null && evt.Global)
             {
                 GlobalEventInstances.TryAdd(evt, new Event(evt.Id, evt, mMapController, MapInstanceId));
@@ -1094,30 +1098,30 @@ public partial class MapInstance : IMapInstance
         {
             foreach (var player in GetPlayers(true))
             {
-                player.RemoveEvent(evt.Value.BaseEvent.Id);
+                player.RemoveEvent(evt.Value.Descriptor.Id);
             }
         }
 
         GlobalEventInstances.Clear();
     }
 
-    public Event GetGlobalEventInstance(EventBase baseEvent)
+    public Event GetGlobalEventInstance(EventDescriptor eventDescriptor)
     {
-        if (GlobalEventInstances.ContainsKey(baseEvent))
+        if (GlobalEventInstances.ContainsKey(eventDescriptor))
         {
-            return GlobalEventInstances[baseEvent];
+            return GlobalEventInstances[eventDescriptor];
         }
 
         return null;
     }
 
-    public bool FindEvent(EventBase baseEvent, EventPageInstance globalClone)
+    public bool FindEvent(EventDescriptor eventDescriptor, EventPageInstance globalClone)
     {
-        if (GlobalEventInstances.ContainsKey(baseEvent))
+        if (GlobalEventInstances.ContainsKey(eventDescriptor))
         {
-            for (var i = 0; i < GlobalEventInstances[baseEvent].GlobalPageInstance.Length; i++)
+            for (var i = 0; i < GlobalEventInstances[eventDescriptor].GlobalPageInstance.Length; i++)
             {
-                if (GlobalEventInstances[baseEvent].GlobalPageInstance[i] == globalClone)
+                if (GlobalEventInstances[eventDescriptor].GlobalPageInstance[i] == globalClone)
                 {
                     return true;
                 }
@@ -1129,10 +1133,10 @@ public partial class MapInstance : IMapInstance
 
     public void RefreshEventsCache()
     {
-        var events = new List<EventBase>();
+        var events = new List<EventDescriptor>();
         foreach (var evt in mMapController.EventIds)
         {
-            var itm = EventBase.Get(evt);
+            var itm = EventDescriptor.Get(evt);
             if (itm != null)
             {
                 events.Add(itm);
@@ -1332,14 +1336,14 @@ public partial class MapInstance : IMapInstance
         for (var i = 0; i < spawns.Count; i++)
         {
             var spawn = spawns[i];
-            if (!NpcSpawnInstances.TryGetValue(spawn, out var spawnInstance) || spawnInstance?.Entity?.Base == default || !spawnInstance.Entity.IsDead)
+            if (!NpcSpawnInstances.TryGetValue(spawn, out var spawnInstance) || spawnInstance?.Entity?.Descriptor == default || !spawnInstance.Entity.IsDead)
             {
                 continue;
             }
 
             if (spawnInstance.RespawnTime < 0)
             {
-                spawnInstance.RespawnTime = mLastUpdateTime + (spawnInstance.Entity.Base?.SpawnDuration ?? 0);
+                spawnInstance.RespawnTime = mLastUpdateTime + (spawnInstance.Entity.Descriptor?.SpawnDuration ?? 0);
             }
             else if (spawnInstance.RespawnTime < Timing.Global.Milliseconds)
             {

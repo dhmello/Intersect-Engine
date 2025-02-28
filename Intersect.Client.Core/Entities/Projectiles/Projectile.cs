@@ -2,8 +2,10 @@ using Intersect.Client.Framework.Entities;
 using Intersect.Client.General;
 using Intersect.Enums;
 using Intersect.Framework.Core;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Maps;
+using Intersect.Framework.Core.GameObjects.Maps.Attributes;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps;
 using Intersect.Network.Packets.Server;
 using Intersect.Utilities;
 
@@ -17,7 +19,7 @@ public partial class Projectile : Entity
 
     private readonly object _lock = new();
 
-    private ProjectileBase? _myBase;
+    private ProjectileDescriptor? _myBase;
 
     private Guid _owner;
 
@@ -75,14 +77,14 @@ public partial class Projectile : Entity
         DirectionFacing = (Direction)pkt.ProjectileDirection;
         _targetId = pkt.TargetId;
         _owner = pkt.OwnerId;
-        _myBase = ProjectileBase.Get(_projectileId);
+        _myBase = ProjectileDescriptor.Get(_projectileId);
         if (_myBase != null)
         {
-            for (var x = 0; x < ProjectileBase.SPAWN_LOCATIONS_WIDTH; x++)
+            for (var x = 0; x < ProjectileDescriptor.SPAWN_LOCATIONS_WIDTH; x++)
             {
-                for (var y = 0; y < ProjectileBase.SPAWN_LOCATIONS_HEIGHT; y++)
+                for (var y = 0; y < ProjectileDescriptor.SPAWN_LOCATIONS_HEIGHT; y++)
                 {
-                    for (var d = 0; d < ProjectileBase.MAX_PROJECTILE_DIRECTIONS; d++)
+                    for (var d = 0; d < ProjectileDescriptor.MAX_PROJECTILE_DIRECTIONS; d++)
                     {
                         if (_myBase.SpawnLocations[x, y].Directions[d] == true)
                         {
@@ -181,11 +183,11 @@ public partial class Projectile : Entity
         var spawn = FindSpawnAnimationData();
         var animBase = AnimationDescriptor.Get(_myBase.Animations[spawn].AnimationId);
 
-        for (var x = 0; x < ProjectileBase.SPAWN_LOCATIONS_WIDTH; x++)
+        for (var x = 0; x < ProjectileDescriptor.SPAWN_LOCATIONS_WIDTH; x++)
         {
-            for (var y = 0; y < ProjectileBase.SPAWN_LOCATIONS_HEIGHT; y++)
+            for (var y = 0; y < ProjectileDescriptor.SPAWN_LOCATIONS_HEIGHT; y++)
             {
-                for (var d = 0; d < ProjectileBase.MAX_PROJECTILE_DIRECTIONS; d++)
+                for (var d = 0; d < ProjectileDescriptor.MAX_PROJECTILE_DIRECTIONS; d++)
                 {
                     // Check if the current direction is enabled for spawning at this location.
                     if (_myBase.SpawnLocations[x, y].Directions[d] == true)
@@ -253,7 +255,7 @@ public partial class Projectile : Entity
     }
 
     private static Direction FindProjectileRotationDir(Direction entityDir, Direction projectionDir) =>
-        (Direction)ProjectileBase.ProjectileRotationDir[(int)entityDir * ProjectileBase.MAX_PROJECTILE_DIRECTIONS + (int)projectionDir];
+        (Direction)ProjectileDescriptor.ProjectileRotationDir[(int)entityDir * ProjectileDescriptor.MAX_PROJECTILE_DIRECTIONS + (int)projectionDir];
 
     /// <summary>
     /// Calculates the projectile range based on the given direction, range, and axis.
@@ -728,8 +730,8 @@ public partial class Projectile : Entity
             z: Z,
             mapId: spawn.MapId,
             blockedBy: ref blockedBy,
-            ignoreAliveResources: spawn.ProjectileBase.IgnoreActiveResources,
-            ignoreDeadResources: spawn.ProjectileBase.IgnoreExhaustedResources,
+            ignoreAliveResources: spawn.ProjectileDescriptor.IgnoreActiveResources,
+            ignoreDeadResources: spawn.ProjectileDescriptor.IgnoreExhaustedResources,
             ignoreNpcAvoids: true,
             projectileTrigger: true
         );
@@ -749,14 +751,14 @@ public partial class Projectile : Entity
 
                 break;
             case -2: // Collision with a map block
-                if (!spawn.ProjectileBase.IgnoreMapBlocks)
+                if (!spawn.ProjectileDescriptor.IgnoreMapBlocks)
                 {
                     killSpawn = true;
                 }
 
                 break;
             case -3: // Collision with a Z-dimension block
-                if (!spawn.ProjectileBase.IgnoreZDimension)
+                if (!spawn.ProjectileDescriptor.IgnoreZDimension)
                 {
                     killSpawn = true;
                 }

@@ -5,8 +5,11 @@ using Intersect.Editor.General;
 using Intersect.Editor.Localization;
 using Intersect.Editor.Networking;
 using Intersect.Enums;
+using Intersect.Framework.Core.GameObjects.Animations;
+using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Framework.Core.GameObjects.Maps.MapList;
+using Intersect.Framework.Core.GameObjects.PlayerClass;
 using Intersect.GameObjects;
-using Intersect.GameObjects.Maps.MapList;
 using Intersect.Utilities;
 using Graphics = System.Drawing.Graphics;
 
@@ -16,11 +19,11 @@ namespace Intersect.Editor.Forms.Editors;
 public partial class FrmClass : EditorForm
 {
 
-    private List<ClassBase> mChanged = new List<ClassBase>();
+    private List<ClassDescriptor> mChanged = new List<ClassDescriptor>();
 
     private string mCopiedItem;
 
-    private ClassBase mEditorItem;
+    private ClassDescriptor mEditorItem;
 
     private List<string> mKnownFolders = new List<string>();
 
@@ -40,7 +43,7 @@ public partial class FrmClass : EditorForm
     }
     private void AssignEditorItem(Guid id)
     {
-        mEditorItem = ClassBase.Get(id);
+        mEditorItem = ClassDescriptor.Get(id);
         UpdateEditor();
     }
 
@@ -49,7 +52,7 @@ public partial class FrmClass : EditorForm
         if (type == GameObjectType.Class)
         {
             InitEditor();
-            if (mEditorItem != null && !ClassBase.Lookup.Values.Contains(mEditorItem))
+            if (mEditorItem != null && !ClassDescriptor.Lookup.Values.Contains(mEditorItem))
             {
                 mEditorItem = null;
                 UpdateEditor();
@@ -99,7 +102,7 @@ public partial class FrmClass : EditorForm
         {
             lstSpells.Items.Add(
                 Strings.ClassEditor.spellitem.ToString(
-                    i + 1, SpellBase.GetName(mEditorItem.Spells[i].Id), mEditorItem.Spells[i].Level
+                    i + 1, SpellDescriptor.GetName(mEditorItem.Spells[i].Id), mEditorItem.Spells[i].Level
                 )
             );
         }
@@ -114,7 +117,7 @@ public partial class FrmClass : EditorForm
     {
         var n = new ClassSpell
         {
-            Id = SpellBase.IdFromList(cmbSpell.SelectedIndex),
+            Id = SpellDescriptor.IdFromList(cmbSpell.SelectedIndex),
             Level = (int) nudLevel.Value
         };
 
@@ -203,7 +206,7 @@ public partial class FrmClass : EditorForm
             if (lstSpells.Items.Count > 0)
             {
                 lstSpells.SelectedIndex = 0;
-                cmbSpell.SelectedIndex = SpellBase.ListIndex(mEditorItem.Spells[lstSpells.SelectedIndex].Id);
+                cmbSpell.SelectedIndex = SpellDescriptor.ListIndex(mEditorItem.Spells[lstSpells.SelectedIndex].Id);
                 nudLevel.Value = mEditorItem.Spells[lstSpells.SelectedIndex].Level;
             }
             else
@@ -289,9 +292,9 @@ public partial class FrmClass : EditorForm
         cmbFace.Items.AddRange(GameContentManager.GetSmartSortedTextureNames(GameContentManager.TextureType.Face));
         cmbSpawnItem.Items.Clear();
         cmbSpawnItem.Items.Add(Strings.General.None);
-        cmbSpawnItem.Items.AddRange(ItemBase.Names);
+        cmbSpawnItem.Items.AddRange(ItemDescriptor.Names);
         cmbSpell.Items.Clear();
-        cmbSpell.Items.AddRange(SpellBase.Names);
+        cmbSpell.Items.AddRange(SpellDescriptor.Names);
         nudLevel.Maximum = Options.Instance.Player.MaxLevel;
         cmbAttackAnimation.Items.Clear();
         cmbAttackAnimation.Items.Add(Strings.General.None);
@@ -483,15 +486,15 @@ public partial class FrmClass : EditorForm
     {
         //Collect folders
         var mFolders = new List<string>();
-        foreach (var itm in ClassBase.Lookup)
+        foreach (var itm in ClassDescriptor.Lookup)
         {
-            if (!string.IsNullOrEmpty(((ClassBase) itm.Value).Folder) &&
-                !mFolders.Contains(((ClassBase) itm.Value).Folder))
+            if (!string.IsNullOrEmpty(((ClassDescriptor) itm.Value).Folder) &&
+                !mFolders.Contains(((ClassDescriptor) itm.Value).Folder))
             {
-                mFolders.Add(((ClassBase) itm.Value).Folder);
-                if (!mKnownFolders.Contains(((ClassBase) itm.Value).Folder))
+                mFolders.Add(((ClassDescriptor) itm.Value).Folder);
+                if (!mKnownFolders.Contains(((ClassDescriptor) itm.Value).Folder))
                 {
-                    mKnownFolders.Add(((ClassBase) itm.Value).Folder);
+                    mKnownFolders.Add(((ClassDescriptor) itm.Value).Folder);
                 }
             }
         }
@@ -502,8 +505,8 @@ public partial class FrmClass : EditorForm
         cmbFolder.Items.Add("");
         cmbFolder.Items.AddRange(mKnownFolders.ToArray());
 
-        var items = ClassBase.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
-            new KeyValuePair<string, string>(((ClassBase)pair.Value)?.Name ?? Models.DatabaseObject<ClassBase>.Deleted, ((ClassBase)pair.Value)?.Folder ?? ""))).ToArray();
+        var items = ClassDescriptor.Lookup.OrderBy(p => p.Value?.Name).Select(pair => new KeyValuePair<Guid, KeyValuePair<string, string>>(pair.Key,
+            new KeyValuePair<string, string>(((ClassDescriptor)pair.Value)?.Name ?? Models.DatabaseObject<ClassDescriptor>.Deleted, ((ClassDescriptor)pair.Value)?.Folder ?? ""))).ToArray();
         lstGameObjects.Repopulate(items, mFolders, btnAlphabetical.Checked, CustomSearch(), txtSearch.Text);
     }
 
@@ -933,7 +936,7 @@ public partial class FrmClass : EditorForm
     {
         if (lstSpells.SelectedIndex > -1 && cmbSpell.SelectedIndex > -1)
         {
-            mEditorItem.Spells[lstSpells.SelectedIndex].Id = SpellBase.IdFromList(cmbSpell.SelectedIndex);
+            mEditorItem.Spells[lstSpells.SelectedIndex].Id = SpellDescriptor.IdFromList(cmbSpell.SelectedIndex);
             UpdateSpellList();
         }
     }
@@ -942,7 +945,7 @@ public partial class FrmClass : EditorForm
     {
         if (lstSpells.SelectedIndex > -1)
         {
-            cmbSpell.SelectedIndex = SpellBase.ListIndex(mEditorItem.Spells[lstSpells.SelectedIndex].Id);
+            cmbSpell.SelectedIndex = SpellDescriptor.ListIndex(mEditorItem.Spells[lstSpells.SelectedIndex].Id);
             nudLevel.Value = mEditorItem.Spells[lstSpells.SelectedIndex].Level;
         }
     }
@@ -1098,7 +1101,7 @@ public partial class FrmClass : EditorForm
         var spawnItems = mEditorItem.Items.ToArray();
         foreach (var spawnItem in spawnItems)
         {
-            if (ItemBase.Get(spawnItem.Id) == null)
+            if (ItemDescriptor.Get(spawnItem.Id) == null)
             {
                 mEditorItem.Items.Remove(spawnItem);
             }
@@ -1110,7 +1113,7 @@ public partial class FrmClass : EditorForm
             {
                 lstSpawnItems.Items.Add(
                     Strings.ClassEditor.spawnitemdisplay.ToString(
-                        ItemBase.GetName(mEditorItem.Items[i].Id), mEditorItem.Items[i].Quantity
+                        ItemDescriptor.GetName(mEditorItem.Items[i].Id), mEditorItem.Items[i].Quantity
                     )
                 );
             }
@@ -1130,7 +1133,7 @@ public partial class FrmClass : EditorForm
     {
         if (lstSpawnItems.SelectedIndex > -1 && lstSpawnItems.SelectedIndex < mEditorItem.Items.Count)
         {
-            mEditorItem.Items[lstSpawnItems.SelectedIndex].Id = ItemBase.IdFromList(cmbSpawnItem.SelectedIndex - 1);
+            mEditorItem.Items[lstSpawnItems.SelectedIndex].Id = ItemDescriptor.IdFromList(cmbSpawnItem.SelectedIndex - 1);
         }
 
         UpdateSpawnItemValues(true);
@@ -1154,7 +1157,7 @@ public partial class FrmClass : EditorForm
     {
         if (lstSpawnItems.SelectedIndex > -1)
         {
-            cmbSpawnItem.SelectedIndex = ItemBase.ListIndex(mEditorItem.Items[lstSpawnItems.SelectedIndex].Id) + 1;
+            cmbSpawnItem.SelectedIndex = ItemDescriptor.ListIndex(mEditorItem.Items[lstSpawnItems.SelectedIndex].Id) + 1;
             nudSpawnItemAmount.Value = mEditorItem.Items[lstSpawnItems.SelectedIndex].Quantity;
         }
     }
@@ -1162,7 +1165,7 @@ public partial class FrmClass : EditorForm
     private void btnSpawnItemAdd_Click(object sender, EventArgs e)
     {
         mEditorItem.Items.Add(new ClassItem());
-        mEditorItem.Items[mEditorItem.Items.Count - 1].Id = ItemBase.IdFromList(cmbSpawnItem.SelectedIndex - 1);
+        mEditorItem.Items[mEditorItem.Items.Count - 1].Id = ItemDescriptor.IdFromList(cmbSpawnItem.SelectedIndex - 1);
         mEditorItem.Items[mEditorItem.Items.Count - 1].Quantity = (int) nudSpawnItemAmount.Value;
 
         UpdateSpawnItemValues();
