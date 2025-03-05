@@ -5,7 +5,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$(Configuration) != 'Debug'">
+  <PropertyGroup Condition="$(Configuration.StartsWith('Debug')) != 'true'">
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
@@ -44,6 +44,10 @@
     <Content Update="wwwroot\favicon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="wwwroot\css\theme.css" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="wwwroot\css\site.css" CopyToOutputDirectory="PreserveNewest" />
+
+    <EmbeddedResource Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest">
+      <LogicalName>$([System.String]::new('%(RelativeDir)').Replace('\','/'))%(FileName)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup Label="Resources (ResX)">

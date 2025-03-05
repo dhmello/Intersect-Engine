@@ -24,6 +24,7 @@ using Intersect.Server.General;
 using Intersect.Server.Localization;
 using Intersect.Server.Metrics;
 using Intersect.Server.Networking;
+using Intersect.Server.Plugins;
 using Intersect.Threading;
 using Intersect.Utilities;
 using Microsoft.Extensions.Logging;
@@ -44,7 +45,7 @@ internal static class Bootstrapper
 
     public static ILockingActionQueue MainThread { get; private set; }
 
-    public static void Start(Assembly entryAssembly, params string[] args)
+    public static void Start(Assembly entryAssembly, string[] args, params Action<ServerCommandLineOptions>[] configuredActions)
     {
         (string[] Args, Parser Parser, ServerCommandLineOptions CommandLineOptions) parsedArguments =
             ParseCommandLineArgs(args);
@@ -55,6 +56,11 @@ internal static class Bootstrapper
             {
                 Directory.SetCurrentDirectory(workingDirectory);
             }
+        }
+
+        foreach (var configureAction in configuredActions)
+        {
+            configureAction(parsedArguments.CommandLineOptions);
         }
 
         if (!PreContextSetup(args))
@@ -73,7 +79,7 @@ internal static class Bootstrapper
 
         PlatformStatistics.Logger = loggerFactory.CreateLogger<PlatformStatistics>();
 
-        var packetTypeRegistry = new PacketTypeRegistry(logger, typeof(SharedConstants).Assembly);
+        var packetTypeRegistry = new PacketTypeRegistry(logger, typeof(IntersectPacket).Assembly);
         if (!packetTypeRegistry.TryRegisterBuiltIn())
         {
             logger.LogCritical("[FATAL] Failed to load built-in packet types.");
@@ -87,6 +93,7 @@ internal static class Bootstrapper
 
         FactoryRegistry<IPluginBootstrapContext>.RegisterFactory(
             PluginBootstrapContext.CreateFactory(
+                typeof(IServerPluginContext),
                 parsedArguments.Args ?? [],
                 parsedArguments.Parser,
                 packetHelper

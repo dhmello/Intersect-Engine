@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using CommandLine;
+using Intersect.Client.Plugins;
 using Intersect.Configuration;
 using Intersect.Core;
 using Intersect.Factories;
@@ -52,7 +53,7 @@ internal static partial class Bootstrapper
 
         PlatformStatistics.Logger = loggerFactory.CreateLogger<PlatformStatistics>();
 
-        var packetTypeRegistry = new PacketTypeRegistry(logger, typeof(SharedConstants).Assembly);
+        var packetTypeRegistry = new PacketTypeRegistry(logger, typeof(IntersectPacket).Assembly);
         if (!packetTypeRegistry.TryRegisterBuiltIn())
         {
             logger.LogError("Failed to register built-in packets.");
@@ -61,7 +62,7 @@ internal static partial class Bootstrapper
 
         var packetHandlerRegistry = new PacketHandlerRegistry(packetTypeRegistry, logger);
         var packetHelper = new PacketHelper(packetTypeRegistry, packetHandlerRegistry);
-        _ = FactoryRegistry<IPluginBootstrapContext>.RegisterFactory(PluginBootstrapContext.CreateFactory(args, parser, packetHelper));
+        _ = FactoryRegistry<IPluginBootstrapContext>.RegisterFactory(PluginBootstrapContext.CreateFactory(typeof(IClientPluginContext), args, parser, packetHelper));
 
         if (!string.IsNullOrWhiteSpace(commandLineOptions.WorkingDirectory))
         {
