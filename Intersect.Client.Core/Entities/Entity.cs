@@ -608,7 +608,12 @@ public partial class Entity : IEntity
     //Returns the amount of time required to traverse 1 tile
     public virtual float GetMovementTime()
     {
-        var time = 1000f / (float)(1 + Math.Log(Stat[(int)Enums.Stat.Speed]));
+        // Cálculo baseado no nível (similar ao Tibia)
+        // Base de 1000ms, reduzindo conforme o nível aumenta
+        // Fórmula: 1000 - (Level * 10) com um mínimo de 200ms
+        var baseSpeed = Math.Max(200, 500 - (Level * 10));
+        var time = (float)baseSpeed;
+        
         if (DirectionFacing > Direction.Right)
         {
             time *= MathHelper.UnitDiagonalLength;
@@ -1937,10 +1942,14 @@ public partial class Entity : IEntity
 
         if (hpForeground != null)
         {
+            // Calcular a cor baseada na porcentagem de HP
+            var hpColor = GetHpBarColor(hpfillRatio);
+
             Graphics.DrawGameTexture(
                 hpForeground,
                 new FloatRect(0, 0, hpFillWidth, hpForeground.Height),
-                new FloatRect(x - foregroundBoundingTexture.Width / 2, y - hpForeground.Height / 2, hpFillWidth, hpForeground.Height), Color.White
+                new FloatRect(x - foregroundBoundingTexture.Width / 2, y - hpForeground.Height / 2, hpFillWidth, hpForeground.Height),
+                hpColor
             );
         }
 
@@ -1953,6 +1962,73 @@ public partial class Entity : IEntity
                 new FloatRect(x - foregroundBoundingTexture.Width / 2 + hpFillWidth, y - shieldForeground.Height / 2, shieldFillWidth, shieldForeground.Height), Color.White
             );
         }
+    }
+
+    /// <summary>
+    /// Calcula a cor da barra de HP baseada na porcentagem de vida restante com efeito degradê.
+    /// </summary>
+    /// <param name="hpPercentage">Porcentagem de HP (0.0 a 1.0)</param>
+    /// <returns>Cor calculada com base na porcentagem de HP</returns>
+    private Color GetHpBarColor(float hpPercentage)
+    {
+        // Converter para porcentagem 0-100
+        var percentage = hpPercentage * 100f;
+
+        // Definir as cores para cada faixa
+        Color color;
+
+        if (percentage >= 100f)
+        {
+            // 100% - Verde puro
+            color = new Color(255, 0, 255, 0);
+        }
+        else if (percentage >= 70f)
+        {
+            // 70-100% - Degradê de Verde para Amarelo
+            var t = (percentage - 70f) / 30f; // Normalizar entre 0 e 1
+            var r = (byte)(255 * (1 - t)); // De 255 (amarelo) para 0 (verde)
+            var g = 255;
+            var b = 0;
+            color = new Color(255, r, g, b);
+        }
+        else if (percentage >= 50f)
+        {
+            // 50-70% - Degradê de Amarelo para Laranja
+            var t = (percentage - 50f) / 20f; // Normalizar entre 0 e 1
+            var r = 255;
+            var g = (byte)(255 - (100 * (1 - t))); // De 155 (laranja) para 255 (amarelo)
+            var b = 0;
+            color = new Color(255, r, g, b);
+        }
+        else if (percentage >= 20f)
+        {
+            // 20-50% - Degradê de Laranja para Vermelho
+            var t = (percentage - 20f) / 30f; // Normalizar entre 0 e 1
+            var r = 255;
+            var g = (byte)(155 * t); // De 0 (vermelho) para 155 (laranja)
+            var b = 0;
+            color = new Color(255, r, g, b);
+        }
+        else if (percentage >= 10f)
+        {
+            // 10-20% - Degradê de Vermelho para Vermelho Médio
+            var t = (percentage - 10f) / 10f; // Normalizar entre 0 e 1
+            var r = (byte)(200 + (55 * t)); // De 200 para 255
+            var g = 0;
+            var b = 0;
+            color = new Color(255, r, g, b);
+        }
+        else
+        {
+            // <10% - Degradê para Vermelho Escuro
+            var t = percentage / 10f; // Normalizar entre 0 e 1
+            var r = (byte)(120 + (80 * t)); // De 120 (vermelho escuro) para 200
+            var g = 0;
+            var b = 0;
+            color = new Color(255, r, g, b);
+        }
+
+        return color;
     }
 
     public bool ShouldDrawCastingBar => ShouldDraw && IsCasting && LatestMap != default;

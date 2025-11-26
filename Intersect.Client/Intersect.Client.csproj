@@ -19,6 +19,7 @@
 		<AppDesignerFolder>Properties</AppDesignerFolder>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<FileAlignment>512</FileAlignment>
+		<AssemblyTitle>Rebornia</AssemblyTitle>
 	</PropertyGroup>
 
 	<ItemGroup>

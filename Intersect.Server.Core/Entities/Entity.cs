@@ -1039,7 +1039,12 @@ public abstract partial class Entity : IEntity
     //Returns the amount of time required to traverse 1 tile
     public virtual float GetMovementTime()
     {
-        var time = 1000f / (float)(1 + Math.Log(Stat[(int)Enums.Stat.Speed].Value()));
+        // Cálculo baseado no nível (similar ao Tibia)
+        // Base de 1000ms, reduzindo conforme o nível aumenta
+        // Fórmula: 1000 - (Level * 10) com um mínimo de 200ms
+        var baseSpeed = Math.Max(200, 500 - (Level * 10));
+        var time = (float)baseSpeed;
+        
         if (Dir > Direction.Right)
         {
             time *= MathHelper.UnitDiagonalLength;
