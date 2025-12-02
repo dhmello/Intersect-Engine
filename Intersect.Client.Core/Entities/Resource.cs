@@ -34,6 +34,11 @@ public partial class Resource : Entity, IResource
     private readonly int _tileHeight = Options.Instance.Map.TileHeight;
     private readonly int _mapHeight = Options.Instance.Map.MapHeight;
 
+    // Sistema de transparência quando o jogador passa atrás
+    private float _currentTransparency = 1.0f;
+    private const float TransparencyWhenPlayerBehind = 0.4f; // 40% de opacidade
+    private const float TransparencyTransitionSpeed = 0.1f; // Velocidade da transição
+
     /// <inheritdoc />
     public override bool CanBeAttacked => !IsDead;
 
@@ -320,6 +325,9 @@ public partial class Resource : Entity, IResource
             return true;
         }
 
+        // Atualizar transparência baseado na posição do jogador
+        UpdateTransparency();
+
         var result = base.Update();
         if (!result)
         {
@@ -330,6 +338,40 @@ public partial class Resource : Entity, IResource
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Atualiza a transparência do recurso baseado na posição do jogador.
+    /// Se o jogador estiver atrás do recurso, ele fica semi-transparente.
+    /// </summary>
+    private void UpdateTransparency()
+    {
+        var targetTransparency = 1.0f;
+
+        // Verificar se o jogador existe e está no mesmo mapa
+        if (Globals.Me != null && Globals.Me.MapId == MapId)
+        {
+            // Verificar se o jogador está na mesma posição ou atrás do recurso (Y menor ou igual)
+            if (Globals.Me.Y <= Y && Globals.Me.X == X)
+            {
+                targetTransparency = TransparencyWhenPlayerBehind;
+            }
+            // Também considerar se o jogador está em tiles adjacentes atrás
+            else if (Globals.Me.Y < Y && Math.Abs(Globals.Me.X - X) <= 1)
+            {
+                targetTransparency = TransparencyWhenPlayerBehind;
+            }
+        }
+
+        // Transição suave para a transparência alvo
+        if (_currentTransparency < targetTransparency)
+        {
+            _currentTransparency = Math.Min(_currentTransparency + TransparencyTransitionSpeed, targetTransparency);
+        }
+        else if (_currentTransparency > targetTransparency)
+        {
+            _currentTransparency = Math.Max(_currentTransparency - TransparencyTransitionSpeed, targetTransparency);
+        }
     }
 
     public override HashSet<Entity>? DetermineRenderOrder(HashSet<Entity>? renderList, IMapInstance? map)
@@ -525,6 +567,10 @@ public partial class Resource : Entity, IResource
             return;
         }
 
-        Graphics.DrawGameTexture(Texture, _renderBoundsSrc, _renderBoundsDest, Color.White);
+        // Aplicar transparência baseado na posição do jogador
+        var alpha = (byte)(_currentTransparency * 255);
+        var renderColor = new Color(alpha, 255, 255, 255);
+
+        Graphics.DrawGameTexture(Texture, _renderBoundsSrc, _renderBoundsDest, renderColor);
     }
 }
