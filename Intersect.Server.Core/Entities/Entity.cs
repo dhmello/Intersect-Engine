@@ -1040,10 +1040,18 @@ public abstract partial class Entity : IEntity
     public virtual float GetMovementTime()
     {
         // Cálculo baseado no nível (similar ao Tibia)
-        // Base de 1000ms, reduzindo conforme o nível aumenta
-        // Fórmula: 1000 - (Level * 10) com um mínimo de 200ms
-        var baseSpeed = Math.Max(200, 500 - (Level * 10));
-        var time = (float)baseSpeed;
+        // Base de 500ms, reduzindo conforme o nível aumenta
+        var baseSpeed = Math.Max(200, 500 - (Level * 5));
+        
+        // Adicionar bônus de velocidade do atributo Speed
+        // Quanto maior o Speed, menor o tempo de movimento
+        var speedStat = Stat[(int)Enums.Stat.Speed].Value();
+        var speedBonus = speedStat > 0 ? (speedStat * 2f) : 0f; // Cada ponto de Speed reduz 2ms
+        
+        var time = (float)(baseSpeed - speedBonus);
+        
+        // Garantir que o tempo não fique menor que 100ms
+        time = Math.Max(100f, time);
         
         if (Dir > Direction.Right)
         {
