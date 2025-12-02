@@ -29,7 +29,7 @@ public partial class CharacterWindow
 
     Button mAddMagicResistBtn;
 
-    Button mAddSpeedBtn;
+    // Speed button removed - Speed is now a passive stat
 
     //Stats
     Label mAttackLabel;
@@ -130,9 +130,8 @@ public partial class CharacterWindow
         mAddDefenseBtn.Clicked += _addDefenseBtn_Clicked;
 
         mSpeedLabel = new Label(mCharacterWindow, "SpeedLabel");
-        mAddSpeedBtn = new Button(mCharacterWindow, "IncreaseSpeedButton");
-        mAddSpeedBtn.Clicked += _addSpeedBtn_Clicked;
-
+        // Speed is now a passive stat - tooltip will be set in Update()
+        
         mAbilityPwrLabel = new Label(mCharacterWindow, "AbilityPowerLabel");
         mAddAbilityPwrBtn = new Button(mCharacterWindow, "IncreaseAbilityPowerButton");
         mAddAbilityPwrBtn.Clicked += _addAbilityPwrBtn_Clicked;
@@ -169,11 +168,6 @@ public partial class CharacterWindow
     void _addAbilityPwrBtn_Clicked(Base sender, MouseButtonState arguments)
     {
         PacketSender.SendUpgradeStat((int) Stat.AbilityPower);
-    }
-
-    void _addSpeedBtn_Clicked(Base sender, MouseButtonState arguments)
-    {
-        PacketSender.SendUpgradeStat((int) Stat.Speed);
     }
 
     void _addDefenseBtn_Clicked(Base sender, MouseButtonState arguments)
@@ -334,6 +328,9 @@ public partial class CharacterWindow
                 Globals.Me.Stat[(int)Stat.Speed]
             )
         );
+        
+        // Set tooltip for Speed label indicating it's a passive stat
+        mSpeedLabel.SetToolTipText(Strings.Character.SpeedPassiveTooltip);
 
         mPointsLabel.SetText(Strings.Character.Points.ToString(Globals.Me.StatPoints));
         mAddAbilityPwrBtn.IsHidden = Globals.Me.StatPoints == 0 ||
@@ -348,9 +345,8 @@ public partial class CharacterWindow
         mAddMagicResistBtn.IsHidden = Globals.Me.StatPoints == 0 ||
                                       Globals.Me.Stat[(int) Stat.MagicResist] == Options.Instance.Player.MaxStat;
 
-        mAddSpeedBtn.IsHidden =
-            Globals.Me.StatPoints == 0 || Globals.Me.Stat[(int) Stat.Speed] == Options.Instance.Player.MaxStat;
-
+        // Speed button is always hidden - Speed is a passive stat based on level and equipment
+        
         UpdateEquippedItems();
     }
 
