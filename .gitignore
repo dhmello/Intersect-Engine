@@ -221,3 +221,4 @@ packages/
 .local/
 
 Custom*.props
+vendor/dockpanelsuite
