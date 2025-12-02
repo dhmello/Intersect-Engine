@@ -664,6 +664,9 @@ public static partial class Strings
         public static LocalizedString Points = @"Points: {00}";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString SpeedPassiveTooltip = @"Speed is a passive stat increased by your level and equipment.";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static LocalizedString StatLabelValue = @"{00}: {01}";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
