@@ -1391,9 +1391,11 @@ public partial class Player : Entity
             TakeExperience(-amount);
             return;
         }
+        double expPercent = Math.Round((double)(100 * amount) / GetExperienceToNextLevel(this.Level));
+
         var equipmentBonus = (int)Math.Round(amount * GetEquipmentBonusEffect(ItemEffect.EXP) / 100f);
         Exp += amount + equipmentBonus;
-
+        PacketSender.SendChatMsg(this, amount + " (" + expPercent + "%)" + " XP gained!", ChatMessageType.Notice, CustomColors.Alerts.Success);
         CheckLevelUp();
     }
 
@@ -1431,7 +1433,7 @@ public partial class Player : Entity
                 Exp = 0;
             }
         }
-
+        PacketSender.SendChatMsg(this, (amount) + " XP loses from death!", ChatMessageType.Notice, CustomColors.Alerts.Declined);
         AddLevels(-levelsToRemove);
     }
 
