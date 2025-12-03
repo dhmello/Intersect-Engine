@@ -31,6 +31,7 @@ using Intersect.Server.Database.PlayerData.Security;
 using Intersect.Server.Entities.Events;
 using Intersect.Server.Framework.Entities;
 using Intersect.Server.Framework.Items;
+using Intersect.Server.General;
 using Intersect.Server.Localization;
 using Intersect.Server.Maps;
 using Intersect.Server.Networking;
@@ -1469,13 +1470,21 @@ public partial class Player : Entity
                     var playerEvent = descriptor.OnDeathEvent;
                     var partyEvent = descriptor.OnDeathPartyEvent;
 
+                    // Calcular XP base automaticamente baseado no nível do NPC
+                    var baseNpcExperience = NpcExperienceCalculator.GetNpcExperience(descriptor);
+
+                    // Aplicar penalidade de XP baseada na diferença de nível (sistema Ragnarok)
+                    var levelDifference = Level - npc.Level;
+                    var experienceMultiplier = CalculateExperiencePenalty(levelDifference);
+                    var npcExperience = (long)(baseNpcExperience * experienceMultiplier);
+
                     // If in party, split the exp.
                     if (Party != null && Party.Count > 0)
                     {
                         var partyMembersInXpRange = Party.Where(partyMember => partyMember.InRangeOf(this, Options.Instance.Party.SharedXpRange)).ToArray();
                         float bonusExp = Options.Instance.Party.BonusExperiencePercentPerMember / 100;
                         var multiplier = 1.0f + (partyMembersInXpRange.Length * bonusExp);
-                        var partyExperience = (int)(descriptor.Experience * multiplier) / partyMembersInXpRange.Length;
+                        var partyExperience = (int)(npcExperience * multiplier) / partyMembersInXpRange.Length;
                         foreach (var partyMember in partyMembersInXpRange)
                         {
                             partyMember.GiveExperience(partyExperience);
@@ -1495,7 +1504,7 @@ public partial class Player : Entity
                     }
                     else
                     {
-                        GiveExperience(descriptor.Experience);
+                        GiveExperience(npcExperience);
                         UpdateQuestKillTasks(entity);
                     }
 
@@ -1518,6 +1527,47 @@ public partial class Player : Entity
                     break;
                 }
         }
+    }
+
+    /// <summary>
+    /// Calcula a penalidade de experiência baseada na diferença de nível entre jogador e NPC (sistema Ragnarok)
+    /// </summary>
+    /// <param name="levelDifference">Diferença de nível (Level do Player - Level do NPC)</param>
+    /// <returns>Multiplicador de experiência (0.15 a 1.0)</returns>
+    private float CalculateExperiencePenalty(int levelDifference)
+    {
+        // Se o NPC é mais forte ou igual ao jogador, sem penalidade
+        if (levelDifference <= 0)
+        {
+            return 1.0f;
+        }
+
+        // Penalidade progressiva baseada no Ragnarok
+        return levelDifference switch
+        {
+            <= 10 => 1.0f,                    // Sem penalidade até +10
+            11 => 0.88f,                      // -12%
+            12 => 0.87f,                      // -13%
+            13 => 0.86f,                      // -14%
+            14 => 0.85f,                      // -15%
+            15 => 0.88f,                      // -12% (conforme tabela)
+            16 => 0.87f,                      // -13%
+            17 => 0.86f,                      // -14%
+            18 => 0.85f,                      // -15%
+            19 => 0.88f,                      // -12%
+            20 => 0.80f,                      // -20%
+            21 => 0.75f,                      // -25%
+            22 => 0.70f,                      // -30%
+            23 => 0.65f,                      // -35%
+            24 => 0.60f,                      // -40%
+            25 => 0.55f,                      // -45%
+            26 => 0.50f,                      // -50%
+            27 => 0.45f,                      // -55%
+            28 => 0.40f,                      // -60%
+            29 => 0.35f,                      // -35% (conforme tabela)
+            30 => 0.30f,                      // -70%
+            >= 31 => 0.15f,                   // -85% para diferenças muito grandes
+        };
     }
 
     public void UpdateQuestKillTasks(Entity en)

@@ -1674,8 +1674,28 @@ public partial class Entity : IEntity
             return;
         }
 
+        // Detectar se é um BOSS e remover a tag do nome
+        var displayName = Name;
+        var isBoss = Name.Contains("[BOSS]", StringComparison.OrdinalIgnoreCase);
+
+        if (isBoss)
+        {
+            // Remover a tag [BOSS] do nome exibido (case-insensitive)
+            displayName = System.Text.RegularExpressions.Regex.Replace(
+                Name,
+                @"\[BOSS\]",
+                "",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            ).Trim();
+
+            // Aplicar cores de BOSS
+            textColor = new Color(255, 255, 0, 0);        // Vermelho puro
+            backgroundColor = new Color(255, 0, 0, 0);    // Preto sólido
+            borderColor = new Color(255, 0, 0, 0);        // Borda preta
+        }
+
         //Check for npc colors
-        if (textColor == null)
+        if (!isBoss && textColor == null)
         {
             var color = Aggression switch
             {
@@ -1704,11 +1724,11 @@ public partial class Entity : IEntity
             backgroundColor = Color.Transparent;
         }
 
-        var name = Name;
+        var name = displayName;
         if ((this is Player && Options.Instance.Player.ShowLevelByName) ||
             (Type == EntityType.GlobalEntity && Options.Instance.Npc.ShowLevelByName))
         {
-            name = Strings.GameWindow.EntityNameAndLevel.ToString(Name, Level);
+            name = Strings.GameWindow.EntityNameAndLevel.ToString(displayName, Level);
         }
 
         var textSize = Graphics.Renderer.MeasureText(name, Graphics.EntityNameFont, Graphics.EntityNameFontSize, 1);
