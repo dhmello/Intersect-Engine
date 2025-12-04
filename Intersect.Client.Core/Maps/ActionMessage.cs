@@ -45,7 +45,7 @@ public partial class ActionMessage : IActionMessage
     private IGameTexture? _criticalTexture = null;
     private bool _texturesLoaded = false;
     private bool _isCritical = false;
-    private float _criticalRotation = 0f; // Rotação aleatória do balão crítico
+    private float _criticalRotation = 0f; // Rotação base do balão crítico
 
     public ActionMessage(MapInstance map, int x, int y, string text, Color color)
     {
@@ -63,29 +63,27 @@ public partial class ActionMessage : IActionMessage
         var hasCriticalText = text.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase) || 
                                text.Contains("CRIT", StringComparison.OrdinalIgnoreCase);
         
-        // Se a mensagem contém "CRITICAL" mas NÃO tem números, é a mensagem de aviso de crítico
-        // Então marcamos que a PRÓXIMA mensagem de dano deve ser crítica
         if (hasCriticalText && !hasNumbers)
         {
             _nextDamageIsCritical = true;
             _criticalFlagTime = Timing.Global.MillisecondsUtc;
-            // Esta mensagem não será renderizada (não tem números)
             return;
         }
         
-        // Se esta mensagem tem números e o flag de crítico está ativo E não expirou
         if (hasNumbers && _nextDamageIsCritical && 
             (Timing.Global.MillisecondsUtc - _criticalFlagTime) < CRITICAL_FLAG_TIMEOUT)
         {
             _isCritical = true;
-            _nextDamageIsCritical = false; // Resetar o flag
+            _nextDamageIsCritical = false;
             
-            // Gerar rotação aleatória
+            // Rotação base aleatória entre -15 e +15 graus
             _criticalRotation = (float)(Globals.Random.NextDouble() * MAX_CRITICAL_ROTATION * 2 - MAX_CRITICAL_ROTATION);
+
+            // Tocar som de crítico (nome do recurso em resources/sounds sem extensão)
+            Audio.AddGameSound("critical", false);
         }
         else
         {
-            // Resetar flag se expirou
             if ((Timing.Global.MillisecondsUtc - _criticalFlagTime) >= CRITICAL_FLAG_TIMEOUT)
             {
                 _nextDamageIsCritical = false;
@@ -204,11 +202,14 @@ public partial class ActionMessage : IActionMessage
         // Desenhar imagem de crítico atrás dos números se aplicável (CAMADA 1)
         if (_isCritical && _criticalTexture != null)
         {
-            // Centralizar a imagem critical.png
             var criticalX = baseX - (_criticalTexture.Width / 2f);
             var criticalY = baseY - (_criticalTexture.Height / 2f);
 
-            // Desenhar com rotação aleatória
+            // Rotação dinâmica: oscila durante a animação para dar "vida" ao balão
+            var oscillation = (float)(Math.Sin(progress * Math.PI * 2) * (MAX_CRITICAL_ROTATION * 0.5f));
+            var rotation = _criticalRotation + oscillation;
+
+            // Garantir que a rotação seja aplicada corretamente
             Intersect.Client.Core.Graphics.DrawGameTexture(
                 _criticalTexture,
                 new FloatRect(0, 0, _criticalTexture.Width, _criticalTexture.Height),
@@ -217,7 +218,7 @@ public partial class ActionMessage : IActionMessage
                 null, // renderTarget
                 GameBlendModes.None, // blendMode
                 null, // shader
-                _criticalRotation // rotação em graus
+                rotation // rotação em graus
             );
         }
 
