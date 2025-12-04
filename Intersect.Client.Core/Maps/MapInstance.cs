@@ -1607,32 +1607,16 @@ public partial class MapInstance : MapDescriptor, IGameObject<Guid, MapInstance>
     {
         for (var n = ActionMessages.Count - 1; n > -1; n--)
         {
-            var actionMessage = ActionMessages[n];
-            var x = (X + actionMessage.X * _tileWidth + actionMessage.XOffset);
-            var y = Y + actionMessage.Y * _tileHeight - _tileHeight * 2 *
-                (1000 - (int)(actionMessage.TransmissionTimer - Timing.Global.MillisecondsUtc)) / 1000;
-            var textWidth = Graphics.Renderer.MeasureText(
-                    actionMessage.Text,
-                    Graphics.ActionMsgFont,
-                    Graphics.ActionMsgFontSize,
-                    1
-                )
-                .X;
+            var actionMessage = ActionMessages[n] as ActionMessage;
+            if (actionMessage == null)
+            {
+                continue;
+            }
 
-            Graphics.Renderer.DrawString(
-                actionMessage.Text,
-                Graphics.ActionMsgFont,
-                Graphics.ActionMsgFontSize,
-                x - textWidth / 2f,
-                y,
-                1,
-                actionMessage.Color,
-                true,
-                null,
-                new Color(40, 40, 40)
-            );
+            // Desenhar usando o novo sistema de imagens
+            actionMessage.Draw(X, Y, _tileWidth, _tileHeight);
 
-            //Try to remove
+            // Tentar remover
             actionMessage.TryRemove();
         }
     }
