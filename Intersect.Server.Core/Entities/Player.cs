@@ -1461,7 +1461,6 @@ public partial class Player : Entity
 
     #endregion
 
-    //Combat
     public override void KilledEntity(Entity entity)
     {
         switch (entity)
@@ -1472,44 +1471,84 @@ public partial class Player : Entity
                     var playerEvent = descriptor.OnDeathEvent;
                     var partyEvent = descriptor.OnDeathPartyEvent;
 
-                    // Calcular XP base automaticamente baseado no nível do NPC
+                    // Calcular XP base usando o calculador automático
                     var baseNpcExperience = NpcExperienceCalculator.GetNpcExperience(descriptor);
 
-                    // Aplicar penalidade de XP baseada na diferença de nível (sistema Ragnarok)
-                    var levelDifference = Level - npc.Level;
-                    var experienceMultiplier = CalculateExperiencePenalty(levelDifference);
-                    var npcExperience = (long)(baseNpcExperience * experienceMultiplier);
-
-                    // If in party, split the exp.
-                    if (Party != null && Party.Count > 0)
+                    if (baseNpcExperience <= 0)
                     {
-                        var partyMembersInXpRange = Party.Where(partyMember => partyMember.InRangeOf(this, Options.Instance.Party.SharedXpRange)).ToArray();
-                        float bonusExp = Options.Instance.Party.BonusExperiencePercentPerMember / 100;
-                        var multiplier = 1.0f + (partyMembersInXpRange.Length * bonusExp);
-                        var partyExperience = (int)(npcExperience * multiplier) / partyMembersInXpRange.Length;
-                        foreach (var partyMember in partyMembersInXpRange)
+                        return; // Se NPC não dá XP, pular processamento
+                    }
+
+                    // Sistema anti-power leveling com penalidade individual por nível
+                    if (IsInParty && Party?.Count > 1)
+                    {
+                        // Filtrar membros elegíveis dentro do alcance e mesma instância
+                        var eligibleMembers = Party
+                            .Where(member => member != null &&
+                                   member.MapId == MapId &&
+                                   member.MapInstanceId == MapInstanceId &&
+                                   member.InRangeOf(this, Options.Instance.Party.SharedXpRange))
+                            .ToList();
+
+                        // Incluir o killer se não estiver na lista
+                        if (!eligibleMembers.Contains(this))
                         {
-                            partyMember.GiveExperience(partyExperience);
-                            partyMember.UpdateQuestKillTasks(entity);
+                            eligibleMembers.Add(this);
                         }
 
-                        if (partyEvent != null)
+                        if (eligibleMembers.Count > 0)
                         {
-                            foreach (var partyMember in Party)
+                            // Aplicar bônus de grupo ao total
+                            var groupBonus = 1.0f + ((eligibleMembers.Count - 1) * (Options.Instance.Party.BonusExperiencePercentPerMember / 100.0f));
+                            var totalGroupExp = (long)(baseNpcExperience * groupBonus);
+
+                            // Distribuir XP igualmente, mas aplicar penalidade individual
+                            var baseSharePerMember = totalGroupExp / eligibleMembers.Count;
+
+                            foreach (var member in eligibleMembers)
                             {
-                                if ((Options.Instance.Party.NpcDeathCommonEventStartRange <= 0 || partyMember.InRangeOf(this, Options.Instance.Party.NpcDeathCommonEventStartRange)) && !(partyMember == this && playerEvent != null))
+                                // Calcular penalidade baseada na diferença de nível individual
+                                var levelDifference = npc.Level - member.Level; // NPC level - Player level
+                                var experienceMultiplier = CalculateAntiPowerLevelingPenalty(levelDifference);
+                                var memberExperience = (long)(baseSharePerMember * experienceMultiplier);
+
+                                if (memberExperience > 0)
                                 {
-                                    partyMember.EnqueueStartCommonEvent(partyEvent);
+                                    member.GiveExperience(memberExperience);
+                                }
+                                member.UpdateQuestKillTasks(entity);
+                            }
+
+                            // Eventos de party
+                            if (partyEvent != null)
+                            {
+                                foreach (var partyMember in Party)
+                                {
+                                    if ((Options.Instance.Party.NpcDeathCommonEventStartRange <= 0 ||
+                                         partyMember.InRangeOf(this, Options.Instance.Party.NpcDeathCommonEventStartRange)) &&
+                                        !(partyMember == this && playerEvent != null))
+                                    {
+                                        partyMember.EnqueueStartCommonEvent(partyEvent);
+                                    }
                                 }
                             }
                         }
                     }
                     else
                     {
-                        GiveExperience(npcExperience);
+                        // Solo: aplicar penalidade baseada no próprio nível
+                        var levelDifference = npc.Level - Level; // NPC level - Player level
+                        var experienceMultiplier = CalculateAntiPowerLevelingPenalty(levelDifference);
+                        var soloExperience = (long)(baseNpcExperience * experienceMultiplier);
+
+                        if (soloExperience > 0)
+                        {
+                            GiveExperience(soloExperience);
+                        }
                         UpdateQuestKillTasks(entity);
                     }
 
+                    // Evento individual do player
                     if (playerEvent != null)
                     {
                         EnqueueStartCommonEvent(playerEvent);
@@ -1525,50 +1564,56 @@ public partial class Player : Entity
                     {
                         EnqueueStartCommonEvent(descriptor.Event);
                     }
-
                     break;
                 }
         }
     }
 
     /// <summary>
-    /// Calcula a penalidade de experiência baseada na diferença de nível entre jogador e NPC (sistema Ragnarok)
+    /// Calcula a penalidade anti-power leveling baseada na diferença de nível entre NPC e jogador.
+    /// Esta função impede que jogadores de baixo nível recebam XP total de NPCs muito mais fortes.
     /// </summary>
-    /// <param name="levelDifference">Diferença de nível (Level do Player - Level do NPC)</param>
-    /// <returns>Multiplicador de experiência (0.15 a 1.0)</returns>
-    private float CalculateExperiencePenalty(int levelDifference)
+    /// <param name="levelDifference">Diferença de nível (NPC Level - Player Level)</param>
+    /// <returns>Multiplicador de experiência (0.05 a 1.0)</returns>
+    private float CalculateAntiPowerLevelingPenalty(int levelDifference)
     {
-        // Se o NPC é mais forte ou igual ao jogador, sem penalidade
+        // Se o jogador é igual ou superior ao NPC, sem penalidade máxima
         if (levelDifference <= 0)
         {
+            // Pequena redução para NPCs muito abaixo do nível do jogador
+            if (levelDifference < -10)
+            {
+                var penalty = Math.Abs(levelDifference) - 10;
+                var reduction = penalty * 0.05f; // 5% por nível além de -10
+                return Math.Max(0.1f, 1.0f - reduction);
+            }
             return 1.0f;
         }
 
-        // Penalidade progressiva baseada no Ragnarok
+        // Penalidade progressiva mais severa para prevenir power leveling
+        // Quanto maior a diferença, menor a XP recebida
         return levelDifference switch
         {
-            <= 10 => 1.0f,                    // Sem penalidade até +10
-            11 => 0.88f,                      // -12%
-            12 => 0.87f,                      // -13%
-            13 => 0.86f,                      // -14%
-            14 => 0.85f,                      // -15%
-            15 => 0.88f,                      // -12% (conforme tabela)
-            16 => 0.87f,                      // -13%
-            17 => 0.86f,                      // -14%
-            18 => 0.85f,                      // -15%
-            19 => 0.88f,                      // -12%
-            20 => 0.80f,                      // -20%
-            21 => 0.75f,                      // -25%
-            22 => 0.70f,                      // -30%
-            23 => 0.65f,                      // -35%
-            24 => 0.60f,                      // -40%
-            25 => 0.55f,                      // -45%
-            26 => 0.50f,                      // -50%
-            27 => 0.45f,                      // -55%
-            28 => 0.40f,                      // -60%
-            29 => 0.35f,                      // -35% (conforme tabela)
-            30 => 0.30f,                      // -70%
-            >= 31 => 0.15f,                   // -85% para diferenças muito grandes
+            <= 2 => 1.0f,                        // Sem penalidade até +2 níveis
+            3 => 0.95f,                          // -5%
+            4 => 0.90f,                          // -10%
+            5 => 0.85f,                          // -15%
+            6 => 0.75f,                          // -25%
+            7 => 0.65f,                          // -35%
+            8 => 0.55f,                          // -45%
+            9 => 0.45f,                          // -55%
+            10 => 0.35f,                         // -65%
+            11 => 0.30f,                         // -70%
+            12 => 0.25f,                         // -75%
+            13 => 0.20f,                         // -80%
+            14 => 0.15f,                         // -85%
+            15 => 0.12f,                         // -88%
+            16 => 0.10f,                         // -90%
+            17 => 0.08f,                         // -92%
+            18 => 0.07f,                         // -93%
+            19 => 0.06f,                         // -94%
+            20 => 0.05f,                         // -95%
+            >= 21 => 0.05f,                      // -95% para diferenças extremas (mínimo 5%)
         };
     }
 
