@@ -63,24 +63,9 @@ public partial class Npc : Entity
 
     public bool Despawnable;
 
-    //Moving - Enhanced autonomy
+    //Moving
     public long LastRandomMove;
     private byte _randomMoveRange;
-    
-    // Individual movement timing for each NPC
-    private long _individualMovementDelay;
-    private long _nextMovementTime;
-    private int _movementVariation;
-    
-    // Movement pattern tracking for more complex behaviors
-    private int _consecutiveMovesInDirection;
-    private int _maxConsecutiveMoves;
-    private Direction? _currentMovementPattern;
-    
-    // Random pause system for natural behavior
-    private long _nextPauseTime;
-    private long _pauseDuration;
-    private bool _isPaused;
 
     //Pathfinding
     private Pathfinder mPathFinder;
@@ -167,9 +152,6 @@ public partial class Npc : Entity
 
         Range = (byte)npcDescriptor.SightRange;
         mPathFinder = new Pathfinder(this);
-        
-        // Initialize individual movement characteristics for this NPC
-        InitializeMovementAutonomy();
     }
 
     public NPCDescriptor Descriptor { get; private set; }
@@ -261,7 +243,8 @@ public partial class Npc : Entity
                 {
                     Target = entity;
                 }
-            }            else if (entity is Player player)
+            }
+            else if (entity is Player player)
             {
                 //TODO Make sure that the npc can target the player
                 if (CanTarget(player))
@@ -1176,32 +1159,22 @@ public partial class Npc : Entity
 
                     CheckForResetLocation();
 
-                    if (targetMap != Guid.Empty || IsCasting)
+                    if (targetMap != Guid.Empty || LastRandomMove >= Timing.Global.Milliseconds || IsCasting)
                     {
                         return;
                     }
 
-                    // Handle different movement types
                     switch (Descriptor.Movement)
                     {
                         case (int)NpcMovement.StandStill:
-                            // Still apply individual timing even when standing still
-                            if (Timing.Global.Milliseconds >= _nextMovementTime)
-                            {
-                                _nextMovementTime = Timing.Global.Milliseconds + Randomization.Next(1000, 3000);
-                            }
+                            LastRandomMove = Timing.Global.Milliseconds + Randomization.Next(1000, 3000);
                             return;
-                            
                         case (int)NpcMovement.TurnRandomly:
-                            if (Timing.Global.Milliseconds >= _nextMovementTime)
-                            {
-                                ChangeDir(Randomization.NextDirection());
-                                _nextMovementTime = Timing.Global.Milliseconds + _individualMovementDelay + Randomization.Next(500, 2500);
-                            }
+                            ChangeDir(Randomization.NextDirection());
+                            LastRandomMove = Timing.Global.Milliseconds + Randomization.Next(1000, 3000);
                             return;
-                            
                         case (int)NpcMovement.MoveRandomly:
-                            MoveRandomlyEnhanced();
+                            MoveRandomly();
                             break;
                     }
 
@@ -1276,140 +1249,6 @@ public partial class Npc : Entity
     }
 
     /// <summary>
-    /// Initialize unique movement characteristics for this NPC instance
-    /// </summary>
-    private void InitializeMovementAutonomy()
-    {
-        // Give each NPC a unique base movement delay (500-1500ms variation)
-        _individualMovementDelay = Randomization.Next(500, 1500);
-        
-        // Set initial next movement time with random offset so NPCs don't move simultaneously
-        _nextMovementTime = Timing.Global.Milliseconds + Randomization.Next(0, 2000);
-        
-        // Movement pattern variation (how many tiles to move in one direction)
-        _movementVariation = Randomization.Next(2, 8);
-        _maxConsecutiveMoves = Randomization.Next(3, 12);
-        _consecutiveMovesInDirection = 0;
-        
-        // Random pause system (NPCs will occasionally pause)
-        _nextPauseTime = Timing.Global.Milliseconds + Randomization.Next(5000, 15000);
-        _pauseDuration = 0;
-        _isPaused = false;
-    }
-
-    /// <summary>
-    /// Enhanced random movement with smoother, more varied patterns
-    /// </summary>
-    private void MoveRandomlyEnhanced()
-    {
-        var currentTime = Timing.Global.Milliseconds;
-        
-        // Check if NPC should be paused
-        if (_isPaused)
-        {
-            if (currentTime >= _nextMovementTime)
-            {
-                _isPaused = false;
-                _nextPauseTime = currentTime + Randomization.Next(5000, 20000);
-                _nextMovementTime = currentTime + _individualMovementDelay + Randomization.Next(-200, 200);
-            }
-            return;
-        }
-        
-        // Random pause activation
-        if (currentTime >= _nextPauseTime && Randomization.Next(0, 100) < 15)
-        {
-            _isPaused = true;
-            _pauseDuration = Randomization.Next(500, 2500);
-            _nextMovementTime = currentTime + _pauseDuration;
-            
-            // 50% chance to turn randomly while paused
-            if (Randomization.Next(0, 100) < 50)
-            {
-                ChangeDir(Randomization.NextDirection());
-            }
-            return;
-        }
-        
-        // Check if it's time to move
-        if (currentTime < _nextMovementTime)
-        {
-            return;
-        }
-        
-        // Check for status effects that prevent movement
-        foreach (var status in CachedStatuses)
-        {
-            if (status.Type is SpellEffect.Stun or SpellEffect.Snare or SpellEffect.Sleep)
-            {
-                _nextMovementTime = currentTime + _individualMovementDelay;
-                return;
-            }
-        }
-        
-        // Start new movement pattern if needed
-        if (_consecutiveMovesInDirection <= 0 || _currentMovementPattern == null)
-        {
-            // Pick a new direction and distance to travel
-            _currentMovementPattern = Randomization.NextDirection();
-            _consecutiveMovesInDirection = Randomization.Next(_movementVariation, _maxConsecutiveMoves);
-            Dir = _currentMovementPattern.Value;
-        }
-        
-        // Try to move in current pattern direction
-        if (CanMoveInDirection(Dir))
-        {
-            Move(Dir, null);
-            _consecutiveMovesInDirection--;
-            
-            // Variable delay between moves for more natural feeling
-            var movementTime = (long)GetMovementTime();
-            var randomVariation = Randomization.Next(-100, 300);
-            _nextMovementTime = currentTime + movementTime + _individualMovementDelay + randomVariation;
-            
-            // Occasionally change direction mid-pattern for unpredictability
-            if (Randomization.Next(0, 100) < 10)
-            {
-                var directionShift = Randomization.Next(-1, 2); // -1, 0, or 1
-                if (directionShift != 0)
-                {
-                    var newDir = ((int)Dir + directionShift + 8) % 8;
-                    if (newDir == 0) newDir = 8;
-                    Dir = (Direction)newDir;
-                    _currentMovementPattern = Dir;
-                }
-            }
-        }
-        else
-        {
-            // Can't move in this direction, pick a new pattern
-            _consecutiveMovesInDirection = 0;
-            _currentMovementPattern = null;
-            
-            // Try adjacent direction
-            var directions = new[]
-            {
-                Direction.Up, Direction.Down, Direction.Left, Direction.Right,
-                Direction.UpLeft, Direction.UpRight, Direction.DownLeft, Direction.DownRight
-            };
-            
-            var validDirections = directions.Where(d => CanMoveInDirection(d)).ToArray();
-            if (validDirections.Length > 0)
-            {
-                Dir = validDirections[Randomization.Next(0, validDirections.Length)];
-                _currentMovementPattern = Dir;
-                _consecutiveMovesInDirection = Randomization.Next(1, 5);
-            }
-            else
-            {
-                // No valid directions, just turn randomly
-                Dir = Randomization.NextDirection();
-                _nextMovementTime = currentTime + _individualMovementDelay + Randomization.Next(500, 1500);
-            }
-        }
-    }
-
-    /// <summary>
     /// Resets the NPCs position to be "pulled" from
     /// </summary>
     /// <param name="targetMap">For referencing the map that the enemy's target WAS on before a reset.</param>
@@ -1475,9 +1314,6 @@ public partial class Npc : Entity
                 RestoreVital((Vital)v);
             }
         }
-        
-        // Reinitialize movement autonomy with new random values
-        InitializeMovementAutonomy();
     }
 
     // Completely resets an Npc to full health and its spawnpoint if it's current chasing something.
