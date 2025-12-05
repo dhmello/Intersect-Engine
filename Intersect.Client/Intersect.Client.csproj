@@ -15,7 +15,7 @@
 		<Description>Game Client - Part of the Intersect 2D Game Creation Suite</Description>
 		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
 		<RootNamespace>Intersect.Client</RootNamespace>
-		<AssemblyName>Intersect Client</AssemblyName>
+		<AssemblyName>Client</AssemblyName>
 		<AppDesignerFolder>Properties</AppDesignerFolder>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<FileAlignment>512</FileAlignment>

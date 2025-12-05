@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
@@ -20,7 +20,7 @@
     <Description>Game Editor - Part of the Intersect 2D Game Creation Suite</Description>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <RootNamespace>Intersect.Editor</RootNamespace>
-    <AssemblyName>Intersect Editor</AssemblyName>
+    <AssemblyName>Editor</AssemblyName>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
