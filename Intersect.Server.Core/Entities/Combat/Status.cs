@@ -214,22 +214,9 @@ public partial class Status
 
     public void TryRemoveStatus()
     {
-        if (Duration <= Timing.Global.Milliseconds) //Check the timer
+        // Expira apenas por tempo; não depende mais de capacidade de Shield
+        if (Duration <= Timing.Global.Milliseconds)
         {
-            RemoveStatus();
-        }
-
-        //If shield check for out of hp
-        if (Type == SpellEffect.Shield)
-        {
-            for (var i = (int)Vital.Health; i < Enum.GetValues<Vital>().Length; i++)
-            {
-                if (Shield[i] > 0)
-                {
-                    return;
-                }
-            }
-
             RemoveStatus();
         }
     }
@@ -248,20 +235,28 @@ public partial class Status
 
     public void DamageShield(Vital vital, ref long amount)
     {
-        if (Type == SpellEffect.Shield)
+        if (Type != SpellEffect.Shield)
         {
-            Shield[(int)vital] -= amount;
-            if (Shield[(int)vital] <= 0)
-            {
-                amount = -Shield[(int)vital]; //Return piercing damage.
-                Shield[(int)vital] = 0;
-                TryRemoveStatus();
-            }
-            else
-            {
-                amount = 0; //Sheild is stronger than the damage dealt, so no piercing damage.
-            }
+            return;
         }
-    }
 
+        // Utamo Vita: enquanto o efeito estiver ativo, dano à vida consome Mana primeiro
+        if (vital == Vital.Health && amount > 0)
+        {
+            var currentMana = mEntity.GetVital(Vital.Mana);
+            if (currentMana > 0)
+            {
+                var manaConsumed = Math.Min(amount, currentMana);
+                mEntity.SetVital(Vital.Mana, currentMana - manaConsumed);
+                amount -= manaConsumed;
+
+            }
+
+            // Se sobrou dano após consumir toda a Mana, ele perfura e afeta a vida normalmente
+            // amount permanece > 0 para continuar a pipeline padrão
+            return;
+        }
+
+        // Para outros vitais, não há absorção especial; manter comportamento padrão (sem alteração)
+    }
 }
