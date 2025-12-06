@@ -11,41 +11,60 @@ namespace Intersect.Client.Maps;
 
 public partial class ActionMessage : IActionMessage
 {
-    private const float ANIMATION_DURATION = 1000f; // Duração total da animação em ms
-    private const float PEAK_HEIGHT = 60f; // Altura máxima do arco (em pixels)
-    private const float HORIZONTAL_DRIFT = 30f; // Deslocamento horizontal para criar o efeito de U
-    private const int DIGIT_SPACING = 2; // Espaçamento entre dígitos
-    private const int DIGIT_WIDTH = 16; // Largura esperada de cada dígito
-    private const int DIGIT_HEIGHT = 24; // Altura esperada de cada dígito
-    private const float CRITICAL_SCALE = 0.6f; // Escala dos números quando é crítico (60% do tamanho original)
-    private const float MAX_CRITICAL_ROTATION = 15f; // Rotação máxima do balão crítico em graus
+    private const float ANIMATION_DURATION = 1000f;
+    private const float PEAK_HEIGHT = 60f;
+    private const float HORIZONTAL_DRIFT = 30f;
+    private const int DIGIT_SPACING = 2;
+    private const int DIGIT_WIDTH = 16;
+    private const int DIGIT_HEIGHT = 24;
+    private const float CRITICAL_SCALE = 0.6f;
+    private const float STATUS_SCALE = 1.0f;
+    private const float MAX_CRITICAL_ROTATION = 15f;
+    private const float MAX_STATUS_ROTATION = 10f;
 
     // Flag global para marcar se a próxima mensagem de dano deve ser crítica
     private static bool _nextDamageIsCritical = false;
     private static long _criticalFlagTime = 0;
-    private const long CRITICAL_FLAG_TIMEOUT = 100; // 100ms de timeout para o flag de crítico
+    
+    // Flags globais para status icons (para quando vier seguido de número)
+    private static string _nextStatusIcon = string.Empty;
+    private static long _statusFlagTime = 0;
+    
+    private const long FLAG_TIMEOUT = 100; // 100ms de timeout
+
+    // Mapeamento de palavras-chave para nomes de texturas (sem o .png)
+    private static readonly Dictionary<string, string> StatusTextureMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "SILENCED", "silenced" },
+        { "STUNNED", "stunned" },
+        { "SHIELD", "shield" },
+        { "BLINDED", "blinded" },
+        { "SNARED", "snared" },
+        { "SLEEP", "sleep" },
+        { "STEALTH", "stealth" },
+        { "INVULNERABLE", "invulnerable" },
+        { "CLEANSED", "cleansed" },
+        { "TRANSFORMED", "transformed" },
+        { "TAUNT", "taunt" }
+    };
 
     public Color Color { get; init; }
-
     public IMapInstance Map { get; init; }
-
     public string Text { get; init; }
-
     public long TransmissionTimer { get; init; }
-
     public long StartTime { get; init; }
-
     public int X { get; init; }
-
     public int XOffset { get; init; }
-
     public int Y { get; init; }
 
     private List<IGameTexture> _digitTextures = new();
     private IGameTexture? _criticalTexture = null;
+    private IGameTexture? _statusTexture = null;
     private bool _texturesLoaded = false;
     private bool _isCritical = false;
-    private float _criticalRotation = 0f; // Rotação base do balão crítico
+    private bool _hasStatus = false;
+    private float _criticalRotation = 0f;
+    private float _statusRotation = 0f;
 
     public ActionMessage(MapInstance map, int x, int y, string text, Color color)
     {
@@ -58,8 +77,9 @@ public partial class ActionMessage : IActionMessage
         StartTime = Timing.Global.MillisecondsUtc;
         TransmissionTimer = StartTime + (long)ANIMATION_DURATION;
         
-        // Verificar se esta mensagem É a mensagem de "CRITICAL" (não contém números)
         var hasNumbers = text.Any(char.IsDigit);
+        
+        // Sistema de flags para CRITICAL (exatamente como está)
         var hasCriticalText = text.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase) || 
                                text.Contains("CRIT", StringComparison.OrdinalIgnoreCase);
         
@@ -71,22 +91,64 @@ public partial class ActionMessage : IActionMessage
         }
         
         if (hasNumbers && _nextDamageIsCritical && 
-            (Timing.Global.MillisecondsUtc - _criticalFlagTime) < CRITICAL_FLAG_TIMEOUT)
+            (Timing.Global.MillisecondsUtc - _criticalFlagTime) < FLAG_TIMEOUT)
         {
             _isCritical = true;
             _nextDamageIsCritical = false;
-            
-            // Rotação base aleatória entre -15 e +15 graus
             _criticalRotation = (float)(Globals.Random.NextDouble() * MAX_CRITICAL_ROTATION * 2 - MAX_CRITICAL_ROTATION);
-
-            // Tocar som de crítico (nome do recurso em resources/sounds sem extensão)
             Audio.AddGameSound("critical", false);
         }
         else
         {
-            if ((Timing.Global.MillisecondsUtc - _criticalFlagTime) >= CRITICAL_FLAG_TIMEOUT)
+            if ((Timing.Global.MillisecondsUtc - _criticalFlagTime) >= FLAG_TIMEOUT)
             {
                 _nextDamageIsCritical = false;
+            }
+        }
+        
+        // Sistema de STATUS ICONS - MODIFICADO para suportar com e sem números
+        if (!hasNumbers)
+        {
+            // Esta mensagem NÃO tem números, verificar se é uma mensagem de status
+            foreach (var statusEntry in StatusTextureMap)
+            {
+                if (text.Contains(statusEntry.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Carregar a textura do status AGORA e exibir apenas o ícone
+                    _statusTexture = Globals.ContentManager.GetTexture(TextureType.Misc, $"{statusEntry.Value}.png");
+                    if (_statusTexture != null)
+                    {
+                        _hasStatus = true;
+                        _statusRotation = (float)(Globals.Random.NextDouble() * MAX_STATUS_ROTATION * 2 - MAX_STATUS_ROTATION);
+                        _texturesLoaded = true; // Marcar como carregado mesmo sem números
+                        
+                        // TAMBÉM marcar a flag para a próxima mensagem COM números (se houver)
+                        _nextStatusIcon = statusEntry.Value;
+                        _statusFlagTime = Timing.Global.MillisecondsUtc;
+                    }
+                    return; // Exibir apenas o ícone de status
+                }
+            }
+        }
+        
+        // Se esta mensagem TEM números, verificar se deve usar o status icon (sistema de flag)
+        if (hasNumbers && !string.IsNullOrEmpty(_nextStatusIcon) && 
+            (Timing.Global.MillisecondsUtc - _statusFlagTime) < FLAG_TIMEOUT)
+        {
+            _hasStatus = true;
+            _statusRotation = (float)(Globals.Random.NextDouble() * MAX_STATUS_ROTATION * 2 - MAX_STATUS_ROTATION);
+            
+            // Carregar a textura do status
+            var statusIconName = _nextStatusIcon;
+            _nextStatusIcon = string.Empty; // Limpar a flag após usar
+            
+            _statusTexture = Globals.ContentManager.GetTexture(TextureType.Misc, $"{statusIconName}.png");
+        }
+        else
+        {
+            if ((Timing.Global.MillisecondsUtc - _statusFlagTime) >= FLAG_TIMEOUT)
+            {
+                _nextStatusIcon = string.Empty;
             }
         }
         
@@ -97,7 +159,6 @@ public partial class ActionMessage : IActionMessage
     {
         _digitTextures.Clear();
 
-        // Extrair apenas números do texto
         var numbers = new string(Text.Where(char.IsDigit).ToArray());
         
         foreach (var digit in numbers)
@@ -110,46 +171,27 @@ public partial class ActionMessage : IActionMessage
             }
         }
 
-        // Carregar textura de crítico se for um dano crítico
         if (_isCritical)
         {
             _criticalTexture = Globals.ContentManager.GetTexture(TextureType.Misc, "critical.png");
         }
 
-        _texturesLoaded = _digitTextures.Count > 0;
+        // Marcar como carregado se há dígitos OU se há status (permite exibir apenas o ícone)
+        _texturesLoaded = _digitTextures.Count > 0 || _hasStatus;
     }
 
-    /// <summary>
-    /// Calcula a posição Y com base na animação em U invertido
-    /// </summary>
-    /// <param name="progress">Progresso da animação de 0 a 1</param>
-    /// <returns>Offset Y para a posição</returns>
     private float CalculateYOffset(float progress)
     {
-        // Função parabólica para criar o efeito de U invertido
-        // y = -4 * height * progress * (progress - 1)
         return -4 * PEAK_HEIGHT * progress * (progress - 1);
     }
 
-    /// <summary>
-    /// Calcula a posição X com base na animação (movimento para esquerda)
-    /// </summary>
-    /// <param name="progress">Progresso da animação de 0 a 1</param>
-    /// <returns>Offset X para a posição</returns>
     private float CalculateXOffset(float progress)
     {
-        // Movimento suave para a esquerda
         return -HORIZONTAL_DRIFT * progress;
     }
 
-    /// <summary>
-    /// Calcula o alfa baseado no progresso (fade out no final)
-    /// </summary>
-    /// <param name="progress">Progresso da animação de 0 a 1</param>
-    /// <returns>Valor de alfa de 0 a 255</returns>
     private byte CalculateAlpha(float progress)
     {
-        // Fade out nos últimos 20% da animação
         if (progress > 0.8f)
         {
             var fadeProgress = (progress - 0.8f) / 0.2f;
@@ -158,88 +200,102 @@ public partial class ActionMessage : IActionMessage
         return 255;
     }
 
-    /// <summary>
-    /// Desenha as imagens dos dígitos com animação
-    /// </summary>
     public void Draw(int mapX, int mapY, int tileWidth, int tileHeight)
     {
-        if (!_texturesLoaded || _digitTextures.Count == 0)
+        if (!_texturesLoaded)
         {
             return;
         }
 
-        // Calcular progresso da animação (0 a 1)
         var elapsed = Timing.Global.MillisecondsUtc - StartTime;
         var progress = Math.Min(1.0f, elapsed / ANIMATION_DURATION);
 
-        // Calcular offsets da animação
         var yOffset = CalculateYOffset(progress);
         var xOffset = CalculateXOffset(progress);
         var alpha = CalculateAlpha(progress);
 
-        // Posição base centralizada (usar float para permitir cálculos precisos)
         var baseX = (float)(mapX + X * tileWidth + XOffset);
         var baseY = (float)(mapY + Y * tileHeight - (tileHeight * 2));
 
-        // Aplicar offsets de animação à posição base
         baseX += xOffset;
         baseY -= yOffset;
 
-        // Criar cor com alpha modificado
+        // Cor com alpha para números e critical (usa a cor do dano)
         var renderColor = new Color(alpha, Color.R, Color.G, Color.B);
-
-        // Determinar a escala dos números (menor quando é crítico para caber no balão)
-        var digitScale = _isCritical && _criticalTexture != null ? CRITICAL_SCALE : 1.0f;
         
-        // Calcular largura e altura dos dígitos com escala aplicada
-        var scaledDigitWidth = DIGIT_WIDTH * digitScale;
-        var scaledDigitHeight = DIGIT_HEIGHT * digitScale;
-        var scaledSpacing = DIGIT_SPACING * digitScale;
-        
-        // Calcular largura total dos dígitos escalados
-        var totalDigitsWidth = (_digitTextures.Count * scaledDigitWidth) + ((_digitTextures.Count - 1) * scaledSpacing);
+        // Cor branca com alpha para ícones de status (preserva cores originais da imagem)
+        var whiteColor = new Color(alpha, 255, 255, 255);
 
-        // Desenhar imagem de crítico atrás dos números se aplicável (CAMADA 1)
+        // Desenhar CRITICAL ou STATUS icon (CAMADA 1 - atrás dos números)
         if (_isCritical && _criticalTexture != null)
         {
             var criticalX = baseX - (_criticalTexture.Width / 2f);
             var criticalY = baseY - (_criticalTexture.Height / 2f);
 
-            // Rotação dinâmica: oscila durante a animação para dar "vida" ao balão
             var oscillation = (float)(Math.Sin(progress * Math.PI * 2) * (MAX_CRITICAL_ROTATION * 0.5f));
             var rotation = _criticalRotation + oscillation;
 
-            // Garantir que a rotação seja aplicada corretamente
+            // CRITICAL usa a cor do dano (vermelho/verde/etc)
             Intersect.Client.Core.Graphics.DrawGameTexture(
                 _criticalTexture,
                 new FloatRect(0, 0, _criticalTexture.Width, _criticalTexture.Height),
                 new FloatRect(criticalX, criticalY, _criticalTexture.Width, _criticalTexture.Height),
-                renderColor, // Aplicar a mesma cor do tipo de dano
-                null, // renderTarget
-                GameBlendModes.None, // blendMode
-                null, // shader
-                rotation // rotação em graus
+                renderColor, // USA COR DO DANO
+                null,
+                GameBlendModes.None,
+                null,
+                rotation
+            );
+        }
+        else if (_hasStatus && _statusTexture != null)
+        {
+            var statusX = baseX - (_statusTexture.Width / 2f);
+            var statusY = baseY - (_statusTexture.Height / 2f);
+
+            var oscillation = (float)(Math.Sin(progress * Math.PI * 2) * (MAX_STATUS_ROTATION * 0.5f));
+            var rotation = _statusRotation + oscillation;
+
+            // STATUS usa cor branca (preserva cores originais da textura)
+            Intersect.Client.Core.Graphics.DrawGameTexture(
+                _statusTexture,
+                new FloatRect(0, 0, _statusTexture.Width, _statusTexture.Height),
+                new FloatRect(statusX, statusY, _statusTexture.Width, _statusTexture.Height),
+                whiteColor, // USA COR BRANCA para preservar cores originais
+                null,
+                GameBlendModes.None,
+                null,
+                rotation
             );
         }
 
-        // Desenhar cada dígito CENTRALIZADO e ESCALADO em cima da imagem critical (CAMADA 2)
-        var currentX = baseX - (totalDigitsWidth / 2f);
-        var currentY = baseY - (scaledDigitHeight / 2f); // Centralizar verticalmente os números escalados
-
-        for (var i = 0; i < _digitTextures.Count; i++)
+        // Desenhar números (CAMADA 2 - em cima do icon) - APENAS SE HOUVER NÚMEROS
+        if (_digitTextures.Count > 0)
         {
-            var texture = _digitTextures[i];
+            var digitScale = (_isCritical && _criticalTexture != null) ? CRITICAL_SCALE : STATUS_SCALE;
+            
+            var scaledDigitWidth = DIGIT_WIDTH * digitScale;
+            var scaledDigitHeight = DIGIT_HEIGHT * digitScale;
+            var scaledSpacing = DIGIT_SPACING * digitScale;
+            
+            var totalDigitsWidth = (_digitTextures.Count * scaledDigitWidth) + ((_digitTextures.Count - 1) * scaledSpacing);
 
-            // Desenhar o dígito com escala aplicada
-            Intersect.Client.Core.Graphics.DrawGameTexture(
-                texture,
-                new FloatRect(0, 0, texture.Width, texture.Height),
-                new FloatRect(currentX, currentY, scaledDigitWidth, scaledDigitHeight), // Aplicar escala
-                renderColor // Aplicar a mesma cor do tipo de dano
-            );
+            var currentX = baseX - (totalDigitsWidth / 2f);
+            var currentY = baseY - (scaledDigitHeight / 2f);
 
-            // Avançar para o próximo dígito
-            currentX += scaledDigitWidth + scaledSpacing;
+            for (var i = 0; i < _digitTextures.Count; i++)
+            {
+                var texture = _digitTextures[i];
+
+                // Números usam a cor do dano
+                Intersect.Client.Core.Graphics.DrawGameTexture(
+                    texture,
+                    new FloatRect(0, 0, texture.Width, texture.Height),
+                    new FloatRect(currentX, currentY, scaledDigitWidth, scaledDigitHeight),
+                    renderColor // USA COR DO DANO para os números
+                );
+
+                currentX += scaledDigitWidth + scaledSpacing;
+            }
         }
     }
 
@@ -250,6 +306,7 @@ public partial class ActionMessage : IActionMessage
             (Map as MapInstance)?.ActionMessages.Remove(this);
             _digitTextures.Clear();
             _criticalTexture = null;
+            _statusTexture = null;
             _texturesLoaded = false;
         }
     }
