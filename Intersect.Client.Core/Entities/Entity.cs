@@ -2114,6 +2114,8 @@ public partial class Entity : IEntity
 
     public bool ShouldDrawTarget => this is not Projectile && LatestMap != default;
 
+    public virtual bool CanBeAttacked => true;
+
     public void DrawTarget(int priority)
     {
         // Should we draw the target?
@@ -2122,30 +2124,61 @@ public partial class Entity : IEntity
             return;
         }
 
-        var targetTexture = Globals.ContentManager.GetTexture(TextureType.Misc, "target.png");
-        if (targetTexture == null)
+        // Determinar a cor do contorno baseado no tipo de target
+        Color outlineColor;
+        if (priority == (int)Enums.TargetType.Selected)
         {
-            return;
+            // Target selecionado = vermelho vibrante
+            outlineColor = new Color(255, 255, 0, 0);
+        }
+        else // Hover
+        {
+            // Target em hover = amarelo suave
+            outlineColor = new Color(200, 255, 215, 0);
         }
 
-        var srcRectangle = new FloatRect(
-            priority * targetTexture.Width / 2f,
-            0,
-            targetTexture.Width / 2f,
-            targetTexture.Height
+        // Espessura do contorno (em pixels)
+        var outlineThickness = 2;
+
+        // Desenhar retângulo vazado ao redor da entidade
+        var targetRect = WorldPos;
+        
+        // Linha superior
+        Graphics.DrawGameTexture(
+            Graphics.Renderer.WhitePixel,
+            new FloatRect(0, 0, 1, 1),
+            new FloatRect(targetRect.X - outlineThickness, targetRect.Y - outlineThickness, 
+                         targetRect.Width + (outlineThickness * 2), outlineThickness),
+            outlineColor
         );
 
-        var destRectangle = new FloatRect(
-            (float)Math.Ceiling(WorldPos.X + (WorldPos.Width - targetTexture.Width / 2) / 2),
-            (float)Math.Ceiling(WorldPos.Y + (WorldPos.Height - targetTexture.Height) / 2),
-            srcRectangle.Width,
-            srcRectangle.Height
+        // Linha inferior
+        Graphics.DrawGameTexture(
+            Graphics.Renderer.WhitePixel,
+            new FloatRect(0, 0, 1, 1),
+            new FloatRect(targetRect.X - outlineThickness, targetRect.Y + targetRect.Height, 
+                         targetRect.Width + (outlineThickness * 2), outlineThickness),
+            outlineColor
         );
 
-        Graphics.DrawGameTexture(targetTexture, srcRectangle, destRectangle, Color.White);
+        // Linha esquerda
+        Graphics.DrawGameTexture(
+            Graphics.Renderer.WhitePixel,
+            new FloatRect(0, 0, 1, 1),
+            new FloatRect(targetRect.X - outlineThickness, targetRect.Y, 
+                         outlineThickness, targetRect.Height),
+            outlineColor
+        );
+
+        // Linha direita
+        Graphics.DrawGameTexture(
+            Graphics.Renderer.WhitePixel,
+            new FloatRect(0, 0, 1, 1),
+            new FloatRect(targetRect.X + targetRect.Width, targetRect.Y, 
+                         outlineThickness, targetRect.Height),
+            outlineColor
+        );
     }
-
-    public virtual bool CanBeAttacked => true;
 
     //Chatting
     public void AddChatBubble(string text)
