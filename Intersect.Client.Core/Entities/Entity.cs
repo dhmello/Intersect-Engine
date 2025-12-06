@@ -2116,68 +2116,212 @@ public partial class Entity : IEntity
 
     public virtual bool CanBeAttacked => true;
 
+    // Variáveis estáticas para animação de pulsação do contorno
+    private static long _lastPulseUpdate = 0;
+    private static float _pulseIntensity = 0f;
+    private static bool _pulseIncreasing = true;
+
     public void DrawTarget(int priority)
     {
-        // Should we draw the target?
         if (!ShouldDrawTarget)
         {
             return;
         }
 
-        // Determinar a cor do contorno baseado no tipo de target
-        Color outlineColor;
+        var currentTime = Timing.Global.Milliseconds;
+        if (currentTime - _lastPulseUpdate > 16)
+        {
+            if (_pulseIncreasing)
+            {
+                _pulseIntensity += 0.04f;
+                if (_pulseIntensity >= 1f)
+                {
+                    _pulseIntensity = 1f;
+                    _pulseIncreasing = false;
+                }
+            }
+            else
+            {
+                _pulseIntensity -= 0.04f;
+                if (_pulseIntensity <= 0.4f)
+                {
+                    _pulseIntensity = 0.4f;
+                    _pulseIncreasing = true;
+                }
+            }
+            _lastPulseUpdate = currentTime;
+        }
+
+        var targetRect = WorldPos;
+        Color baseColor;
+        Color glowColor;
+        
         if (priority == (int)Enums.TargetType.Selected)
         {
-            // Target selecionado = vermelho vibrante
-            outlineColor = new Color(255, 255, 0, 0);
+            var pulseAlpha = (byte)(200 + (55 * _pulseIntensity));
+            baseColor = new Color(pulseAlpha, 255, 0, 0);
+            glowColor = new Color((byte)(150 * _pulseIntensity), 255, 80, 80);
         }
-        else // Hover
+        else
         {
-            // Target em hover = amarelo suave
-            outlineColor = new Color(200, 255, 215, 0);
+            var pulseAlpha = (byte)(180 + (75 * _pulseIntensity));
+            baseColor = new Color(pulseAlpha, 255, 215, 0);
+            glowColor = new Color((byte)(120 * _pulseIntensity), 255, 255, 150);
         }
 
-        // Espessura do contorno (em pixels)
-        var outlineThickness = 2;
-
-        // Desenhar retângulo vazado ao redor da entidade
-        var targetRect = WorldPos;
+        var outerThickness = 3;
+        var cornerSize = 6;
+        var shadowOffset = 2;
+        var shadowColor = new Color(80, 0, 0, 0);
         
-        // Linha superior
-        Graphics.DrawGameTexture(
-            Graphics.Renderer.WhitePixel,
-            new FloatRect(0, 0, 1, 1),
-            new FloatRect(targetRect.X - outlineThickness, targetRect.Y - outlineThickness, 
-                         targetRect.Width + (outlineThickness * 2), outlineThickness),
-            outlineColor
+        DrawOutlineRect(
+            targetRect.X + shadowOffset - outerThickness,
+            targetRect.Y + shadowOffset - outerThickness,
+            targetRect.Width + (outerThickness * 2),
+            targetRect.Height + (outerThickness * 2),
+            outerThickness,
+            shadowColor
         );
 
-        // Linha inferior
-        Graphics.DrawGameTexture(
-            Graphics.Renderer.WhitePixel,
-            new FloatRect(0, 0, 1, 1),
-            new FloatRect(targetRect.X - outlineThickness, targetRect.Y + targetRect.Height, 
-                         targetRect.Width + (outlineThickness * 2), outlineThickness),
-            outlineColor
+        var glowSize = (int)(3 * _pulseIntensity);
+        if (glowSize > 0)
+        {
+            DrawOutlineRect(
+                targetRect.X - outerThickness - glowSize,
+                targetRect.Y - outerThickness - glowSize,
+                targetRect.Width + (outerThickness + glowSize) * 2,
+                targetRect.Height + (outerThickness + glowSize) * 2,
+                glowSize,
+                glowColor
+            );
+        }
+
+        DrawOutlineRectWithRoundedCorners(
+            targetRect.X - outerThickness,
+            targetRect.Y - outerThickness,
+            targetRect.Width + (outerThickness * 2),
+            targetRect.Height + (outerThickness * 2),
+            outerThickness,
+            cornerSize,
+            baseColor
         );
 
-        // Linha esquerda
+        var innerThickness = 1;
+        var innerAlpha = (byte)(baseColor.A * 0.5f);
+        var innerColor = new Color(innerAlpha, baseColor.R, baseColor.G, baseColor.B);
+        
         Graphics.DrawGameTexture(
             Graphics.Renderer.WhitePixel,
             new FloatRect(0, 0, 1, 1),
-            new FloatRect(targetRect.X - outlineThickness, targetRect.Y, 
-                         outlineThickness, targetRect.Height),
-            outlineColor
+            new FloatRect(targetRect.X + 1, targetRect.Y + 1, 
+                         targetRect.Width - 2, innerThickness),
+            innerColor
+        );
+        
+        Graphics.DrawGameTexture(
+            Graphics.Renderer.WhitePixel,
+            new FloatRect(0, 0, 1, 1),
+            new FloatRect(targetRect.X + 1, targetRect.Y + 1, 
+                         innerThickness, targetRect.Height - 2),
+            innerColor
         );
 
-        // Linha direita
-        Graphics.DrawGameTexture(
-            Graphics.Renderer.WhitePixel,
-            new FloatRect(0, 0, 1, 1),
-            new FloatRect(targetRect.X + targetRect.Width, targetRect.Y, 
-                         outlineThickness, targetRect.Height),
-            outlineColor
-        );
+        if (priority == (int)Enums.TargetType.Selected)
+        {
+            var cornerGlowSize = (int)(4 * _pulseIntensity);
+            var cornerGlowColor = new Color((byte)(200 * _pulseIntensity), 255, 200, 0);
+            
+            DrawCornerGlow(targetRect.X - outerThickness, targetRect.Y - outerThickness, 
+                          cornerGlowSize, cornerGlowColor, 0);
+            DrawCornerGlow(targetRect.X + targetRect.Width + outerThickness - cornerGlowSize, 
+                          targetRect.Y - outerThickness, cornerGlowSize, cornerGlowColor, 1);
+            DrawCornerGlow(targetRect.X + targetRect.Width + outerThickness - cornerGlowSize, 
+                          targetRect.Y + targetRect.Height + outerThickness - cornerGlowSize, 
+                          cornerGlowSize, cornerGlowColor, 2);
+            DrawCornerGlow(targetRect.X - outerThickness, 
+                          targetRect.Y + targetRect.Height + outerThickness - cornerGlowSize, 
+                          cornerGlowSize, cornerGlowColor, 3);
+        }
+    }
+
+    private void DrawOutlineRect(float x, float y, float width, float height, int thickness, Color color)
+    {
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x, y, width, thickness), color);
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x, y + height - thickness, width, thickness), color);
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x, y, thickness, height), color);
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x + width - thickness, y, thickness, height), color);
+    }
+
+    private void DrawOutlineRectWithRoundedCorners(float x, float y, float width, float height, 
+                                                    int thickness, int cornerSize, Color color)
+    {
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x + cornerSize, y, width - (cornerSize * 2), thickness), color);
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x + cornerSize, y + height - thickness, width - (cornerSize * 2), thickness), color);
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x, y + cornerSize, thickness, height - (cornerSize * 2)), color);
+        Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+            new FloatRect(x + width - thickness, y + cornerSize, thickness, height - (cornerSize * 2)), color);
+
+        DrawRoundedCorner(x, y, cornerSize, thickness, color, 0);
+        DrawRoundedCorner(x + width - cornerSize, y, cornerSize, thickness, color, 1);
+        DrawRoundedCorner(x + width - cornerSize, y + height - cornerSize, cornerSize, thickness, color, 2);
+        DrawRoundedCorner(x, y + height - cornerSize, cornerSize, thickness, color, 3);
+    }
+
+    private void DrawRoundedCorner(float x, float y, int size, int thickness, Color color, int corner)
+    {
+        for (int i = 0; i < size; i++)
+        {
+            for (int j = 0; j < size; j++)
+            {
+                float centerX = corner % 2 == 0 ? 0 : size;
+                float centerY = corner < 2 ? 0 : size;
+                var distance = Math.Sqrt(Math.Pow(i - centerX, 2) + Math.Pow(j - centerY, 2));
+                
+                if (distance >= size - thickness && distance <= size)
+                {
+                    var px = x + i;
+                    var py = y + j;
+                    var edgeSmoothness = 1f - Math.Max(0, Math.Min(1, (float)(distance - (size - thickness)) / thickness));
+                    var alpha = (byte)(color.A * edgeSmoothness);
+                    var cornerColor = new Color(alpha, color.R, color.G, color.B);
+                    
+                    Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+                        new FloatRect(px, py, 1, 1), cornerColor);
+                }
+            }
+        }
+    }
+
+    private void DrawCornerGlow(float x, float y, int size, Color color, int corner)
+    {
+        for (int i = 0; i < size; i++)
+        {
+            for (int j = 0; j < size; j++)
+            {
+                float centerX = corner % 2 == 0 ? 0 : size;
+                float centerY = corner < 2 ? 0 : size;
+                var distance = Math.Sqrt(Math.Pow(i - centerX, 2) + Math.Pow(j - centerY, 2));
+                
+                if (distance <= size)
+                {
+                    var px = x + i;
+                    var py = y + j;
+                    var intensity = 1f - (float)(distance / size);
+                    var alpha = (byte)(color.A * intensity * intensity);
+                    var glowColor = new Color(alpha, color.R, color.G, color.B);
+                    
+                    Graphics.DrawGameTexture(Graphics.Renderer.WhitePixel, new FloatRect(0, 0, 1, 1),
+                        new FloatRect(px, py, 1, 1), glowColor);
+                }
+            }
+        }
     }
 
     //Chatting
