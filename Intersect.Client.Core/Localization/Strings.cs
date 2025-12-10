@@ -812,6 +812,18 @@ public static partial class Strings
         public static LocalizedString AttackWhileCastingDeny = @"You cannot attack while casting a spell.";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString AutoAttackEnabled = @"Auto Attack: Enabled";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString AutoAttackDisabled = @"Auto Attack: Disabled";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString AutoFollowEnabled = @"Auto Follow: Enabled";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public static LocalizedString AutoFollowDisabled = @"Auto Follow: Disabled";
+
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static Dictionary<Stat, LocalizedString> Stats = new() {
             { Stat.Attack, @"Attack" },
             { Stat.AbilityPower, @"Ability Power" },

@@ -334,6 +334,9 @@ public partial class Player : Entity, IPlayer
 
         var returnval = base.Update();
 
+        // Auto-combat features
+        UpdateAutoCombat();
+
         return returnval;
     }
 
