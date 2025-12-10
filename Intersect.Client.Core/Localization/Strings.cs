@@ -2110,9 +2110,6 @@ If you are sure you want to hand over your guild enter '\c{{#ff8080}}{02}\c{{}}'
         
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static LocalizedString AutoAttack = @"Auto Attack";
-        
-        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        public static LocalizedString AutoFollow = @"Auto Follow";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public static LocalizedString Cancel = @"Cancel";

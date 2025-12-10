@@ -17,12 +17,12 @@ namespace Intersect.Client.Entities
     {
         /// <summary>
         /// Auto-combat system
-        /// Automatically attacks and follows the current target based on user settings
+        /// Automatically attacks the current target based on user settings
         /// </summary>
         private void UpdateAutoCombat()
         {
-            // Check if at least one feature is enabled
-            if (!Globals.Database.AutoAttackEnabled && !Globals.Database.AutoFollowEnabled)
+            // Check if auto-attack is enabled
+            if (!Globals.Database.AutoAttackEnabled)
             {
                 return;
             }
@@ -75,21 +75,13 @@ namespace Intersect.Client.Entities
             // Check if target is in attack range
             var distance = GetDistanceTo(targetEntity);
             
-            // If target is within range, try to attack (only if auto-attack is enabled)
-            if (distance <= attackRange && Globals.Database.AutoAttackEnabled)
+            // If target is within range, try to attack
+            if (distance <= attackRange)
             {
                 // Try to attack if not on cooldown
                 if (AttackTimer < Timing.Global.Milliseconds)
                 {
                     TryAttack();
-                }
-            }
-            else if (distance <= Options.Instance.Combat.MaxPlayerAutoTargetRadius && Globals.Database.AutoFollowEnabled)
-            {
-                // Target is too far, move towards it (only if auto-follow is enabled)
-                if (!IsMoving || MoveTimer < Timing.Global.Milliseconds)
-                {
-                    MoveTowardsTarget(targetEntity);
                 }
             }
         }
@@ -123,88 +115,6 @@ namespace Intersect.Client.Entities
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Moves the player towards the target
-        /// </summary>
-        private void MoveTowardsTarget(IEntity target)
-        {
-            if (target == null || Globals.Me == null)
-            {
-                return;
-            }
-
-            var myMap = Maps.MapInstance.Get(MapId);
-            var targetMap = Maps.MapInstance.Get(target.MapId);
-
-            if (myMap == null || targetMap == null || myMap != targetMap)
-            {
-                return;
-            }
-
-            // Calculate direction to target
-            var deltaX = target.X - X;
-            var deltaY = target.Y - Y;
-
-            Direction moveDirection = Direction.None;
-
-            // Determine movement direction
-            if (Options.Instance.Map.EnableDiagonalMovement)
-            {
-                // Diagonal movement
-                if (deltaY < 0 && deltaX < 0)
-                {
-                    moveDirection = Direction.UpLeft;
-                }
-                else if (deltaY < 0 && deltaX > 0)
-                {
-                    moveDirection = Direction.UpRight;
-                }
-                else if (deltaY > 0 && deltaX < 0)
-                {
-                    moveDirection = Direction.DownLeft;
-                }
-                else if (deltaY > 0 && deltaX > 0)
-                {
-                    moveDirection = Direction.DownRight;
-                }
-                else if (deltaY < 0)
-                {
-                    moveDirection = Direction.Up;
-                }
-                else if (deltaY > 0)
-                {
-                    moveDirection = Direction.Down;
-                }
-                else if (deltaX < 0)
-                {
-                    moveDirection = Direction.Left;
-                }
-                else if (deltaX > 0)
-                {
-                    moveDirection = Direction.Right;
-                }
-            }
-            else
-            {
-                // Cardinal directions only
-                if (Math.Abs(deltaY) > Math.Abs(deltaX))
-                {
-                    moveDirection = deltaY < 0 ? Direction.Up : Direction.Down;
-                }
-                else if (deltaX != 0)
-                {
-                    moveDirection = deltaX < 0 ? Direction.Left : Direction.Right;
-                }
-            }
-
-            // Set the movement direction and initiate movement
-            if (moveDirection != Direction.None)
-            {
-                DirectionMoving = moveDirection;
-                DirectionFacing = moveDirection;
-            }
         }
     }
 }

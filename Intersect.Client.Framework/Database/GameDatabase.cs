@@ -77,10 +77,8 @@ public abstract partial class GameDatabase
 
     public float WorldZoom { get; set; } = 1.0f;
     
-    // Auto-attack and Auto-follow settings
+    // Auto-attack setting
     public bool AutoAttackEnabled { get; set; }
-    
-    public bool AutoFollowEnabled { get; set; }
 
     public abstract void DeletePreference(string key);
 
@@ -156,7 +154,6 @@ public abstract partial class GameDatabase
         EnableScrollingWorldZoom = LoadPreference(nameof(EnableScrollingWorldZoom), false);
         WorldZoom = LoadPreference(nameof(WorldZoom), 1.0f);
         AutoAttackEnabled = LoadPreference(nameof(AutoAttackEnabled), false);
-        AutoFollowEnabled = LoadPreference(nameof(AutoFollowEnabled), false);
     }
 
     /// <summary>
@@ -199,9 +196,7 @@ public abstract partial class GameDatabase
         SavePreference(nameof(EnableScrollingWorldZoom), EnableScrollingWorldZoom);
         SavePreference(nameof(WorldZoom), WorldZoom);
         SavePreference(nameof(AutoAttackEnabled), AutoAttackEnabled);
-        SavePreference(nameof(AutoFollowEnabled), AutoFollowEnabled);
     }
 
     public abstract bool LoadConfig();
-
 }
