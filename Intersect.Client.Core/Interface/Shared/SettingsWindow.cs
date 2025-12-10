@@ -68,6 +68,8 @@ public partial class SettingsWindow : Window
     private readonly LabeledCheckBox _stickyTarget;
     private readonly LabeledCheckBox _autoTurnToTarget;
     private readonly LabeledCheckBox _autoSoftRetargetOnSelfCast;
+    private readonly LabeledCheckBox _autoAttackCheckbox;
+    private readonly LabeledCheckBox _autoFollowCheckbox;
 
     // Video Settings
     private readonly TabButton _videoSettingsTab;
@@ -386,6 +388,24 @@ public partial class SettingsWindow : Window
             TooltipBackgroundName = "tooltip.png",
             TooltipFont = _defaultFont,
             TooltipTextColor = Color.White,
+        };
+
+        // Game Settings - Targeting: Auto Attack.
+        _autoAttackCheckbox = new LabeledCheckBox(parent: _targetingSettings, name: nameof(_autoAttackCheckbox))
+        {
+            Dock = Pos.Top,
+            Font = _defaultFont,
+            FontSize = 12,
+            Text = Strings.Settings.AutoAttack,
+        };
+
+        // Game Settings - Targeting: Auto Follow.
+        _autoFollowCheckbox = new LabeledCheckBox(parent: _targetingSettings, name: nameof(_autoFollowCheckbox))
+        {
+            Dock = Pos.Top,
+            Font = _defaultFont,
+            FontSize = 12,
+            Text = Strings.Settings.AutoFollow,
         };
 
 #endregion Game
@@ -989,6 +1009,8 @@ public partial class SettingsWindow : Window
         _stickyTarget.IsChecked = Globals.Database.StickyTarget;
         _autoTurnToTarget.IsChecked = Globals.Database.AutoTurnToTarget;
         _autoSoftRetargetOnSelfCast.IsChecked = Globals.Database.AutoSoftRetargetOnSelfCast;
+        _autoAttackCheckbox.IsChecked = Globals.Database.AutoAttackEnabled;
+        _autoFollowCheckbox.IsChecked = Globals.Database.AutoFollowEnabled;
         _typewriterCheckbox.IsChecked = Globals.Database.TypewriterBehavior == Enums.TypewriterBehavior.Word;
 
         // Video Settings.
@@ -1170,6 +1192,8 @@ public partial class SettingsWindow : Window
         Globals.Database.StickyTarget = _stickyTarget.IsChecked;
         Globals.Database.AutoTurnToTarget = _autoTurnToTarget.IsChecked;
         Globals.Database.AutoSoftRetargetOnSelfCast = _autoSoftRetargetOnSelfCast.IsChecked;
+        Globals.Database.AutoAttackEnabled = _autoAttackCheckbox.IsChecked;
+        Globals.Database.AutoFollowEnabled = _autoFollowCheckbox.IsChecked;
         Globals.Database.TypewriterBehavior = _typewriterCheckbox.IsChecked ? Enums.TypewriterBehavior.Word : Enums.TypewriterBehavior.Off;
 
         // Video Settings.

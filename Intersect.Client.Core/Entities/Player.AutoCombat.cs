@@ -1,6 +1,7 @@
 using Intersect.Client.Framework.Entities;
 using Intersect.Client.General;
 using Intersect.Client.Maps;
+using Intersect.Client.Networking;
 using Intersect.Configuration;
 using Intersect.Core;
 using Intersect.Enums;
@@ -15,11 +16,17 @@ namespace Intersect.Client.Entities
     public partial class Player
     {
         /// <summary>
-        /// Auto-combat system - Always enabled by default
-        /// Automatically attacks and follows the current target
+        /// Auto-combat system
+        /// Automatically attacks and follows the current target based on user settings
         /// </summary>
         private void UpdateAutoCombat()
         {
+            // Check if at least one feature is enabled
+            if (!Globals.Database.AutoAttackEnabled && !Globals.Database.AutoFollowEnabled)
+            {
+                return;
+            }
+
             // Only process if we have a valid target
             if (TargetId == Guid.Empty || TargetType < 0)
             {
@@ -34,7 +41,7 @@ namespace Intersect.Client.Entities
             }
 
             // Don't process if player is busy
-            if (IsBusy || IsMoving || IsAttacking || IsCasting)
+            if (IsBusy || IsAttacking || IsCasting)
             {
                 return;
             }
@@ -68,8 +75,8 @@ namespace Intersect.Client.Entities
             // Check if target is in attack range
             var distance = GetDistanceTo(targetEntity);
             
-            // If target is within range, try to attack
-            if (distance <= attackRange)
+            // If target is within range, try to attack (only if auto-attack is enabled)
+            if (distance <= attackRange && Globals.Database.AutoAttackEnabled)
             {
                 // Try to attack if not on cooldown
                 if (AttackTimer < Timing.Global.Milliseconds)
@@ -77,10 +84,13 @@ namespace Intersect.Client.Entities
                     TryAttack();
                 }
             }
-            else if (distance <= Options.Instance.Combat.MaxPlayerAutoTargetRadius)
+            else if (distance <= Options.Instance.Combat.MaxPlayerAutoTargetRadius && Globals.Database.AutoFollowEnabled)
             {
-                // Target is too far, move towards it
-                MoveTowardsTarget(targetEntity);
+                // Target is too far, move towards it (only if auto-follow is enabled)
+                if (!IsMoving || MoveTimer < Timing.Global.Milliseconds)
+                {
+                    MoveTowardsTarget(targetEntity);
+                }
             }
         }
 
@@ -189,10 +199,11 @@ namespace Intersect.Client.Entities
                 }
             }
 
-            // Set the movement direction
+            // Set the movement direction and initiate movement
             if (moveDirection != Direction.None)
             {
                 DirectionMoving = moveDirection;
+                DirectionFacing = moveDirection;
             }
         }
     }
