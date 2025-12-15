@@ -918,6 +918,7 @@ public static partial class Strings
             {"holdtozoomout", "Hold to Zoom Out:"},
             {"togglefullscreen", "Toggle Fullscreen:"},
             {nameof(Control.ToggleAutoSoftRetargetOnSelfCast).ToLowerInvariant(), "Toggle Auto Soft-Retarget on Self-Cast:"},
+            {"toggleminimap", @"Toggle Minimap:"},
         };
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]

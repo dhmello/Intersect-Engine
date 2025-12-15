@@ -334,6 +334,10 @@ public static partial class Input
                         case Control.OpenGuild:
                             _ = Interface.Interface.GameUi.GameMenu?.ToggleGuildWindow();
                             break;
+
+                        case Control.ToggleMinimap:
+                            Interface.Interface.GameUi.GameMenu?.ToggleMinimapWindow();
+                            break;
                     }
                     break;
 
