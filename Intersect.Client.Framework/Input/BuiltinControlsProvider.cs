@@ -91,7 +91,7 @@ internal sealed class BuiltinControlsProvider : IControlsProvider
             { Control.OpenFriends, new ControlMapping(new ControlBinding(Keys.None, Keys.F), ControlBinding.Default) },
             { Control.OpenGuild, new ControlMapping(new ControlBinding(Keys.None, Keys.G), ControlBinding.Default) },
             { Control.OpenSettings, new ControlMapping(new ControlBinding(Keys.None, Keys.O), ControlBinding.Default) },
-            { Control.OpenDebugger, new ControlMapping(new ControlBinding(Keys.None, Keys.F2), ControlBinding.Default) },
+            { Control.OpenDebugger, new ControlMapping(new ControlBinding(Keys.None, Keys.Home), ControlBinding.Default) },
             { Control.OpenAdminPanel, new ControlMapping(new ControlBinding(Keys.None, Keys.Insert), ControlBinding.Default) },
             { Control.ToggleGui, new ControlMapping(new ControlBinding(Keys.None, Keys.F11), ControlBinding.Default) },
             { Control.TurnAround, new ControlMapping(new ControlBinding(Keys.None, Keys.Control), ControlBinding.Default) },
@@ -111,7 +111,17 @@ internal sealed class BuiltinControlsProvider : IControlsProvider
             { Control.Hotkey7, new ControlMapping(new ControlBinding(Keys.None, Keys.D7), ControlBinding.Default) },
             { Control.Hotkey8, new ControlMapping(new ControlBinding(Keys.None, Keys.D8), ControlBinding.Default) },
             { Control.Hotkey9, new ControlMapping(new ControlBinding(Keys.None, Keys.D9), ControlBinding.Default) },
-            { Control.Hotkey10, new ControlMapping(new ControlBinding(Keys.None, Keys.D0), ControlBinding.Default) },
+            { Control.Hotkey10, new ControlMapping(new ControlBinding(Keys.None, Keys.F1), ControlBinding.Default) },
+            { Control.Hotkey11, new ControlMapping(new ControlBinding(Keys.None, Keys.F2), ControlBinding.Default) },
+            { Control.Hotkey12, new ControlMapping(new ControlBinding(Keys.None, Keys.F3), ControlBinding.Default) },
+            { Control.Hotkey13, new ControlMapping(new ControlBinding(Keys.None, Keys.F4), ControlBinding.Default) },
+            { Control.Hotkey14, new ControlMapping(new ControlBinding(Keys.None, Keys.F5), ControlBinding.Default) },
+            { Control.Hotkey15, new ControlMapping(new ControlBinding(Keys.None, Keys.F6), ControlBinding.Default) },
+            { Control.Hotkey16, new ControlMapping(new ControlBinding(Keys.None, Keys.F7), ControlBinding.Default) },
+            { Control.Hotkey17, new ControlMapping(new ControlBinding(Keys.None, Keys.F8), ControlBinding.Default) },
+            { Control.Hotkey18, new ControlMapping(new ControlBinding(Keys.None, Keys.F9), ControlBinding.Default) },
+            { Control.Hotkey19, new ControlMapping(new ControlBinding(Keys.None, Keys.F10), ControlBinding.Default) },
+
         };
     }
 }

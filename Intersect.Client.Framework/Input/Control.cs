@@ -88,6 +88,15 @@ public enum Control
     Hotkey9,
 
     Hotkey10,
+    Hotkey11,
+    Hotkey12,
+    Hotkey13,
+    Hotkey14,
+    Hotkey15,
+    Hotkey16,
+    Hotkey17,
+    Hotkey18,
+    Hotkey19,
 }
 
 // TODO: Switch to a record struct (incomplete) that can be used for controls that can be added via plugin (or at least not in this file)
