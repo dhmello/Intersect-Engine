@@ -7,7 +7,6 @@ using Intersect.Client.General;
 using Intersect.Client.Interface.Game.Character;
 using Intersect.Client.Interface.Game.Chat;
 using Intersect.Client.Interface.Game.Inventory;
-using Intersect.Client.Interface.Game.Minimap;
 using Intersect.Client.Interface.Game.Spells;
 using Intersect.Client.Localization;
 using Intersect.Client.Networking;
@@ -52,8 +51,6 @@ public partial class MenuContainer : Panel
     private readonly Button _escapeMenuButton;
 
     private readonly MapItemWindow _mapItemWindow;
-
-    private readonly MinimapWindow _minimapWindow;
 
     public MenuContainer(Canvas gameCanvas) : base(parent: gameCanvas, name: nameof(MenuContainer))
     {
@@ -244,7 +241,6 @@ public partial class MenuContainer : Panel
         _questsWindow = new QuestsWindow(gameCanvas: gameCanvas);
         _mapItemWindow = new MapItemWindow(gameCanvas: gameCanvas);
         _guildWindow = new GuildWindow(gameCanvas: gameCanvas);
-        _minimapWindow = new MinimapWindow(gameCanvas: gameCanvas);
     }
 
     //Methods
@@ -258,7 +254,6 @@ public partial class MenuContainer : Panel
         _questsWindow.Update(updateQuestLog);
         _mapItemWindow.Update();
         _guildWindow.Update();
-        _minimapWindow.Update();
     }
 
     public void UpdateFriendsList()
@@ -491,17 +486,5 @@ public partial class MenuContainer : Panel
     private void CharacterButton_Clicked(Base sender, MouseButtonState arguments)
     {
         ToggleCharacterWindow();
-    }
-
-    public void ToggleMinimapWindow()
-    {
-        if (_minimapWindow.IsVisible())
-        {
-            _minimapWindow.Hide();
-        }
-        else
-        {
-            _minimapWindow.Show();
-        }
     }
 }
