@@ -919,6 +919,8 @@ public static partial class Strings
             {"togglefullscreen", "Toggle Fullscreen:"},
             {nameof(Control.ToggleAutoSoftRetargetOnSelfCast).ToLowerInvariant(), "Toggle Auto Soft-Retarget on Self-Cast:"},
             {"toggleminimap", @"Toggle Minimap:"},
+            {"minimapzoomin", @"Minimap Zoom In:"},
+            {"minimapzoomout", @"Minimap Zoom Out:"},
         };
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
