@@ -101,20 +101,18 @@ internal sealed class BuiltinControlsProvider : IControlsProvider
             { Control.HoldToZoomOut, new ControlMapping(ControlBinding.Default, ControlBinding.Default) },
             { Control.ToggleFullscreen, new ControlMapping(new ControlBinding(Keys.Alt, Keys.Enter), ControlBinding.Default) },
             { Control.ToggleMinimap, new ControlMapping(new ControlBinding(Keys.None, Keys.M), ControlBinding.Default) },
-            { Control.MinimapZoomIn, new ControlMapping(new ControlBinding(Keys.None, Keys.Add), ControlBinding.Default) },
-            { Control.MinimapZoomOut, new ControlMapping(new ControlBinding(Keys.None, Keys.Subtract), ControlBinding.Default) },
 
             // Hotkeys should be at the end of the list
             { Control.Hotkey1, new ControlMapping(new ControlBinding(Keys.None, Keys.D1), ControlBinding.Default) },
             { Control.Hotkey2, new ControlMapping(new ControlBinding(Keys.None, Keys.D2), ControlBinding.Default) },
-            { Control.Hotkey3, new ControlMapping(new ControlBinding(Keys.None, Keys.D3), ControlBinding.Default) },
-            { Control.Hotkey4, new ControlMapping(new ControlBinding(Keys.None, Keys.D4), ControlBinding.Default) },
-            { Control.Hotkey5, new ControlMapping(new ControlBinding(Keys.None, Keys.D5), ControlBinding.Default) },
-            { Control.Hotkey6, new ControlMapping(new ControlBinding(Keys.None, Keys.D6), ControlBinding.Default) },
-            { Control.Hotkey7, new ControlMapping(new ControlBinding(Keys.None, Keys.D7), ControlBinding.Default) },
-            { Control.Hotkey8, new ControlMapping(new ControlBinding(Keys.None, Keys.D8), ControlBinding.Default) },
-            { Control.Hotkey9, new ControlMapping(new ControlBinding(Keys.None, Keys.D9), ControlBinding.Default) },
-            { Control.Hotkey10, new ControlMapping(new ControlBinding(Keys.None, Keys.D0), ControlBinding.Default) },
+            { Control.Hotkey3, new ControlMapping(new ControlBinding(Keys.None, Keys.D3), ControlBinding.Default) }
+            , { Control.Hotkey4, new ControlMapping(new ControlBinding(Keys.None, Keys.D4), ControlBinding.Default) }
+            , { Control.Hotkey5, new ControlMapping(new ControlBinding(Keys.None, Keys.D5), ControlBinding.Default) }
+            , { Control.Hotkey6, new ControlMapping(new ControlBinding(Keys.None, Keys.D6), ControlBinding.Default) }
+            , { Control.Hotkey7, new ControlMapping(new ControlBinding(Keys.None, Keys.D7), ControlBinding.Default) }
+            , { Control.Hotkey8, new ControlMapping(new ControlBinding(Keys.None, Keys.D8), ControlBinding.Default) }
+            , { Control.Hotkey9, new ControlMapping(new ControlBinding(Keys.None, Keys.D9), ControlBinding.Default) }
+            , { Control.Hotkey10, new ControlMapping(new ControlBinding(Keys.None, Keys.D0), ControlBinding.Default) }
         };
     }
 }

@@ -64,10 +64,6 @@ public enum Control
 
     ToggleMinimap,
 
-    MinimapZoomIn,
-
-    MinimapZoomOut,
-
     // Add new controls above this line
     // If new controls are added that are similar to hotkeys (in that they map to some configurable slot count)
     // they should have an explicit offset like hotkeys, and the offset should be >0x1000 and far enough away from

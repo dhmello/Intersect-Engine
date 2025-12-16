@@ -504,14 +504,4 @@ public partial class MenuContainer : Panel
             _minimapWindow.Show();
         }
     }
-
-    public void MinimapZoomIn()
-    {
-        _minimapWindow.ZoomIn();
-    }
-
-    public void MinimapZoomOut()
-    {
-        _minimapWindow.ZoomOut();
-    }
 }

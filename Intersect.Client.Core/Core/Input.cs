@@ -338,14 +338,6 @@ public static partial class Input
                         case Control.ToggleMinimap:
                             Interface.Interface.GameUi.GameMenu?.ToggleMinimapWindow();
                             break;
-
-                        case Control.MinimapZoomIn:
-                            Interface.Interface.GameUi.GameMenu?.MinimapZoomIn();
-                            break;
-
-                        case Control.MinimapZoomOut:
-                            Interface.Interface.GameUi.GameMenu?.MinimapZoomOut();
-                            break;
                     }
                     break;
 
