@@ -153,7 +153,7 @@ public abstract partial class GameDatabase
         UIScale = LoadPreference(nameof(UIScale), 1.0f);
         EnableScrollingWorldZoom = LoadPreference(nameof(EnableScrollingWorldZoom), false);
         WorldZoom = LoadPreference(nameof(WorldZoom), 1.0f);
-        AutoAttackEnabled = LoadPreference(nameof(AutoAttackEnabled), false);
+        AutoAttackEnabled = LoadPreference(nameof(AutoAttackEnabled), true);
     }
 
     /// <summary>
