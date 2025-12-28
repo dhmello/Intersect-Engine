@@ -65,6 +65,9 @@ public partial class ActionMessage : IActionMessage
     private bool _hasStatus = false;
     private float _criticalRotation = 0f;
     private float _statusRotation = 0f;
+    
+    // Flag para indicar se deve usar renderização de texto tradicional
+    private bool _useTextRendering = false;
 
     public ActionMessage(MapInstance map, int x, int y, string text, Color color)
     {
@@ -129,6 +132,12 @@ public partial class ActionMessage : IActionMessage
                     return; // Exibir apenas o ícone de status
                 }
             }
+            
+            // Se chegou aqui: não tem números E não é um status icon
+            // Usar renderização de texto tradicional (ex: "Pegou Poção de Vida")
+            _useTextRendering = true;
+            _texturesLoaded = true;
+            return;
         }
         
         // Se esta mensagem TEM números, verificar se deve usar o status icon (sistema de flag)
@@ -219,6 +228,34 @@ public partial class ActionMessage : IActionMessage
 
         baseX += xOffset;
         baseY -= yOffset;
+
+        // Se deve usar renderização de texto tradicional (fallback)
+        if (_useTextRendering)
+        {
+            var textWidth = Intersect.Client.Core.Graphics.Renderer.MeasureText(
+                Text,
+                Intersect.Client.Core.Graphics.ActionMsgFont,
+                Intersect.Client.Core.Graphics.ActionMsgFontSize,
+                1
+            ).X;
+
+            var textColor = new Color(alpha, Color.R, Color.G, Color.B);
+            var outlineColor = new Color(alpha, 40, 40, 40);
+
+            Intersect.Client.Core.Graphics.Renderer.DrawString(
+                Text,
+                Intersect.Client.Core.Graphics.ActionMsgFont,
+                Intersect.Client.Core.Graphics.ActionMsgFontSize,
+                baseX - textWidth / 2f,
+                baseY,
+                1,
+                textColor,
+                true,
+                null,
+                outlineColor
+            );
+            return;
+        }
 
         // Cor com alpha para números e critical (usa a cor do dano)
         var renderColor = new Color(alpha, Color.R, Color.G, Color.B);
