@@ -2,6 +2,8 @@ using Intersect.Core;
 using Intersect.Framework.Core;
 using Intersect.Utilities;
 using Microsoft.Extensions.Logging;
+using Intersect.Server.Networking;
+using Intersect.Enums;
 
 namespace Intersect.Server.General;
 
@@ -11,6 +13,7 @@ public static class Weather
     private static int _currentXSpeed = 0;
     private static int _currentYSpeed = 0;
     private static int _currentIntensity = 0;
+    private static string _currentWeatherName = "Céu Limpo";
 
     // Automatic weather system
     private static long _nextWeatherChangeTime = 0;
@@ -20,7 +23,7 @@ public static class Weather
     public static void Init()
     {
         // Initialize with clear weather
-        SetWeather(Guid.Empty, 0, 0, 0);
+        SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
         
         // Schedule first weather check
         if (Options.Instance.Weather.EnableAutomaticWeather)
@@ -54,7 +57,7 @@ public static class Weather
         if (clearChance < weatherOptions.ClearWeatherChance)
         {
             // Clear weather
-            SetWeather(Guid.Empty, 0, 0, 0);
+            SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
             ScheduleNextWeatherChange();
             return;
         }
@@ -70,7 +73,7 @@ public static class Weather
 
         if (availableWeathers.Count == 0)
         {
-            SetWeather(Guid.Empty, 0, 0, 0);
+            SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
             ScheduleNextWeatherChange();
             return;
         }
@@ -99,7 +102,8 @@ public static class Weather
                 selectedWeather.AnimationId,
                 selectedWeather.XSpeed,
                 selectedWeather.YSpeed,
-                selectedWeather.Intensity
+                selectedWeather.Intensity,
+                selectedWeather.Name
             );
 
             // Schedule weather end
@@ -113,7 +117,7 @@ public static class Weather
         }
         else
         {
-            SetWeather(Guid.Empty, 0, 0, 0);
+            SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
             ScheduleNextWeatherChange();
         }
     }
@@ -129,16 +133,49 @@ public static class Weather
         _nextWeatherChangeTime = Timing.Global.MillisecondsUtc + (delayMinutes * 60 * 1000);
     }
 
-    public static void SetWeather(Guid animationId, int xSpeed, int ySpeed, int intensity)
+    public static void SetWeather(Guid animationId, int xSpeed, int ySpeed, int intensity, string weatherName = "")
     {
+        var previousWeatherName = _currentWeatherName;
+        
         _currentAnimationId = animationId;
         _currentXSpeed = xSpeed;
         _currentYSpeed = ySpeed;
         _currentIntensity = intensity;
+        _currentWeatherName = string.IsNullOrEmpty(weatherName) ? "Céu Limpo" : weatherName;
+
+        // Send broadcast message if weather changed
+        if (previousWeatherName != _currentWeatherName)
+        {
+            SendWeatherBroadcast(previousWeatherName, _currentWeatherName);
+        }
+    }
+
+    private static void SendWeatherBroadcast(string previousWeather, string newWeather)
+    {
+        string message = "";
+        
+        if (newWeather == "Céu Limpo" && previousWeather != "Céu Limpo")
+        {
+            message = $"O clima mudou! O {previousWeather.ToLower()} parou e o céu está limpo novamente.";
+        }
+        else if (newWeather != "Céu Limpo" && previousWeather == "Céu Limpo")
+        {
+            message = $"O clima mudou! Começou a {newWeather.ToLower()}. ";
+        }
+        else if (newWeather != "Céu Limpo" && previousWeather != "Céu Limpo")
+        {
+            message = $"O clima mudou! O {previousWeather.ToLower()} deu lugar à {newWeather.ToLower()}.";
+        }
+
+        if (!string.IsNullOrEmpty(message))
+        {
+            PacketSender.SendGlobalMsg(message, CustomColors.Chat.AnnouncementChat, "");
+        }
     }
 
     public static Guid GetWeatherAnimationId() => _currentAnimationId;
     public static int GetWeatherXSpeed() => _currentXSpeed;
     public static int GetWeatherYSpeed() => _currentYSpeed;
     public static int GetWeatherIntensity() => _currentIntensity;
+    public static string GetCurrentWeatherName() => _currentWeatherName;
 }
