@@ -1759,7 +1759,11 @@ internal sealed partial class PacketHandler
 
                 if (ItemDescriptor.TryGet(mapItem.ItemId, out var item))
                 {
-                    PacketSender.SendActionMsg(player, item.Name, CustomColors.Items.Rarities[item.Rarity]);
+
+                    var displayText = mapItem.Quantity > 1
+    ? $"{item.Name} x{mapItem.Quantity}"
+    : item.Name;
+                    PacketSender.SendActionMsg(player, displayText, CustomColors.Items.Rarities[item.Rarity]);
                 }
             }
         }

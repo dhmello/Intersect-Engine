@@ -253,7 +253,11 @@ public abstract partial class GameTexture<TPlatformTexture, TPlatformRenderer> :
             if (AtlasReference.Texture is not GameTexture<TPlatformTexture, TPlatformRenderer> atlasTexture)
             {
                 IsMissingOrCorrupt = true;
-                throw new InvalidOperationException();
+                ApplicationContext.CurrentContext.Logger.LogWarning(
+                    "Atlas reference for '{TextureName}' has invalid texture type",
+                    Name
+                );
+                return;
             }
 
             atlasTexture.LoadPlatformTexture(force);
@@ -269,7 +273,11 @@ public abstract partial class GameTexture<TPlatformTexture, TPlatformRenderer> :
         if (_streamFactory == null)
         {
             IsMissingOrCorrupt = true;
-            throw new InvalidOperationException();
+            ApplicationContext.CurrentContext.Logger.LogWarning(
+                "No stream factory available for '{TextureName}'",
+                Name
+            );
+            return;
         }
 
         try
@@ -292,8 +300,27 @@ public abstract partial class GameTexture<TPlatformTexture, TPlatformRenderer> :
             UpdateAccessTime();
             EmitLoaded();
         }
+        catch (FileNotFoundException fileNotFoundException)
+        {
+            IsMissingOrCorrupt = true;
+            ApplicationContext.CurrentContext.Logger.LogWarning(
+                fileNotFoundException,
+                "File not found while trying to load '{TextureName}'",
+                Name
+            );
+        }
+        catch (DirectoryNotFoundException directoryNotFoundException)
+        {
+            IsMissingOrCorrupt = true;
+            ApplicationContext.CurrentContext.Logger.LogWarning(
+                directoryNotFoundException,
+                "Directory not found while trying to load '{TextureName}'",
+                Name
+            );
+        }
         catch (Exception exception)
         {
+            IsMissingOrCorrupt = true;
             ApplicationContext.CurrentContext.Logger.LogError(
                 exception,
                 "Exception thrown while trying to load '{TextureName}'",
@@ -302,7 +329,10 @@ public abstract partial class GameTexture<TPlatformTexture, TPlatformRenderer> :
         }
         finally
         {
-            IsMissingOrCorrupt = _platformTexture == null;
+            if (_platformTexture == null)
+            {
+                IsMissingOrCorrupt = true;
+            }
         }
     }
 
