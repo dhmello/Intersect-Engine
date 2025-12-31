@@ -44,6 +44,9 @@ public static partial class Time
 
         sTimeRange = 0;
         sUpdateTime = 0;
+
+        // Initialize Weather System
+        Weather.Init();
     }
 
     public static void Update()
@@ -95,6 +98,9 @@ public static partial class Time
 
             sUpdateTime = Timing.Global.Milliseconds + 1000;
         }
+
+        // Update Weather System
+        Weather.Update();
     }
 
     public static Color GetTimeColor()

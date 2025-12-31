@@ -98,6 +98,7 @@ public static partial class PacketSender
             player.InGame = true;
 
             SendTimeTo(client);
+            SendGlobalWeatherTo(client);
 
             if (client.Power.Editor)
             {
@@ -1088,7 +1089,7 @@ public static partial class PacketSender
     //MapListPacket
     public static void SendMapListToAll()
     {
-        SendDataToAll(new MapListPacket(MapList.List.JsonData));
+        SendDataToAllPlayers(new MapListPacket(MapList.List.JsonData));
     }
 
     //ErrorPacket
@@ -2377,7 +2378,7 @@ public static partial class PacketSender
 
     public static void SendDataToEditors(IPacket packet)
     {
-        lock (Client.GlobalLock)
+        lock ( Client.GlobalLock)
         {
             foreach (var client in Client.Instances)
             {
@@ -2403,18 +2404,28 @@ public static partial class PacketSender
         }
     }
 
-    public static void SendDataToAll(IPacket packet, TransmissionMode mode = TransmissionMode.All)
+    //Global Weather
+    public static void SendGlobalWeatherToAll()
     {
-        lock (Client.GlobalLock)
-        {
-            foreach (var client in Client.Instances)
-            {
-                if ((client?.IsEditor ?? false) || client?.Entity != null)
-                {
-                    client.Send(packet, mode);
-                }
-            }
-        }
+        SendDataToAllPlayers(
+            new GlobalWeatherPacket(
+                Weather.GetWeatherAnimationId(),
+                Weather.GetWeatherXSpeed(),
+                Weather.GetWeatherYSpeed(),
+                Weather.GetWeatherIntensity()
+            )
+        );
     }
 
+    public static void SendGlobalWeatherTo(Client client)
+    {
+        client?.Send(
+            new GlobalWeatherPacket(
+                Weather.GetWeatherAnimationId(),
+                Weather.GetWeatherXSpeed(),
+                Weather.GetWeatherYSpeed(),
+                Weather.GetWeatherIntensity()
+            )
+        );
+    }
 }

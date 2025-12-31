@@ -258,6 +258,14 @@ public static partial class Strings
             Help = @"unmutes a player allowing them to talk"
         };
 
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public readonly LocaleCommand Weather = new LocaleCommand
+        {
+            Name = @"weather",
+            Description = @"Controls the global weather system.",
+            Help = @"sets global weather: weather <animation-id|clear> [xspeed] [yspeed] [intensity]"
+        };
+
         public sealed partial class ArgumentsNamespace : LocaleNamespace
         {
 
@@ -478,6 +486,34 @@ public static partial class Strings
             {
                 Name = @"value",
                 Description = @"the value to set the server variable to"
+            };
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public readonly LocaleArgument WeatherAnimation = new LocaleArgument
+            {
+                Name = @"animation-id",
+                Description = @"the animation ID (GUID) or 'clear' to remove weather"
+            };
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public readonly LocaleArgument WeatherXSpeed = new LocaleArgument
+            {
+                Name = @"x-speed",
+                Description = @"horizontal speed of weather particles (default: 2)"
+            };
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public readonly LocaleArgument WeatherYSpeed = new LocaleArgument
+            {
+                Name = @"y-speed",
+                Description = @"vertical speed of weather particles (default: 3)"
+            };
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public readonly LocaleArgument WeatherIntensity = new LocaleArgument
+            {
+                Name = @"intensity",
+                Description = @"weather intensity from 0-100 (default: 50)"
             };
         }
     }

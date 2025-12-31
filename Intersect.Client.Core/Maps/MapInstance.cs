@@ -1424,21 +1424,43 @@ public partial class MapInstance : MapDescriptor, IGameObject<Guid, MapInstance>
             return;
         }
 
-        var anim = AnimationDescriptor.Get(WeatherAnimationId);
+        // Usar clima global se o mapa NÃO for indoors, caso contrário usar clima local do mapa
+        AnimationDescriptor? anim = null;
+        int weatherXSpeed = 0;
+        int weatherYSpeed = 0;
+        int weatherIntensity = 0;
 
-        if (anim == null || WeatherIntensity == 0)
+        if (!IsIndoors)
         {
+            // Clima GLOBAL (sincronizado pelo servidor)
+            anim = Weather.GetWeatherAnimation();
+            weatherXSpeed = Weather.GetWeatherXSpeed();
+            weatherYSpeed = Weather.GetWeatherYSpeed();
+            weatherIntensity = Weather.GetWeatherIntensity();
+        }
+        else
+        {
+            // Clima LOCAL do mapa (se for indoors, usar o clima configurado no editor)
+            anim = AnimationDescriptor.Get(WeatherAnimationId);
+            weatherXSpeed = WeatherXSpeed;
+            weatherYSpeed = WeatherYSpeed;
+            weatherIntensity = WeatherIntensity;
+        }
+
+        if (anim == null || weatherIntensity == 0)
+        {
+            ClearWeather();
             return;
         }
 
         _removeParticles.Clear();
 
-        if ((WeatherXSpeed != 0 || WeatherYSpeed != 0) && Globals.Me.MapInstance == this)
+        if ((weatherXSpeed != 0 || weatherYSpeed != 0) && Globals.Me.MapInstance == this)
         {
             if (Timing.Global.MillisecondsUtc > _weatherParticleSpawnTime)
             {
-                _weatherParticles.Add(new WeatherParticle(_removeParticles, WeatherXSpeed, WeatherYSpeed, anim));
-                var spawnTime = 25 + (int)(475 * (1f - WeatherIntensity / 100f));
+                _weatherParticles.Add(new WeatherParticle(_removeParticles, weatherXSpeed, weatherYSpeed, anim));
+                var spawnTime = 25 + (int)(475 * (1f - weatherIntensity / 100f));
                 spawnTime = (int)(spawnTime *
                                    (480000f /
                                     (Graphics.Renderer.ScreenWidth * Graphics.Renderer.ScreenHeight)));

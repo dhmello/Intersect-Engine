@@ -1893,11 +1893,12 @@ internal sealed partial class PacketHandler
     //TimePacket
     public void HandlePacket(IPacketSender packetSender, TimePacket packet)
     {
-        Time.LoadTime(
-            packet.Time,
-            Color.FromArgb(packet.Color.A, packet.Color.R, packet.Color.G, packet.Color.B),
-            packet.Rate
-        );
+        Time.LoadTime(packet.Time, packet.Color, packet.Rate);
+    }
+
+    public void HandlePacket(IPacketSender packetSender, GlobalWeatherPacket packet)
+    {
+        Weather.LoadWeather(packet.AnimationId, packet.XSpeed, packet.YSpeed, packet.Intensity);
     }
 
     //PartyPacket
