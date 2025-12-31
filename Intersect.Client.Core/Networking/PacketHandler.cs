@@ -344,7 +344,6 @@ internal sealed partial class PacketHandler
     public void HandlePacket(IPacketSender packetSender, MapPacket packet)
     {
         HandleMap(packetSender, packet);
-        Player.FetchNewMaps();
     }
 
     //PlayerEntityPacket

@@ -11,8 +11,6 @@ public static class Weather
     private static int _currentXSpeed = 0;
     private static int _currentYSpeed = 0;
     private static int _currentIntensity = 0;
-    private static string _currentSound = string.Empty;
-    private static float _currentSoundVolume = 0.5f;
 
     // Automatic weather system
     private static long _nextWeatherChangeTime = 0;
@@ -96,14 +94,12 @@ public static class Weather
 
         if (selectedWeather != null)
         {
-            // Set the weather
+            // Set the weather (sound parameters removed)
             SetWeather(
                 selectedWeather.AnimationId,
                 selectedWeather.XSpeed,
                 selectedWeather.YSpeed,
-                selectedWeather.Intensity,
-                selectedWeather.Sound,
-                selectedWeather.SoundVolume
+                selectedWeather.Intensity
             );
 
             // Schedule weather end
@@ -133,20 +129,16 @@ public static class Weather
         _nextWeatherChangeTime = Timing.Global.MillisecondsUtc + (delayMinutes * 60 * 1000);
     }
 
-    public static void SetWeather(Guid animationId, int xSpeed, int ySpeed, int intensity, string sound = "", float soundVolume = 0.5f)
+    public static void SetWeather(Guid animationId, int xSpeed, int ySpeed, int intensity)
     {
         _currentAnimationId = animationId;
         _currentXSpeed = xSpeed;
         _currentYSpeed = ySpeed;
         _currentIntensity = intensity;
-        _currentSound = sound;
-        _currentSoundVolume = soundVolume;
     }
 
     public static Guid GetWeatherAnimationId() => _currentAnimationId;
     public static int GetWeatherXSpeed() => _currentXSpeed;
     public static int GetWeatherYSpeed() => _currentYSpeed;
     public static int GetWeatherIntensity() => _currentIntensity;
-    public static string GetWeatherSound() => _currentSound;
-    public static float GetWeatherSoundVolume() => _currentSoundVolume;
 }

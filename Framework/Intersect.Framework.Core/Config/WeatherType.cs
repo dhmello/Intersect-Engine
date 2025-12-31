@@ -36,16 +36,6 @@ public class WeatherType
     public int Intensity { get; set; } = 50;
 
     /// <summary>
-    /// Sound file to play (without extension, from resources/sounds/)
-    /// </summary>
-    public string Sound { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Sound volume (0.0 to 1.0)
-    /// </summary>
-    public float SoundVolume { get; set; } = 0.5f;
-
-    /// <summary>
     /// Minimum duration in minutes
     /// </summary>
     public int MinDuration { get; set; } = 5;
