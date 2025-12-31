@@ -10,12 +10,14 @@ public partial class GlobalWeatherPacket : IntersectPacket
     {
     }
 
-    public GlobalWeatherPacket(Guid animationId, int xSpeed, int ySpeed, int intensity)
+    public GlobalWeatherPacket(Guid animationId, int xSpeed, int ySpeed, int intensity, string sound = "", float soundVolume = 0.5f)
     {
         AnimationId = animationId;
         XSpeed = xSpeed;
         YSpeed = ySpeed;
         Intensity = intensity;
+        Sound = sound;
+        SoundVolume = soundVolume;
     }
 
     [Key(0)]
@@ -29,4 +31,10 @@ public partial class GlobalWeatherPacket : IntersectPacket
 
     [Key(3)]
     public int Intensity { get; set; }
+
+    [Key(4)]
+    public string Sound { get; set; } = string.Empty;
+
+    [Key(5)]
+    public float SoundVolume { get; set; } = 0.5f;
 }

@@ -1898,7 +1898,7 @@ internal sealed partial class PacketHandler
 
     public void HandlePacket(IPacketSender packetSender, GlobalWeatherPacket packet)
     {
-        Weather.LoadWeather(packet.AnimationId, packet.XSpeed, packet.YSpeed, packet.Intensity);
+        Weather.LoadWeather(packet.AnimationId, packet.XSpeed, packet.YSpeed, packet.Intensity, packet.Sound, packet.SoundVolume);
     }
 
     //PartyPacket

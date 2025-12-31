@@ -2412,7 +2412,9 @@ public static partial class PacketSender
                 Weather.GetWeatherAnimationId(),
                 Weather.GetWeatherXSpeed(),
                 Weather.GetWeatherYSpeed(),
-                Weather.GetWeatherIntensity()
+                Weather.GetWeatherIntensity(),
+                Weather.GetWeatherSound(),
+                Weather.GetWeatherSoundVolume()
             )
         );
     }
@@ -2424,7 +2426,9 @@ public static partial class PacketSender
                 Weather.GetWeatherAnimationId(),
                 Weather.GetWeatherXSpeed(),
                 Weather.GetWeatherYSpeed(),
-                Weather.GetWeatherIntensity()
+                Weather.GetWeatherIntensity(),
+                Weather.GetWeatherSound(),
+                Weather.GetWeatherSoundVolume()
             )
         );
     }

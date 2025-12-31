@@ -1,50 +1,82 @@
+using Intersect.Client.Core;
+using Intersect.Client.Core.Sounds;
+using Intersect.Client.Framework.Core.Sounds;
+using Intersect.Core;
 using Intersect.Framework.Core.GameObjects.Animations;
-using Intersect.GameObjects;
+using Microsoft.Extensions.Logging;
 
 namespace Intersect.Client.General;
 
-public static partial class Weather
+public static class Weather
 {
-    private static Guid sWeatherAnimationId = Guid.Empty;
-    private static int sWeatherXSpeed = 0;
-    private static int sWeatherYSpeed = 0;
-    private static int sWeatherIntensity = 0;
+    private static Guid _animationId = Guid.Empty;
+    private static int _xSpeed = 0;
+    private static int _ySpeed = 0;
+    private static int _intensity = 0;
+    private static string _sound = string.Empty;
+    private static float _soundVolume = 0.5f;
+    private static ISound? _currentWeatherSound = null;
 
-    public static void LoadWeather(Guid animationId, int xSpeed, int ySpeed, int intensity)
+    public static void LoadWeather(Guid animationId, int xSpeed, int ySpeed, int intensity, string sound, float soundVolume)
     {
-        sWeatherAnimationId = animationId;
-        sWeatherXSpeed = xSpeed;
-        sWeatherYSpeed = ySpeed;
-        sWeatherIntensity = intensity;
-    }
+        ApplicationContext.CurrentContext.Logger.LogDebug(
+            $"[Weather] Loading weather: AnimationId={animationId}, Sound='{sound}', Volume={soundVolume}, Intensity={intensity}"
+        );
 
-    public static Guid GetWeatherAnimationId()
-    {
-        return sWeatherAnimationId;
-    }
+        // Check if weather is being cleared (empty animation)
+        var isClearing = animationId == Guid.Empty || intensity <= 0;
 
-    public static int GetWeatherXSpeed()
-    {
-        return sWeatherXSpeed;
-    }
+        // Stop previous weather sound if it changed OR if clearing weather
+        if ((_sound != sound || isClearing) && _currentWeatherSound != null)
+        {
+            ApplicationContext.CurrentContext.Logger.LogDebug($"[Weather] Stopping previous sound: '{_sound}'");
+            Audio.StopSound(_currentWeatherSound as IMapSound);
+            _currentWeatherSound = null;
+        }
 
-    public static int GetWeatherYSpeed()
-    {
-        return sWeatherYSpeed;
-    }
+        _animationId = animationId;
+        _xSpeed = xSpeed;
+        _ySpeed = ySpeed;
+        _intensity = intensity;
+        _sound = sound;
+        _soundVolume = soundVolume;
 
-    public static int GetWeatherIntensity()
-    {
-        return sWeatherIntensity;
+        // Only start new weather sound if NOT clearing
+        if (!isClearing && !string.IsNullOrEmpty(sound))
+        {
+            ApplicationContext.CurrentContext.Logger.LogDebug($"[Weather] Attempting to play sound: '{sound}'");
+            _currentWeatherSound = Audio.AddGameSound(sound, true);
+
+            if (_currentWeatherSound != null)
+            {
+                ApplicationContext.CurrentContext.Logger.LogDebug("[Weather] Sound started successfully!");
+            }
+            else
+            {
+                ApplicationContext.CurrentContext.Logger.LogWarning($"[Weather] Failed to start sound: '{sound}'");
+            }
+        }
+        else if (isClearing)
+        {
+            ApplicationContext.CurrentContext.Logger.LogDebug("[Weather] Weather cleared, no sound to play");
+        }
+        else if (string.IsNullOrEmpty(sound))
+        {
+            ApplicationContext.CurrentContext.Logger.LogDebug("[Weather] No sound specified for this weather");
+        }
     }
 
     public static AnimationDescriptor? GetWeatherAnimation()
     {
-        if (sWeatherAnimationId == Guid.Empty)
+        if (_animationId == Guid.Empty)
         {
             return null;
         }
 
-        return AnimationDescriptor.Get(sWeatherAnimationId);
+        return AnimationDescriptor.Get(_animationId);
     }
+
+    public static int GetWeatherXSpeed() => _xSpeed;
+    public static int GetWeatherYSpeed() => _ySpeed;
+    public static int GetWeatherIntensity() => _intensity;
 }

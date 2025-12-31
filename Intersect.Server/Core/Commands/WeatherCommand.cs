@@ -55,7 +55,7 @@ internal sealed partial class WeatherCommand : ServerCommand
             string.Equals(animationArgValue, "none", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(animationArgValue, "off", StringComparison.OrdinalIgnoreCase))
         {
-            Weather.SetWeather(Guid.Empty, 0, 0, 0);
+            Weather.SetWeather(Guid.Empty, 0, 0, 0, "", 0f);
             Console.WriteLine("    Global weather cleared!");
             PacketSender.SendGlobalWeatherToAll();
             return;
@@ -77,8 +77,16 @@ internal sealed partial class WeatherCommand : ServerCommand
             Console.WriteLine($"    Intensity clamped to valid range (0-100): {intensity}");
         }
 
+        // Try to find a matching weather type in config for sound
+        var weatherType = Options.Instance.Weather.WeatherTypes.FirstOrDefault(
+            w => w.AnimationId == animationId
+        );
+
+        var sound = weatherType?.Sound ?? "";
+        var soundVolume = weatherType?.SoundVolume ?? 0.5f;
+
         // Set the weather
-        Weather.SetWeather(animationId, xSpeedArgValue, ySpeedArgValue, intensity);
+        Weather.SetWeather(animationId, xSpeedArgValue, ySpeedArgValue, intensity, sound, soundVolume);
         PacketSender.SendGlobalWeatherToAll();
 
         Console.WriteLine("    Global weather set!");
@@ -86,5 +94,9 @@ internal sealed partial class WeatherCommand : ServerCommand
         Console.WriteLine($"    X Speed: {xSpeedArgValue}");
         Console.WriteLine($"    Y Speed: {ySpeedArgValue}");
         Console.WriteLine($"    Intensity: {intensity}%");
+        if (!string.IsNullOrEmpty(sound))
+        {
+            Console.WriteLine($"    Sound: {sound} (Volume: {soundVolume * 100}%)");
+        }
     }
 }
