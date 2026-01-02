@@ -12,6 +12,7 @@ using Intersect.Client.Localization;
 using Intersect.Client.Networking;
 using Intersect.Configuration;
 using Intersect.Framework.Core.GameObjects.Items;
+using Intersect.Client.Items;
 
 namespace Intersect.Client.Interface.Game.Bag;
 
@@ -20,6 +21,9 @@ public partial class BagItem : SlotItem
     // Controls
     private readonly Label _quantityLabel;
     private readonly BagWindow _bagWindow;
+
+    // Descriptor atual para controle de animação
+    private ItemDescriptor? _currentDescriptor;
 
     // Context Menu Handling
     private readonly MenuItem _withdrawContextItem;
@@ -172,6 +176,26 @@ public partial class BagItem : SlotItem
 
     #endregion
 
+    protected override void Render(Framework.Gwen.Skin.Base skin)
+    {
+        // Atualizar animação do item se necessário
+        if (_currentDescriptor != null && Icon.Texture != null)
+        {
+            var sourceRect = ItemAnimationManager.GetItemSourceRect(_currentDescriptor, Icon.Texture);
+            if (sourceRect.HasValue)
+            {
+                Icon.SetTextureRect(
+                    (int)sourceRect.Value.X,
+                    (int)sourceRect.Value.Y,
+                    (int)sourceRect.Value.Width,
+                    (int)sourceRect.Value.Height
+                );
+            }
+        }
+
+        base.Render(skin);
+    }
+
     public override void Update()
     {
         if (Globals.Me == default)
@@ -188,6 +212,8 @@ public partial class BagItem : SlotItem
         {
             _quantityLabel.IsVisibleInParent = false;
             Icon.Texture = default;
+            _currentDescriptor = null;
+            UpdateIconDescriptor(null);
             return;
         }
 
@@ -199,6 +225,12 @@ public partial class BagItem : SlotItem
         {
             _quantityLabel.Text = Strings.FormatQuantityAbbreviated(bagSlot.Quantity);
         }
+
+        // Armazenar o descriptor atual para usar na animação
+        _currentDescriptor = descriptor;
+        
+        // Atualizar o descriptor no ícone para suportar animação durante drag
+        UpdateIconDescriptor(descriptor);
 
         if (Icon.TextureFilename == descriptor.Icon)
         {

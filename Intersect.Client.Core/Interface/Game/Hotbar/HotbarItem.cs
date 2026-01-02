@@ -59,6 +59,9 @@ public partial class HotbarItem : SlotItem
         Icon.HoverLeave += Icon_HoverLeave;
         Icon.Clicked += Icon_Clicked;
         Icon.DoubleClicked += Icon_DoubleClicked;
+        
+        // Desabilitar cache de textura para permitir animação
+        Icon.ShouldCacheToTexture = false;
 
         var font = GameContentManager.Current.GetFont("sourcesansproblack");
 
@@ -229,6 +232,26 @@ public partial class HotbarItem : SlotItem
         return false;
     }
 
+    protected override void Render(Framework.Gwen.Skin.Base skin)
+    {
+        // Atualizar animação do item se necessário
+        if (_currentItem != null && Icon.Texture != null)
+        {
+            var sourceRect = ItemAnimationManager.GetItemSourceRect(_currentItem, Icon.Texture);
+            if (sourceRect.HasValue)
+            {
+                Icon.SetTextureRect(
+                    (int)sourceRect.Value.X,
+                    (int)sourceRect.Value.Y,
+                    (int)sourceRect.Value.Width,
+                    (int)sourceRect.Value.Height
+                );
+            }
+        }
+
+        base.Render(skin);
+    }
+
     public override void Update()
     {
         if (Globals.Me == null || Controls.ActiveControls == null)
@@ -311,6 +334,12 @@ public partial class HotbarItem : SlotItem
                 _inventoryItemIndex = itmIndex;
                 _inventoryItem = (Item)Globals.Me.Inventory[itmIndex];
             }
+            
+            // Sempre atualizar o descriptor para suportar animação
+            UpdateIconDescriptor(_currentItem);
+            
+            // Forçar invalidação do Icon para garantir redesenho constante da animação
+            Icon.Invalidate();
         }
         else if (_currentSpell != null)
         {
@@ -319,6 +348,14 @@ public partial class HotbarItem : SlotItem
             {
                 _spellBookItem = Globals.Me.Spells[splIndex] as Spell;
             }
+            
+            // Limpar descriptor quando for spell
+            UpdateIconDescriptor(null);
+        }
+        else
+        {
+            // Limpar descriptor quando não houver item
+            UpdateIconDescriptor(null);
         }
 
         if (_currentItem != null) //When it's an item

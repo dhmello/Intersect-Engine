@@ -20,6 +20,7 @@ using Intersect.GameObjects;
 using Intersect.Utilities;
 using Intersect.Client.Framework.GenericClasses;
 using Intersect.Core;
+using Intersect.Client.Items;
 
 namespace Intersect.Client.Interface.Game.Inventory;
 
@@ -35,6 +36,9 @@ public partial class InventoryItem : SlotItem
     // Variáveis para contorno de raridade
     private Color _rarityBorderColor = Color.Transparent;
     private bool _showRarityBorder = false;
+
+    // Descriptor atual para controle de animação
+    private ItemDescriptor? _currentDescriptor;
 
     // Context Menu Handling
     private readonly MenuItem _useItemMenuItem;
@@ -483,6 +487,7 @@ public partial class InventoryItem : SlotItem
 
         // empty texture to reload on update
         Icon.Texture = default;
+        _currentDescriptor = null;
     }
 
     /// <summary>
@@ -515,10 +520,25 @@ public partial class InventoryItem : SlotItem
     }
 
     /// <summary>
-    /// Override do método Render para desenhar o contorno de raridade
+    /// Override do método Render para desenhar o contorno de raridade E animação de item
     /// </summary>
     protected override void Render(Framework.Gwen.Skin.Base skin)
     {
+        // Atualizar animação do item se necessário
+        if (_currentDescriptor != null && Icon.Texture != null)
+        {
+            var sourceRect = ItemAnimationManager.GetItemSourceRect(_currentDescriptor, Icon.Texture);
+            if (sourceRect.HasValue)
+            {
+                Icon.SetTextureRect(
+                    (int)sourceRect.Value.X,
+                    (int)sourceRect.Value.Y,
+                    (int)sourceRect.Value.Width,
+                    (int)sourceRect.Value.Height
+                );
+            }
+        }
+
         // Renderizar o componente normalmente primeiro
         base.Render(skin);
 
@@ -622,6 +642,12 @@ public partial class InventoryItem : SlotItem
         // Atualizar o contorno de raridade
         UpdateRarityBorder(descriptor, isDragging);
 
+        // Armazenar o descriptor atual para usar na animação
+        _currentDescriptor = descriptor;
+        
+        // Atualizar o descriptor no ícone para suportar animação durante drag
+        UpdateIconDescriptor(descriptor);
+
         if (Icon.TextureFilename == descriptor.Icon)
         {
             return;
@@ -654,6 +680,8 @@ public partial class InventoryItem : SlotItem
         _quantityLabel.IsVisibleInParent = false;
         _equipLabel.IsVisibleInParent = false;
         _cooldownLabel.IsVisibleInParent = false;
-        _showRarityBorder = false; // Esconder contorno de raridade
+        _showRarityBorder = false;
+        _currentDescriptor = null;
+        UpdateIconDescriptor(null);
     }
 }

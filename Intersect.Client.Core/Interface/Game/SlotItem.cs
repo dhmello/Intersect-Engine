@@ -1,6 +1,7 @@
 using Intersect.Client.Framework.Gwen;
 using Intersect.Client.Framework.Gwen.Control;
 using Intersect.Client.Framework.Gwen.DragDrop;
+using Intersect.Framework.Core.GameObjects.Items;
 
 namespace Intersect.Client.Interface.Game;
 
@@ -27,6 +28,14 @@ public partial class SlotItem : ImagePanel
         };
 
         _contextMenu = contextMenu;
+    }
+
+    /// <summary>
+    /// Atualiza o ItemDescriptor do ícone para suportar animação
+    /// </summary>
+    protected void UpdateIconDescriptor(ItemDescriptor? descriptor)
+    {
+        Icon.ItemDescriptor = descriptor;
     }
 
     public virtual void Update()

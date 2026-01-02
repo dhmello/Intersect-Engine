@@ -961,13 +961,28 @@ public partial class MapInstance : MapDescriptor, IGameObject<Guid, MapInstance>
                 var textureXPosition = centerX - (mapItemWidth / 2);
                 var textureYPosition = centerY - (mapItemHeight / 2);
 
-                // Draw the item texture.
-                Graphics.DrawGameTexture(
-                    itemTexture,
-                    new FloatRect(0, 0, itemTexture.Width, itemTexture.Height),
-                    new FloatRect(textureXPosition, textureYPosition, mapItemWidth, mapItemHeight),
-                    itemDescriptor.Color
-                );
+                // Get animated source rectangle if item has animation
+                var sourceRect = Items.ItemAnimationManager.GetItemSourceRect(itemDescriptor, itemTexture);
+                if (sourceRect.HasValue)
+                {
+                    // Draw with animation - use the specific frame
+                    Graphics.DrawGameTexture(
+                        itemTexture,
+                        sourceRect.Value,
+                        new FloatRect(textureXPosition, textureYPosition, mapItemWidth, mapItemHeight),
+                        itemDescriptor.Color
+                    );
+                }
+                else
+                {
+                    // Draw without animation - use full texture
+                    Graphics.DrawGameTexture(
+                        itemTexture,
+                        new FloatRect(0, 0, itemTexture.Width, itemTexture.Height),
+                        new FloatRect(textureXPosition, textureYPosition, mapItemWidth, mapItemHeight),
+                        itemDescriptor.Color
+                    );
+                }
             }
         }
 

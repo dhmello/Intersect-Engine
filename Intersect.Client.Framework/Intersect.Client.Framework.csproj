@@ -28,4 +28,8 @@
     <EmbeddedResource Include="Gwen\Skin\skin-intersect.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Gwen\Extensions\" />
+  </ItemGroup>
+
 </Project>

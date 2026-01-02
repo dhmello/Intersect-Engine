@@ -24,6 +24,9 @@ public partial class MapItemIcon
 
     private MapItemWindow mMapItemWindow;
 
+    // Descriptor atual para controle de animação
+    private ItemDescriptor? _currentDescriptor;
+
     public MapItemIcon(MapItemWindow window)
     {
         mMapItemWindow = window;
@@ -85,16 +88,41 @@ public partial class MapItemIcon
         return rect;
     }
 
+    /// <summary>
+    /// Renderiza o ícone do item com animação
+    /// </summary>
+    public void Render()
+    {
+        // Atualizar animação do item se necessário
+        if (_currentDescriptor != null && Pnl.Texture != null)
+        {
+            var sourceRect = ItemAnimationManager.GetItemSourceRect(_currentDescriptor, Pnl.Texture);
+            if (sourceRect.HasValue)
+            {
+                Pnl.SetTextureRect(
+                    (int)sourceRect.Value.X,
+                    (int)sourceRect.Value.Y,
+                    (int)sourceRect.Value.Width,
+                    (int)sourceRect.Value.Height
+                );
+            }
+        }
+    }
+
     public void Update()
     {
         if (MyItem == null)
         {
+            _currentDescriptor = null;
             return;
         }
 
         var item = ItemDescriptor.Get(MyItem.ItemId);
         if (item != null)
         {
+            // Armazenar o descriptor atual para usar na animação
+            _currentDescriptor = item;
+
             var itemTex = Globals.ContentManager.GetTexture(Framework.Content.TextureType.Item, item.Icon);
             if (itemTex != null)
             {
@@ -111,10 +139,14 @@ public partial class MapItemIcon
         }
         else
         {
+            _currentDescriptor = null;
             if (Pnl.Texture != null)
             {
                 Pnl.Texture = null;
             }
         }
+
+        // Atualizar animação
+        Render();
     }
 }

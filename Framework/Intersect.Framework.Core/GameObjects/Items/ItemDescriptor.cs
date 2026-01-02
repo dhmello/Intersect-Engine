@@ -196,6 +196,26 @@ public partial class ItemDescriptor : DatabaseObject<ItemDescriptor>, IFolderabl
     [NotMapped]
     public Color Color { get; set; }
 
+    /// <summary>
+    /// Defines the duration (in milliseconds) for transitioning between consecutive item animation frames.
+    /// Default is 200ms for smooth animation.
+    /// </summary>
+    public int AnimationFrameSpeed { get; set; } = 200;
+
+    /// <summary>
+    /// Gets or sets the number of animation frames for this item based on the texture dimensions.
+    /// Frames are laid out horizontally in the texture (32px per frame).
+    /// Supports 1-4 frames (32x32, 64x32, 96x32, or 128x32).
+    /// </summary>
+    [NotMapped, JsonIgnore]
+    public int AnimationFrameCount
+    {
+        get => _animationFrameCount;
+        set => _animationFrameCount = Math.Clamp(value, 1, 4);
+    }
+
+    private int _animationFrameCount = 1;
+
     public int Price { get; set; }
 
     public int Rarity { get; set; }
@@ -483,5 +503,7 @@ public partial class ItemDescriptor : DatabaseObject<ItemDescriptor>, IFolderabl
         Consumable = new ConsumableData();
         Effects = [];
         Color = new Color(255, 255, 255, 255);
+        AnimationFrameSpeed = 200; // Default animation speed
+        _animationFrameCount = 1; // Default to 1 frame (no animation)
     }
 }
