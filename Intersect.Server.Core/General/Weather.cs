@@ -19,11 +19,17 @@ public static class Weather
     private static long _nextWeatherChangeTime = 0;
     private static long _currentWeatherEndTime = 0;
     private static Random _random = new Random();
+    private static bool _isInitialized = false;
 
     public static void Init()
     {
-        // Initialize with clear weather
-        SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
+        // Don't reset weather on init to preserve manual settings
+        if (!_isInitialized)
+        {
+            // Only initialize with clear weather on first run
+            SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo", sendBroadcast: false);
+            _isInitialized = true;
+        }
         
         // Schedule first weather check
         if (Options.Instance.Weather.EnableAutomaticWeather)
@@ -58,6 +64,7 @@ public static class Weather
         {
             // Clear weather
             SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
+            PacketSender.SendGlobalWeatherToAll();
             ScheduleNextWeatherChange();
             return;
         }
@@ -74,6 +81,7 @@ public static class Weather
         if (availableWeathers.Count == 0)
         {
             SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
+            PacketSender.SendGlobalWeatherToAll();
             ScheduleNextWeatherChange();
             return;
         }
@@ -106,6 +114,9 @@ public static class Weather
                 selectedWeather.Name
             );
 
+            // Send weather packet to all clients
+            PacketSender.SendGlobalWeatherToAll();
+
             // Schedule weather end
             var duration = _random.Next(selectedWeather.MinDuration, selectedWeather.MaxDuration + 1);
             _currentWeatherEndTime = Timing.Global.MillisecondsUtc + (duration * 60 * 1000);
@@ -118,6 +129,7 @@ public static class Weather
         else
         {
             SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
+            PacketSender.SendGlobalWeatherToAll();
             ScheduleNextWeatherChange();
         }
     }
@@ -133,7 +145,7 @@ public static class Weather
         _nextWeatherChangeTime = Timing.Global.MillisecondsUtc + (delayMinutes * 60 * 1000);
     }
 
-    public static void SetWeather(Guid animationId, int xSpeed, int ySpeed, int intensity, string weatherName = "")
+    public static void SetWeather(Guid animationId, int xSpeed, int ySpeed, int intensity, string weatherName = "", bool sendBroadcast = true)
     {
         var previousWeatherName = _currentWeatherName;
         
@@ -143,8 +155,8 @@ public static class Weather
         _currentIntensity = intensity;
         _currentWeatherName = string.IsNullOrEmpty(weatherName) ? "Céu Limpo" : weatherName;
 
-        // Send broadcast message if weather changed
-        if (previousWeatherName != _currentWeatherName)
+        // Send broadcast message if weather changed and broadcast is enabled
+        if (sendBroadcast && previousWeatherName != _currentWeatherName)
         {
             SendWeatherBroadcast(previousWeatherName, _currentWeatherName);
         }

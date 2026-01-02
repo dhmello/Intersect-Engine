@@ -55,7 +55,7 @@ internal sealed partial class WeatherCommand : ServerCommand
             string.Equals(animationArgValue, "none", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(animationArgValue, "off", StringComparison.OrdinalIgnoreCase))
         {
-            Weather.SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo");
+            Weather.SetWeather(Guid.Empty, 0, 0, 0, "Céu Limpo", sendBroadcast: false);
             PacketSender.SendGlobalWeatherToAll();
             Console.WriteLine("    Global weather cleared!");
             return;
@@ -77,8 +77,8 @@ internal sealed partial class WeatherCommand : ServerCommand
             Console.WriteLine($"    Intensity clamped to valid range (0-100): {intensity}");
         }
 
-        // Set the weather (sound system removed)
-        Weather.SetWeather(animationId, xSpeedArgValue, ySpeedArgValue, intensity, "Clima Manual");
+        // Set the weather (sound system removed, disable broadcast for manual commands)
+        Weather.SetWeather(animationId, xSpeedArgValue, ySpeedArgValue, intensity, "Clima Manual", sendBroadcast: false);
         PacketSender.SendGlobalWeatherToAll();
 
         Console.WriteLine("    Global weather set!");
