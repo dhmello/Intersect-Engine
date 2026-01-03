@@ -60,6 +60,12 @@ namespace Intersect.Client.Entities
                     return;
                 }
 
+                // Check if the target is a Player and the map is Safe, if so, do not auto attack
+                if (TargetType == 0 && targetEntity is Player && Globals.Me?.MapInstance?.ZoneType == Intersect.Framework.Core.GameObjects.Maps.MapZone.Safe)
+                {
+                    return;
+                }
+
                 // IMPORTANT: Check if the target can be attacked
                 // This prevents auto-attacking friendly NPCs
                 if (!targetEntity.CanBeAttacked)
