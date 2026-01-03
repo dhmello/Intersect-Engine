@@ -54,6 +54,12 @@ namespace Intersect.Client.Entities
                     return;
                 }
 
+                // Check if the target is an Event, if so, do not auto attack
+                if (TargetType == 1)
+                {
+                    return;
+                }
+
                 // IMPORTANT: Check if the target can be attacked
                 // This prevents auto-attacking friendly NPCs
                 if (!targetEntity.CanBeAttacked)
