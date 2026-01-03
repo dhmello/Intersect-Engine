@@ -1098,9 +1098,6 @@ public static partial class Strings
         public readonly LocalizedString Killed = @"{00} has been killed by {01}!";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
-        public readonly LocalizedString Left = @"{00} has left {01}.";
-
-        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public readonly LocalizedString LevelLost = @"You have lost a level! You are now level {00}!";
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
