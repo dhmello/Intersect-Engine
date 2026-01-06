@@ -92,6 +92,10 @@ public static partial class Graphics
     private static GameContentManager sContentManager = null!;
 
     private static IGameRenderTexture? sDarknessTexture;
+    
+    // START EDIT - Fog Texture
+    private static IGameRenderTexture? sFogTexture;
+    // END EDIT
 
     private static readonly List<LightDescriptor> sLightQueue = [];
 
@@ -536,6 +540,10 @@ public static partial class Graphics
             }
         }
 
+        // START EDIT - Draw Fog Of War
+        DrawFogOfWar();
+        // END EDIT
+
         foreach (var animInstance in animations)
         {
             animInstance.EndDraw();
@@ -570,6 +578,9 @@ public static partial class Graphics
             renderer.DisplayModeChanged())
         {
             sDarknessTexture = null;
+            // START EDIT - Reset Fog
+            sFogTexture = null;
+            // END EDIT
             Interface.Interface.DestroyGwen();
             Interface.Interface.InitGwen();
             sOldWidth = renderer.ScreenWidth;
@@ -1159,6 +1170,73 @@ public static partial class Graphics
             );
         }
     }
+
+    // START EDIT - Fog Of War Implementation
+    public static void DrawFogOfWar()
+    {
+        if (Renderer == default || Globals.Me == default)
+        {
+            return;
+        }
+
+        // Initialize texture if needed
+        sFogTexture ??= Renderer.CreateRenderTexture(Renderer.ScreenWidth, Renderer.ScreenHeight);
+        
+        // Clear to Black (Opacity 100% Black) - effectively the Fog
+        sFogTexture.Clear(Color.Black);
+
+        // Get Shader
+        var radialShader = Globals.ContentManager.GetShader("radialgradient");
+        if (radialShader != null)
+        {
+             var player = Globals.Me;
+             // Define View Radius (Fog of War aperture)
+             // Using 960 radius for 1920 diameter (1080p width parity)
+             int size = 960; 
+             float expand = 50f; 
+             
+             // Calculate coordinates relative to View
+             var x = (int)Math.Ceiling(player.Center.X) - ((int)CurrentView.Left + size);
+             var y = (int)Math.Ceiling(player.Center.Y) - ((int)CurrentView.Top + size);
+
+             // Configure Shader for White Light (Visibility)
+             // The shader uses this color to draw the gradient.
+             // White (255, 255, 255, 255) means full visibility in the center.
+             radialShader.SetColor("LightColor", new Color(255, 255, 255, 255));
+             radialShader.SetFloat("Expand", expand / 100f);
+
+             // Draw the 'Hole' in the Fog (White Circle) onto the Black Texture
+             DrawGameTexture(
+                Renderer.WhitePixel, 
+                new FloatRect(0, 0, 1, 1),
+                new FloatRect(x, y, size * 2, size * 2), 
+                new Color(255, 255, 255, 255), 
+                sFogTexture, 
+                GameBlendModes.Add, // Adding White to Black creates White
+                radialShader, 
+                0, 
+                false
+             );
+        }
+        
+        // Draw the Fog Texture onto the Screen
+        // We use Multiply blend mode.
+        // Background (Game) * FogTexture
+        // Where FogTexture is Black, result is Black (Fog).
+        // Where FogTexture is White, result is Background (Visible).
+        if (sFogTexture != null)
+        {
+            DrawGameTexture(
+                sFogTexture,
+                sFogTexture.Bounds,
+                WorldViewport,
+                Color.White,
+                renderTarget: null,
+                blendMode: GameBlendModes.Multiply
+            );
+        }
+    }
+    // END EDIT
 
     public static void AddLight(int x, int y, int size, byte intensity, float expand, Color color)
     {
