@@ -122,6 +122,12 @@ public static partial class Graphics
 
     public static float MaximumWorldScale => Options.Instance?.Map?.MaximumWorldScale ?? 1;
 
+    //Fog of War Movement
+    private static float sFogX = 0f;
+    private static float sFogY = 0f;
+    public static float FogSpeedX = 0.1f; // Configurable Speed X
+    public static float FogSpeedY = 0.1f; // Configurable Speed Y
+
     //Init Functions
     public static void InitGraphics()
     {
@@ -1183,7 +1189,39 @@ public static partial class Graphics
         sFogTexture ??= Renderer.CreateRenderTexture(Renderer.ScreenWidth, Renderer.ScreenHeight);
         
         // Clear to Black (Opacity 100% Black) - effectively the Fog
-        sFogTexture.Clear(Color.Black);
+        var fogTex = Globals.ContentManager.GetTexture(TextureType.Fog, "fow.png");
+        
+        if (fogTex != null)
+        {
+            // If texture exists, tile it across the render texture
+            sFogTexture.Clear(Color.Black);
+
+            // Update Fog Position
+            sFogX += FogSpeedX;
+            sFogY += FogSpeedY;
+
+            // Loop positions to keep them within texture bounds
+            if (sFogX >= fogTex.Width) sFogX -= fogTex.Width;
+            if (sFogX < 0) sFogX += fogTex.Width;
+            if (sFogY >= fogTex.Height) sFogY -= fogTex.Height;
+            if (sFogY < 0) sFogY += fogTex.Height;
+
+            // Draw tiled fog texture
+            // We start drawing from the offset (modulo width/height) to create the scrolling effect.
+            // We draw from -Width/Height to ScreenWidth/Height + Width/Height to ensure coverage during scrolling.
+            for (var x = -fogTex.Width; x < Renderer.ScreenWidth + fogTex.Width; x += fogTex.Width)
+            {
+                for (var y = -fogTex.Height; y < Renderer.ScreenHeight + fogTex.Height; y += fogTex.Height)
+                {
+                    DrawGameTexture(fogTex, x + (int)sFogX, y + (int)sFogY, Color.White, sFogTexture, GameBlendModes.None);
+                }
+            }
+        }
+        else
+        {
+            // Fallback to black if texture not found
+            sFogTexture.Clear(Color.Black);
+        }
 
         // Get Shader
         var radialShader = Globals.ContentManager.GetShader("radialgradient");
@@ -1202,17 +1240,18 @@ public static partial class Graphics
              // Configure Shader for White Light (Visibility)
              // The shader uses this color to draw the gradient.
              // White (255, 255, 255, 255) means full visibility in the center.
+             // When we ADD white to our Fog Texture, it pushes the pixels towards White (Vision).
              radialShader.SetColor("LightColor", new Color(255, 255, 255, 255));
              radialShader.SetFloat("Expand", expand / 100f);
 
-             // Draw the 'Hole' in the Fog (White Circle) onto the Black Texture
+             // Draw the 'Hole' in the Fog (White Circle) onto the Texture
              DrawGameTexture(
                 Renderer.WhitePixel, 
                 new FloatRect(0, 0, 1, 1),
                 new FloatRect(x, y, size * 2, size * 2), 
                 new Color(255, 255, 255, 255), 
                 sFogTexture, 
-                GameBlendModes.Add, // Adding White to Black creates White
+                GameBlendModes.Add, 
                 radialShader, 
                 0, 
                 false
@@ -1222,15 +1261,15 @@ public static partial class Graphics
         // Draw the Fog Texture onto the Screen
         // We use Multiply blend mode.
         // Background (Game) * FogTexture
-        // Where FogTexture is Black, result is Black (Fog).
-        // Where FogTexture is White, result is Background (Visible).
+        // Outside circle: FogTexture is the tiled texture (dark). World * DarkTexture = Darkened/Textured Fog.
+        // Inside circle: FogTexture is White (because we Added White). World * White = World (Visible).
         if (sFogTexture != null)
         {
             DrawGameTexture(
                 sFogTexture,
                 sFogTexture.Bounds,
                 WorldViewport,
-                Color.White,
+                new Color(255, 255, 255, 255),
                 renderTarget: null,
                 blendMode: GameBlendModes.Multiply
             );
