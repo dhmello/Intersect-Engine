@@ -32,6 +32,14 @@ public partial class FrmItem : EditorForm
 
     private bool EffectValueUpdating = false;
 
+    private System.Windows.Forms.Timer _animTimer;
+
+    private int _animFrame;
+
+    private Image _texture;
+
+    private string _textureName;
+
     public FrmItem()
     {
         ApplyHooks();
@@ -51,7 +59,21 @@ public partial class FrmItem : EditorForm
         _btnCancel = btnCancel;
 
         lstGameObjects.Init(UpdateToolStripItems, AssignEditorItem, toolStripItemNew_Click, toolStripItemCopy_Click, toolStripItemUndo_Click, toolStripItemPaste_Click, toolStripItemDelete_Click);
+
+        _animTimer = new System.Windows.Forms.Timer();
+        _animTimer.Interval = 200;
+        _animTimer.Tick += _animTimer_Tick;
+        _animTimer.Start();
     }
+
+    private void _animTimer_Tick(object sender, EventArgs e)
+    {
+        if (mEditorItem == null) return;
+
+        _animFrame++;
+        DrawItemIcon();
+    }
+
     private void AssignEditorItem(Guid id)
     {
         mEditorItem = ItemDescriptor.Get(id);
@@ -86,6 +108,9 @@ public partial class FrmItem : EditorForm
             item.DeleteBackup();
         }
 
+        _animTimer?.Dispose();
+        _texture?.Dispose();
+
         Hide();
         Globals.CurrentEditor = -1;
         Dispose();
@@ -99,6 +124,9 @@ public partial class FrmItem : EditorForm
             PacketSender.SendSaveObject(item);
             item.DeleteBackup();
         }
+
+        _animTimer?.Dispose();
+        _texture?.Dispose();
 
         Hide();
         Globals.CurrentEditor = -1;
@@ -419,40 +447,16 @@ public partial class FrmItem : EditorForm
                 nudIntervalPercentage.Value = mEditorItem.Consumable.Percentage;
             }
 
-            picItem.BackgroundImage?.Dispose();
-            picItem.BackgroundImage = null;
-            if (cmbPic.SelectedIndex > 0)
-            {
-                DrawItemIcon();
-            }
-
-            picMalePaperdoll.BackgroundImage?.Dispose();
-            picMalePaperdoll.BackgroundImage = null;
-            if (cmbMalePaperdoll.SelectedIndex > 0)
-            {
-                DrawItemPaperdoll(Gender.Male);
-            }
-
-            picFemalePaperdoll.BackgroundImage?.Dispose();
-            picFemalePaperdoll.BackgroundImage = null;
-            if (cmbFemalePaperdoll.SelectedIndex > 0)
-            {
-                DrawItemPaperdoll(Gender.Female);
-            }
-
-            cmbDamageType.SelectedIndex = mEditorItem.DamageType;
-            cmbScalingStat.SelectedIndex = mEditorItem.ScalingStat;
-
-            //External References
-            cmbProjectile.SelectedIndex = ProjectileDescriptor.ListIndex(mEditorItem.ProjectileId) + 1;
-            cmbAnimation.SelectedIndex = AnimationDescriptor.ListIndex(mEditorItem.AnimationId) + 1;
-
-            nudCooldown.Value = mEditorItem.Cooldown;
-            cmbCooldownGroup.Text = mEditorItem.CooldownGroup;
-            chkIgnoreGlobalCooldown.Checked = mEditorItem.IgnoreGlobalCooldown;
-            chkIgnoreCdr.Checked = mEditorItem.IgnoreCooldownReduction;
-
             txtCannotUse.Text = mEditorItem.CannotUseMessage;
+
+            if (mEditorItem.AnimationFrameSpeed > 0)
+            {
+                _animTimer.Interval = mEditorItem.AnimationFrameSpeed;
+            }
+            else
+            {
+                _animTimer.Interval = 200;
+            }
 
             if (mChanged.IndexOf(mEditorItem) == -1)
             {
@@ -1156,34 +1160,69 @@ public partial class FrmItem : EditorForm
         gfx.FillRectangle(Brushes.Black, new Rectangle(0, 0, picItem.Width, picItem.Height));
         if (cmbPic.SelectedIndex > 0)
         {
-            var img = Image.FromFile("resources/items/" + cmbPic.Text);
-            var imgAttributes = new ImageAttributes();
+            if (_textureName != cmbPic.Text)
+            {
+                _texture?.Dispose();
+                _textureName = cmbPic.Text;
+                try
+                {
+                    _texture = Image.FromFile("resources/items/" + _textureName);
+                }
+                catch
+                {
+                    _texture = null;
+                }
+                _animFrame = 0;
+            }
 
-            // Microsoft, what the heck is this crap?
-            imgAttributes.SetColorMatrix(
-                new ColorMatrix(
-                    new float[][]
-                    {
+            if (_texture != null)
+            {
+                var imgAttributes = new ImageAttributes();
+
+                // Microsoft, what the heck is this crap?
+                imgAttributes.SetColorMatrix(
+                    new ColorMatrix(
+                        new float[][]
+                        {
                         new float[] { (float)nudRgbaR.Value / 255,  0,  0,  0, 0},  // Modify the red space
                         new float[] {0, (float)nudRgbaG.Value / 255,  0,  0, 0},    // Modify the green space
                         new float[] {0,  0, (float)nudRgbaB.Value / 255,  0, 0},    // Modify the blue space
                         new float[] {0,  0,  0, (float)nudRgbaA.Value / 255, 0},    // Modify the alpha space
                         new float[] {0, 0, 0, 0, 1}                                 // We're not adding any non-linear changes. Value of 1 at the end is a dummy value!
-                    }
-                )
-            );
+                        }
+                    )
+                );
 
-            gfx.DrawImage(
-                img, new Rectangle(0, 0, img.Width, img.Height),
-                0, 0, img.Width, img.Height, GraphicsUnit.Pixel, imgAttributes
-            );
+                var frameWidth = 32;
+                var frameHeight = 32;
+                var frames = _texture.Width / frameWidth;
+                if (frames <= 0) frames = 1;
 
-            img.Dispose();
-            imgAttributes.Dispose();
+                var currentFrame = _animFrame % frames;
+                var srcRect = new Rectangle(currentFrame * frameWidth, 0, frameWidth, frameHeight);
+
+                // Ensure we don't read past image
+                if (srcRect.Right > _texture.Width) srcRect.Width = _texture.Width - srcRect.X;
+                if (srcRect.Bottom > _texture.Height) srcRect.Height = _texture.Height - srcRect.Y;
+
+                gfx.DrawImage(
+                    _texture, new Rectangle(0, 0, srcRect.Width, srcRect.Height),
+                    srcRect.X, srcRect.Y, srcRect.Width, srcRect.Height, GraphicsUnit.Pixel, imgAttributes
+                );
+
+                imgAttributes.Dispose();
+            }
+        }
+        else
+        {
+            _texture?.Dispose();
+            _texture = null;
+            _textureName = null;
         }
 
         gfx.Dispose();
 
+        picItem.BackgroundImage?.Dispose();
         picItem.BackgroundImage = picItemBmp;
     }
 

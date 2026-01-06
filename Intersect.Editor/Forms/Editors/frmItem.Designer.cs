@@ -37,7 +37,7 @@ namespace Intersect.Editor.Forms.Editors
             grpItems = new DarkGroupBox();
             btnClearSearch = new DarkButton();
             txtSearch = new DarkTextBox();
-            lstGameObjects = new Controls.GameObjectList();
+            lstGameObjects = new Intersect.Editor.Forms.Controls.GameObjectList();
             btnCancel = new DarkButton();
             btnSave = new DarkButton();
             grpGeneral = new DarkGroupBox();
@@ -707,7 +707,7 @@ namespace Intersect.Editor.Forms.Editors
             lblDespawnTime.Location = new System.Drawing.Point(9, 479);
             lblDespawnTime.Margin = new Padding(4, 0, 4, 0);
             lblDespawnTime.Name = "lblDespawnTime";
-            lblDespawnTime.Size = new Size(262, 15);
+            lblDespawnTime.Size = new Size(263, 15);
             lblDespawnTime.TabIndex = 101;
             lblDespawnTime.Text = "Item Despawn Time (ms):     [0 for server default]";
             // 
@@ -844,7 +844,7 @@ namespace Intersect.Editor.Forms.Editors
             chkCanTrade.Location = new System.Drawing.Point(27, 384);
             chkCanTrade.Margin = new Padding(4, 3, 4, 3);
             chkCanTrade.Name = "chkCanTrade";
-            chkCanTrade.Size = new Size(83, 19);
+            chkCanTrade.Size = new Size(84, 19);
             chkCanTrade.TabIndex = 91;
             chkCanTrade.Text = "Can Trade?";
             chkCanTrade.CheckedChanged += chkCanTrade_CheckedChanged;
@@ -1122,10 +1122,10 @@ namespace Intersect.Editor.Forms.Editors
             cmbPic.ForeColor = System.Drawing.Color.Gainsboro;
             cmbPic.FormattingEnabled = true;
             cmbPic.Items.AddRange(new object[] { "None" });
-            cmbPic.Location = new System.Drawing.Point(327, 45);
+            cmbPic.Location = new System.Drawing.Point(351, 28);
             cmbPic.Margin = new Padding(4, 3, 4, 3);
             cmbPic.Name = "cmbPic";
-            cmbPic.Size = new Size(184, 24);
+            cmbPic.Size = new Size(164, 24);
             cmbPic.TabIndex = 11;
             cmbPic.Text = "None";
             cmbPic.TextPadding = new Padding(2);
@@ -1154,7 +1154,7 @@ namespace Intersect.Editor.Forms.Editors
             // lblPic
             // 
             lblPic.AutoSize = true;
-            lblPic.Location = new System.Drawing.Point(323, 25);
+            lblPic.Location = new System.Drawing.Point(321, 31);
             lblPic.Margin = new Padding(4, 0, 4, 0);
             lblPic.Name = "lblPic";
             lblPic.Size = new Size(26, 15);
@@ -1164,10 +1164,12 @@ namespace Intersect.Editor.Forms.Editors
             // picItem
             // 
             picItem.BackColor = System.Drawing.Color.Black;
-            picItem.Location = new System.Drawing.Point(518, 21);
+            picItem.BackgroundImageLayout = ImageLayout.Stretch;
+            picItem.Location = new System.Drawing.Point(523, 13);
             picItem.Margin = new Padding(4, 3, 4, 3);
             picItem.Name = "picItem";
-            picItem.Size = new Size(56, 55);
+            picItem.Size = new Size(64, 64);
+            picItem.SizeMode = PictureBoxSizeMode.StretchImage;
             picItem.TabIndex = 4;
             picItem.TabStop = false;
             // 
@@ -1177,7 +1179,7 @@ namespace Intersect.Editor.Forms.Editors
             lblType.Location = new System.Drawing.Point(9, 111);
             lblType.Margin = new Padding(4, 0, 4, 0);
             lblType.Name = "lblType";
-            lblType.Size = new Size(34, 15);
+            lblType.Size = new Size(35, 15);
             lblType.TabIndex = 3;
             lblType.Text = "Type:";
             // 
@@ -2430,7 +2432,7 @@ namespace Intersect.Editor.Forms.Editors
             lblCritMultiplier.Location = new System.Drawing.Point(14, 112);
             lblCritMultiplier.Margin = new Padding(4, 0, 4, 0);
             lblCritMultiplier.Name = "lblCritMultiplier";
-            lblCritMultiplier.Size = new Size(156, 15);
+            lblCritMultiplier.Size = new Size(155, 15);
             lblCritMultiplier.TabIndex = 57;
             lblCritMultiplier.Text = "Crit Multiplier (Default 1.5x):";
             // 
@@ -2638,7 +2640,7 @@ namespace Intersect.Editor.Forms.Editors
             lblDamageType.Location = new System.Drawing.Point(15, 156);
             lblDamageType.Margin = new Padding(4, 0, 4, 0);
             lblDamageType.Name = "lblDamageType";
-            lblDamageType.Size = new Size(81, 15);
+            lblDamageType.Size = new Size(82, 15);
             lblDamageType.TabIndex = 41;
             lblDamageType.Text = "Damage Type:";
             // 
@@ -2680,7 +2682,7 @@ namespace Intersect.Editor.Forms.Editors
             lblAttackAnimation.Location = new System.Drawing.Point(14, 387);
             lblAttackAnimation.Margin = new Padding(4, 0, 4, 0);
             lblAttackAnimation.Name = "lblAttackAnimation";
-            lblAttackAnimation.Size = new Size(132, 15);
+            lblAttackAnimation.Size = new Size(131, 15);
             lblAttackAnimation.TabIndex = 37;
             lblAttackAnimation.Text = "Extra Attack Animation:";
             // 
@@ -2701,7 +2703,7 @@ namespace Intersect.Editor.Forms.Editors
             lblToolType.Location = new System.Drawing.Point(15, 435);
             lblToolType.Margin = new Padding(4, 0, 4, 0);
             lblToolType.Name = "lblToolType";
-            lblToolType.Size = new Size(59, 15);
+            lblToolType.Size = new Size(61, 15);
             lblToolType.TabIndex = 26;
             lblToolType.Text = "Tool Type:";
             // 
@@ -2964,7 +2966,6 @@ namespace Intersect.Editor.Forms.Editors
             AutoSize = true;
             BackColor = System.Drawing.Color.FromArgb(45, 45, 48);
             ClientSize = new Size(1241, 728);
-            ControlBox = true;
             Controls.Add(toolStrip);
             Controls.Add(btnCancel);
             Controls.Add(btnSave);
@@ -2973,8 +2974,8 @@ namespace Intersect.Editor.Forms.Editors
             FormBorderStyle = FormBorderStyle.FixedSingle;
             KeyPreview = true;
             Margin = new Padding(4, 3, 4, 3);
-            MinimizeBox = false;
             MaximizeBox = false;
+            MinimizeBox = false;
             Name = "FrmItem";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Item Editor";
