@@ -32,7 +32,6 @@ public sealed class OptionsContractResolver(bool serializePrivateProperties, boo
     private static readonly HashSet<PropertyInfo> PublicProperties =
     [
         typeof(Options).GetProperty(nameof(Options.SmtpValid)),
-        typeof(Options).GetProperty(nameof(Options.TranslationApiKey)),
     ];
 
     protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
@@ -44,7 +43,6 @@ public sealed class OptionsContractResolver(bool serializePrivateProperties, boo
             property.ShouldDeserialize = AlwaysSerialize;
             property.ShouldSerialize = ShouldSerializePrivateProperty;
             property.Writable = true;
-            property.Ignored = false;
         }
 
         if (PublicProperties.Contains(member))
@@ -52,7 +50,6 @@ public sealed class OptionsContractResolver(bool serializePrivateProperties, boo
             property.ShouldDeserialize = AlwaysSerialize;
             property.ShouldSerialize = ShouldSerializePublicProperty;
             property.Writable = true;
-            property.Ignored = false;
         }
 
         return property;

@@ -315,10 +315,10 @@ public partial class Label : Base, ILabel, IFontProvider
     /// </summary>
     public Color? TextColor
     {
-        get => _textElement?.Color ?? Color.White;
+        get => _textElement.Color ?? Color.White;
         set
         {
-            if (_textElement == null || value == _textElement.Color)
+            if (value == _textElement.Color)
             {
                 return;
             }
@@ -664,11 +664,6 @@ public partial class Label : Base, ILabel, IFontProvider
     {
         base.Layout(skin);
 
-        if (_textElement == null)
-        {
-            return;
-        }
-
         if (_autoSizeToContents)
         {
             SizeToContents();
@@ -679,7 +674,7 @@ public partial class Label : Base, ILabel, IFontProvider
 
     protected void AlignTextElement(Text textElement)
     {
-        if (textElement == null || (_textDisabled && textElement == _textElement && textElement.IsHidden))
+        if (_textDisabled && textElement == _textElement && textElement.IsHidden)
         {
             return;
         }
@@ -810,12 +805,6 @@ public partial class Label : Base, ILabel, IFontProvider
 
     public virtual bool SizeToContents(out Point contentSize)
     {
-        if (_textElement == null)
-        {
-            contentSize = Point.Empty;
-            return false;
-        }
-
         _textElement.SizeToChildren();
 
         contentSize = MeasureShrinkToContents();

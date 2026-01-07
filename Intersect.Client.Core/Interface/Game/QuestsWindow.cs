@@ -56,7 +56,6 @@ public partial class QuestsWindow
         mQuestStatus.SetText("");
 
         mQuestDescArea = new ScrollControl(mQuestsWindow, "QuestDescription");
-        mQuestDescArea.EnableScroll(false, true); // Enable vertical scrolling explicitely
 
         mQuestDescTemplateLabel = new Label(mQuestsWindow, "QuestDescriptionTemplate");
 
@@ -347,8 +346,6 @@ public partial class QuestsWindow
 
                     if (mSelectedQuest.InProgressDescription.Length > 0)
                     {
-                        // FORCE TRANSLATION UPDATE IF NEEDED OR USE CACHED IF DESCRIPTOR IS OUTDATED
-                        // But Descriptor should be updated by TranslationService.
                         mQuestDescLabel.AddText(mSelectedQuest.InProgressDescription, mQuestDescTemplateLabel);
 
                         mQuestDescLabel.AddLineBreak();
@@ -435,12 +432,9 @@ public partial class QuestsWindow
             _questList.Hide();
             mQuestTitle.IsHidden = false;
             mQuestTitle.Text = mSelectedQuest.Name;
-            
-            // Fix layout bug causing text cut off sometimes
+            mQuestDescArea.IsHidden = false;
             mQuestDescLabel.Width = mQuestDescArea.Width - mQuestDescArea.VerticalScrollBar.Width;
             mQuestDescLabel.SizeToChildren(false, true);
-            
-            mQuestDescArea.IsHidden = false;
             mQuestStatus.Show();
             mBackButton.Show();
             mQuitButton.Show();

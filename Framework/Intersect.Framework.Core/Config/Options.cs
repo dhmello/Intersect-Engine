@@ -226,9 +226,6 @@ public partial record Options
 
     public WeatherOptions Weather { get; set; } = new();
 
-    [JsonIgnore]
-    public string TranslationApiKey { get; set; } = string.Empty;
-
     #endregion Other Game Properties
 
     #endregion Configuration Properties
@@ -255,17 +252,6 @@ public partial record Options
             var rawJson = File.ReadAllText(pathToServerConfig);
             instance = JsonConvert.DeserializeObject<Options>(rawJson, PrivateSerializerSettings) ?? instance;
             Instance = instance;
-        }
-        
-        // Load API Key from separate file (server-side only logic essentially, though code is shared)
-        var pathToApiKey = Path.Combine(ResourcesDirectory, "localization", "apikey.txt");
-        if (File.Exists(pathToApiKey))
-        {
-            try 
-            {
-               instance.TranslationApiKey = File.ReadAllText(pathToApiKey).Trim();
-            }
-            catch {}
         }
 
         instance.SmtpValid = instance.SmtpSettings.IsValid();

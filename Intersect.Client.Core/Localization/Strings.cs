@@ -295,14 +295,6 @@ public static partial class Strings
         }
 
         PostLoad();
-        
-        // After loading the default strings (often English or original language),
-        // we check the translation cache to re-apply any previously translated strings.
-        // This ensures the game starts with translations without modifying client_strings.json.
-        _ = Task.Run(async () => 
-        {
-            await TranslateAll(TranslationService.Instance);
-        });
     }
 
     private static readonly MethodInfo _methodInfoDeserializeDictionary = typeof(Strings).GetMethod(

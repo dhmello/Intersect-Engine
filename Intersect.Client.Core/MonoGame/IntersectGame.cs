@@ -27,7 +27,6 @@ using Intersect.Framework.SystemInformation;
 using Intersect.Framework.Utilities;
 using Microsoft.Extensions.Logging;
 using Exception = System.Exception;
-using Intersect.Framework.Threading; // Added for ThreadQueue
 
 namespace Intersect.Client.MonoGame;
 
@@ -180,9 +179,6 @@ internal partial class IntersectGame : Game
     {
         (Core.Graphics.Renderer as MonoRenderer)?.Init(GraphicsDevice);
 
-        // Ensure the main thread is correctly set, as background tasks might have initialized calls elsewhere
-        ThreadQueue.Default.SetMainThreadId();
-
         // TODO: Remove old netcode
         Networking.Network.Socket = new MonoSocket(Context);
         Networking.Network.Socket.Connected += (_, connectionEventArgs) =>
@@ -209,9 +205,6 @@ internal partial class IntersectGame : Game
     /// <param name="gameTime">Provides a snapshot of timing values.</param>
     protected override void Update(GameTime gameTime)
     {
-        // Ensure pending main thread actions are executed
-        ThreadQueue.Default.InvokePending();
-
         _elapsedSincePlatformStatisticsRefresh += gameTime.ElapsedGameTime;
         if (_elapsedSincePlatformStatisticsRefresh.TotalSeconds > 1)
         {

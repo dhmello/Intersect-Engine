@@ -223,4 +223,3 @@ packages/
 Custom*.props
 vendor/dockpanelsuite
 /vendor
-resources/localization/apikey.txt
