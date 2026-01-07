@@ -280,23 +280,7 @@ public partial class QuestsWindow
 
     private void AddQuestToList(string name, Color clr, Guid questId, bool indented = true)
     {
-        // Traduzir o nome da quest na lista usando ID
-        var key = $"QUEST_NAME_{questId}";
-        string translatedName;
-        if (TranslationService.Instance.TryGetCachedById(key, out var cached))
-        {
-            translatedName = cached;
-        }
-        else if (TranslationService.Instance.TryGetCached(name, out cached))
-        {
-            translatedName = cached;
-        }
-        else
-        {
-            translatedName = name;
-        }
-        
-        var item = _questList.AddRow((indented ? "\t\t\t" : "") + translatedName);
+        var item = _questList.AddRow((indented ? "\t\t\t" : "") + name);
         item.UserData = questId;
         item.Clicked += QuestListItem_Clicked;
         item.Selected += Item_Selected;
@@ -334,59 +318,8 @@ public partial class QuestsWindow
         UpdateSelectedQuest();
     }
 
-    private string GetTranslated(string text)
-    {
-        if (TranslationService.Instance.TryGetCached(text, out var translated))
-        {
-            return translated;
-        }
-        return text;
-    }
-
-    private string GetTranslatedQuestField(Guid questId, string fieldName, string fallbackText)
-    {
-        // Try to get translation using the structured key
-        var key = $"QUEST_{fieldName}_{questId}";
-        if (TranslationService.Instance.TryGetCachedById(key, out var translated))
-        {
-            return translated;
-        }
-        
-        // Fallback to direct text translation
-        if (TranslationService.Instance.TryGetCached(fallbackText, out translated))
-        {
-            return translated;
-        }
-        
-        return fallbackText;
-    }
-
-    private string GetTranslatedTaskDescription(Guid questId, Guid taskId, string fallbackText)
-    {
-        // Try to get translation using the structured key
-        var key = $"QUEST_TASK_{questId}_{taskId}";
-        if (TranslationService.Instance.TryGetCachedById(key, out var translated))
-        {
-            return translated;
-        }
-        
-        // Fallback to direct text translation
-        if (TranslationService.Instance.TryGetCached(fallbackText, out translated))
-        {
-            return translated;
-        }
-        
-        return fallbackText;
-    }
-
     private void UpdateSelectedQuest()
     {
-        // Refresh quest descriptor reference to ensure we have the latest data
-        if (mSelectedQuest != null && QuestDescriptor.TryGet(mSelectedQuest.Id, out var freshDescriptor))
-        {
-            mSelectedQuest = freshDescriptor;
-        }
-
         if (mSelectedQuest == null)
         {
             _questList.Show();
@@ -414,8 +347,9 @@ public partial class QuestsWindow
 
                     if (mSelectedQuest.InProgressDescription.Length > 0)
                     {
-                        var translatedDesc = GetTranslatedQuestField(mSelectedQuest.Id, "INPROG", mSelectedQuest.InProgressDescription);
-                        mQuestDescLabel.AddText(translatedDesc, mQuestDescTemplateLabel);
+                        // FORCE TRANSLATION UPDATE IF NEEDED OR USE CACHED IF DESCRIPTOR IS OUTDATED
+                        // But Descriptor should be updated by TranslationService.
+                        mQuestDescLabel.AddText(mSelectedQuest.InProgressDescription, mQuestDescTemplateLabel);
 
                         mQuestDescLabel.AddLineBreak();
                         mQuestDescLabel.AddLineBreak();
@@ -430,11 +364,7 @@ public partial class QuestsWindow
                         {
                             if (mSelectedQuest.Tasks[i].Description.Length > 0)
                             {
-                                var translatedTaskDesc = GetTranslatedTaskDescription(
-                                    mSelectedQuest.Id, 
-                                    mSelectedQuest.Tasks[i].Id, 
-                                    mSelectedQuest.Tasks[i].Description);
-                                mQuestDescLabel.AddText(translatedTaskDesc, mQuestDescTemplateLabel);
+                                mQuestDescLabel.AddText(mSelectedQuest.Tasks[i].Description, mQuestDescTemplateLabel);
 
                                 mQuestDescLabel.AddLineBreak();
                                 mQuestDescLabel.AddLineBreak();
@@ -474,8 +404,7 @@ public partial class QuestsWindow
                         {
                             mQuestStatus.SetText(Strings.QuestLog.Completed);
                             mQuestStatus.SetTextColor(CustomColors.QuestWindow.Completed, ComponentState.Normal);
-                            var translatedEndDesc = GetTranslatedQuestField(mSelectedQuest.Id, "END", mSelectedQuest.EndDescription);
-                            mQuestDescLabel.AddText(translatedEndDesc, mQuestDescTemplateLabel);
+                            mQuestDescLabel.AddText(mSelectedQuest.EndDescription, mQuestDescTemplateLabel);
                         }
                     }
                     else
@@ -485,8 +414,7 @@ public partial class QuestsWindow
                         {
                             mQuestStatus.SetText(Strings.QuestLog.NotStarted);
                             mQuestStatus.SetTextColor(CustomColors.QuestWindow.NotStarted, ComponentState.Normal);
-                            var translatedBeforeDesc = GetTranslatedQuestField(mSelectedQuest.Id, "BEFORE", mSelectedQuest.BeforeDescription);
-                            mQuestDescLabel.AddText(translatedBeforeDesc, mQuestDescTemplateLabel);
+                            mQuestDescLabel.AddText(mSelectedQuest.BeforeDescription, mQuestDescTemplateLabel);
 
                             mQuitButton?.Hide();
                         }
@@ -500,16 +428,13 @@ public partial class QuestsWindow
                 {
                     mQuestStatus.SetText(Strings.QuestLog.NotStarted);
                     mQuestStatus.SetTextColor(CustomColors.QuestWindow.NotStarted, ComponentState.Normal);
-                    var translatedBeforeDesc = GetTranslatedQuestField(mSelectedQuest.Id, "BEFORE", mSelectedQuest.BeforeDescription);
-                    mQuestDescLabel.AddText(translatedBeforeDesc, mQuestDescTemplateLabel);
+                    mQuestDescLabel.AddText(mSelectedQuest.BeforeDescription, mQuestDescTemplateLabel);
                 }
             }
 
             _questList.Hide();
             mQuestTitle.IsHidden = false;
-            // Traduzir o título da quest usando ID
-            var translatedName = GetTranslatedQuestField(mSelectedQuest.Id, "NAME", mSelectedQuest.Name);
-            mQuestTitle.Text = translatedName;
+            mQuestTitle.Text = mSelectedQuest.Name;
             
             // Fix layout bug causing text cut off sometimes
             mQuestDescLabel.Width = mQuestDescArea.Width - mQuestDescArea.VerticalScrollBar.Width;

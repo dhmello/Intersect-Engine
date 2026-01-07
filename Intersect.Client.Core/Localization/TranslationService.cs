@@ -11,7 +11,6 @@ using Intersect.Framework.Core.GameObjects.Quests;
 using Intersect.GameObjects;
 using Intersect.Framework.Threading;
 using System.IO; // Added for file caching
-using System.Linq;
 
 namespace Intersect.Client.Localization;
 
@@ -109,36 +108,6 @@ public class TranslationService
             ApplicationContext.Context.Value?.Logger.LogWarning($"Translation failed for '{text}': {ex.Message}");
             return text;
         }
-    }
-
-    public bool TryGetCached(string text, out string translated)
-    {
-        translated = text;
-        if (!_enabled || string.IsNullOrWhiteSpace(text)) return false;
-
-        // First try direct text lookup (for UI strings and simple translations)
-        if (_translationCache.TryGetValue(text, out var cached))
-        {
-            translated = cached;
-            return true;
-        }
-
-        return false;
-    }
-
-    public bool TryGetCachedById(string key, out string translated)
-    {
-        translated = string.Empty;
-        if (!_enabled || string.IsNullOrWhiteSpace(key)) return false;
-
-        // Look up by structured key (e.g., "QUEST_NAME_{guid}")
-        if (_translationKeyCache.TryGetValue(key, out var cached))
-        {
-            translated = cached;
-            return true;
-        }
-
-        return false;
     }
     
     public async Task<Dictionary<string, string>> TranslateBatch(Dictionary<string, string> inputs, Action<Dictionary<string, string>>? onChunkComplete = null)
@@ -373,7 +342,7 @@ public class TranslationService
     {
         // Give the game a moment to load loaded descriptors from server/cache
         // Wait a short delay to ensure deserialization is fully complete if needed, but primarily triggered by GameData
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        await Task.Delay(TimeSpan.FromSeconds(2));
 
         var inputs = new Dictionary<string, string>();
 
@@ -390,9 +359,6 @@ public class TranslationService
         // 2. Collect Quests
         if (QuestDescriptor.Lookup != null)
         {
-            var questCount = QuestDescriptor.Lookup.Values.OfType<QuestDescriptor>().Count();
-            ApplicationContext.Context.Value?.Logger.LogInformation($"Scanning {questCount} quests for translation...");
-            
             foreach (var quest in QuestDescriptor.Lookup.Values.OfType<QuestDescriptor>())
             {
                 if (!string.IsNullOrWhiteSpace(quest.Name)) inputs[$"QUEST_NAME_{quest.Id}"] = quest.Name;
@@ -485,7 +451,7 @@ public class TranslationService
                 // This logic is a bit UI specific for this service, but necessary
                 if (Intersect.Client.Interface.Interface.HasInGameUI)
                 {
-                    Intersect.Client.Interface.Interface.GameUi.NotifyQuestsUpdated();
+                        Intersect.Client.Interface.Interface.GameUi.NotifyQuestsUpdated();
                 }
             });
         });
