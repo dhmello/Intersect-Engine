@@ -527,15 +527,22 @@ public partial class InventoryItem : SlotItem
         // Atualizar animação do item se necessário
         if (_currentDescriptor != null && Icon.Texture != null)
         {
-            var sourceRect = ItemAnimationManager.GetItemSourceRect(_currentDescriptor, Icon.Texture);
-            if (sourceRect.HasValue)
+            try 
             {
-                Icon.SetTextureRect(
-                    (int)sourceRect.Value.X,
-                    (int)sourceRect.Value.Y,
-                    (int)sourceRect.Value.Width,
-                    (int)sourceRect.Value.Height
-                );
+                var sourceRect = ItemAnimationManager.GetItemSourceRect(_currentDescriptor, Icon.Texture);
+                if (sourceRect.HasValue)
+                {
+                    Icon.SetTextureRect(
+                        (int)sourceRect.Value.X,
+                        (int)sourceRect.Value.Y,
+                        (int)sourceRect.Value.Width,
+                        (int)sourceRect.Value.Height
+                    );
+                }
+            }
+            catch (Exception)
+            {
+                // Deixa passar se falhar a renderização da animação específico pra evitar crash
             }
         }
 

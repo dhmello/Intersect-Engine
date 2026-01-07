@@ -164,4 +164,14 @@ public partial class DescriptionWindowBase : ComponentBase
 
         MoveTo(newX, newY);
     }
+    
+    public virtual void Clear()
+    {
+        foreach (var component in _components)
+        {
+            component.Dispose();
+        }
+        _components.Clear();
+        _componentY = 0;
+    }
 }

@@ -15,6 +15,7 @@ using Intersect.Framework.Core.GameObjects.Lighting;
 using Intersect.Framework.Core.GameObjects.Maps;
 using Intersect.GameObjects;
 using Intersect.Utilities;
+using Intersect.Client.Localization;
 
 namespace Intersect.Client.Core;
 
@@ -144,6 +145,9 @@ public static partial class Graphics
         (EntityNameFont, EntityNameFontSize) = FindFont(ClientConfiguration.Instance.EntityNameFont);
         (ChatBubbleFont, ChatBubbleFontSize) = FindFont(ClientConfiguration.Instance.ChatBubbleFont);
         (ActionMsgFont, ActionMsgFontSize) = FindFont(ClientConfiguration.Instance.ActionMsgFont);
+
+        // Initialize Automatic Translation Service
+        TranslationService.Init();
     }
 
     private static (IFont?, int) FindFont(string font)

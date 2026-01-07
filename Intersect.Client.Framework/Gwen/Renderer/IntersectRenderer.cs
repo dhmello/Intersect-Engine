@@ -223,94 +223,102 @@ public partial class IntersectRenderer : Base, ICacheToTexture
             return;
         }
 
-        var translatedTarget = Translate(targetRect);
-        var rect = new FloatRect(
-            translatedTarget.X,
-            translatedTarget.Y,
-            translatedTarget.Width,
-            translatedTarget.Height
-        );
-
-        u1 *= tex.Width;
-        v1 *= tex.Height;
-        u2 *= tex.Width;
-        v2 *= tex.Height;
-
-        if (mClipping)
+        try
         {
-            var clip = new FloatRect(ClipRegion.X, ClipRegion.Y, ClipRegion.Width, ClipRegion.Height);
-            clip.X = (int) Math.Round(clip.X * Scale);
-            clip.Y = (int) Math.Round(clip.Y * Scale);
-            clip.Width = (int) Math.Round(clip.Width * Scale);
-            clip.Height = (int) Math.Round(clip.Height * Scale);
+            var translatedTarget = Translate(targetRect);
+            var rect = new FloatRect(
+                translatedTarget.X,
+                translatedTarget.Y,
+                translatedTarget.Width,
+                translatedTarget.Height
+            );
 
-            var heightRatio = targetRect.Height * Scale / Math.Abs(v2 - v1);
-            var widthRatio = targetRect.Width * Scale / Math.Abs(u2 - u1);
+            u1 *= tex.Width;
+            v1 *= tex.Height;
+            u2 *= tex.Width;
+            v2 *= tex.Height;
 
-            float diff = 0;
-            float vdiff = 0;
-            if (rect.X < clip.X)
+            if (mClipping)
             {
-                diff = clip.X - rect.X;
-                vdiff = (int)Math.Floor(diff / widthRatio);
-                rect.X += diff;
-                rect.Width -= diff;
-                u1 += vdiff;
+                var clip = new FloatRect(ClipRegion.X, ClipRegion.Y, ClipRegion.Width, ClipRegion.Height);
+                clip.X = (int) Math.Round(clip.X * Scale);
+                clip.Y = (int) Math.Round(clip.Y * Scale);
+                clip.Width = (int) Math.Round(clip.Width * Scale);
+                clip.Height = (int) Math.Round(clip.Height * Scale);
+
+                var heightRatio = targetRect.Height * Scale / Math.Abs(v2 - v1);
+                var widthRatio = targetRect.Width * Scale / Math.Abs(u2 - u1);
+
+                float diff = 0;
+                float vdiff = 0;
+                if (rect.X < clip.X)
+                {
+                    diff = clip.X - rect.X;
+                    vdiff = (int)Math.Floor(diff / widthRatio);
+                    rect.X += diff;
+                    rect.Width -= diff;
+                    u1 += vdiff;
+                }
+
+                if (rect.X + rect.Width > clip.X + clip.Width)
+                {
+                    diff = rect.X + rect.Width - (clip.X + clip.Width);
+                    vdiff = (int)Math.Floor(diff / widthRatio);
+                    rect.Width -= diff;
+                    u2 -= vdiff;
+                }
+
+                if (rect.Y < clip.Y)
+                {
+                    diff = clip.Y - rect.Y;
+                    vdiff = (int)Math.Floor(diff / heightRatio);
+                    rect.Y += diff;
+                    rect.Height -= diff;
+                    v1 += vdiff;
+                }
+
+                if (rect.Y + rect.Height > clip.Y + clip.Height)
+                {
+                    diff = rect.Y + rect.Height - (clip.Y + clip.Height);
+                    vdiff = (int)Math.Floor(diff / heightRatio);
+                    rect.Height -= diff;
+                    v2 -= vdiff;
+                }
+
+                if (rect.Width <= 0)
+                {
+                    return;
+                }
+
+                if (rect.Height <= 0)
+                {
+                    return;
+                }
             }
 
-            if (rect.X + rect.Width > clip.X + clip.Width)
+            //u1 /= tex.GetWidth();
+            //v1 /= tex.GetHeight();
+            //u2 /= tex.GetWidth();
+            //v2 /= tex.GetHeight();
+            if (mRenderTarget == null)
             {
-                diff = rect.X + rect.Width - (clip.X + clip.Width);
-                vdiff = (int)Math.Floor(diff / widthRatio);
-                rect.Width -= diff;
-                u2 -= vdiff;
+                mRenderer.DrawTexture(
+                    tex, u1, v1, u2 - u1, v2 - v1, rect.X, rect.Y, rect.Width, rect.Height, mColor, mRenderTarget,
+                    GameBlendModes.None, null, 0f, true
+                );
             }
-
-            if (rect.Y < clip.Y)
+            else
             {
-                diff = clip.Y - rect.Y;
-                vdiff = (int)Math.Floor(diff / heightRatio);
-                rect.Y += diff;
-                rect.Height -= diff;
-                v1 += vdiff;
-            }
-
-            if (rect.Y + rect.Height > clip.Y + clip.Height)
-            {
-                diff = rect.Y + rect.Height - (clip.Y + clip.Height);
-                vdiff = (int)Math.Floor(diff / heightRatio);
-                rect.Height -= diff;
-                v2 -= vdiff;
-            }
-
-            if (rect.Width <= 0)
-            {
-                return;
-            }
-
-            if (rect.Height <= 0)
-            {
-                return;
+                mRenderer.DrawTexture(
+                    tex, u1, v1, u2 - u1, v2 - v1, rect.X, rect.Y, rect.Width, rect.Height, mColor, mRenderTarget,
+                    GameBlendModes.None, null, 0f, true
+                );
             }
         }
-
-        //u1 /= tex.GetWidth();
-        //v1 /= tex.GetHeight();
-        //u2 /= tex.GetWidth();
-        //v2 /= tex.GetHeight();
-        if (mRenderTarget == null)
+        catch (Exception)
         {
-            mRenderer.DrawTexture(
-                tex, u1, v1, u2 - u1, v2 - v1, rect.X, rect.Y, rect.Width, rect.Height, mColor, mRenderTarget,
-                GameBlendModes.None, null, 0f, true
-            );
-        }
-        else
-        {
-            mRenderer.DrawTexture(
-                tex, u1, v1, u2 - u1, v2 - v1, rect.X, rect.Y, rect.Width, rect.Height, mColor, mRenderTarget,
-                GameBlendModes.None, null, 0f, true
-            );
+            // Swallow rendering exceptions to prevent game crash. 
+            // This is critical for stability when textures are reloading or in invalid state.
         }
     }
 
