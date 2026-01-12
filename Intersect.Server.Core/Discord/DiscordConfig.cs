@@ -73,6 +73,18 @@ public class DiscordChannels
 
     [JsonProperty("AdminChannelId")]
     public ulong AdminChannelId { get; set; }
+
+    [JsonProperty("PlayerJoinChannelId")]
+    public ulong PlayerJoinChannelId { get; set; }
+
+    [JsonProperty("PlayerLeaveChannelId")]
+    public ulong PlayerLeaveChannelId { get; set; }
+
+    [JsonProperty("PlayerDeathChannelId")]
+    public ulong PlayerDeathChannelId { get; set; }
+
+    [JsonProperty("LevelUpChannelId")]
+    public ulong LevelUpChannelId { get; set; }
 }
 
 public class DiscordFeatures

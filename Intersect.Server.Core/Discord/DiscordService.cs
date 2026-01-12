@@ -34,6 +34,10 @@ public sealed class DiscordService : IDisposable
     private ulong _dropChannelId;
     private ulong _tradeChannelId;
     private ulong _adminChannelId;
+    private ulong _playerJoinChannelId;
+    private ulong _playerLeaveChannelId;
+    private ulong _playerDeathChannelId;
+    private ulong _levelUpChannelId;
 
     public DiscordService(ILogger logger)
     {
@@ -63,7 +67,9 @@ public sealed class DiscordService : IDisposable
     /// Inicia o serviço Discord
     /// </summary>
     public async Task StartAsync(string token, ulong logChannelId, ulong chatChannelId, 
-        ulong dropChannelId, ulong tradeChannelId, ulong adminChannelId)
+        ulong dropChannelId, ulong tradeChannelId, ulong adminChannelId,
+        ulong playerJoinChannelId, ulong playerLeaveChannelId, 
+        ulong playerDeathChannelId, ulong levelUpChannelId)
     {
         if (_isRunning)
         {
@@ -76,6 +82,10 @@ public sealed class DiscordService : IDisposable
         _dropChannelId = dropChannelId;
         _tradeChannelId = tradeChannelId;
         _adminChannelId = adminChannelId;
+        _playerJoinChannelId = playerJoinChannelId;
+        _playerLeaveChannelId = playerLeaveChannelId;
+        _playerDeathChannelId = playerDeathChannelId;
+        _levelUpChannelId = levelUpChannelId;
 
         try
         {
@@ -185,7 +195,7 @@ public sealed class DiscordService : IDisposable
             .WithCurrentTimestamp()
             .Build();
 
-        EnqueueLog(_logChannelId, embed);
+        EnqueueLog(_playerJoinChannelId != 0 ? _playerJoinChannelId : _logChannelId, embed);
     }
 
     /// <summary>
@@ -201,7 +211,7 @@ public sealed class DiscordService : IDisposable
             .WithCurrentTimestamp()
             .Build();
 
-        EnqueueLog(_logChannelId, embed);
+        EnqueueLog(_playerLeaveChannelId != 0 ? _playerLeaveChannelId : _logChannelId, embed);
     }
 
     /// <summary>
@@ -218,7 +228,7 @@ public sealed class DiscordService : IDisposable
             .WithCurrentTimestamp()
             .Build();
 
-        EnqueueLog(_logChannelId, embed);
+        EnqueueLog(_playerDeathChannelId != 0 ? _playerDeathChannelId : _logChannelId, embed);
     }
 
     /// <summary>
@@ -234,7 +244,7 @@ public sealed class DiscordService : IDisposable
             .WithCurrentTimestamp()
             .Build();
 
-        EnqueueLog(_logChannelId, embed);
+        EnqueueLog(_levelUpChannelId != 0 ? _levelUpChannelId : _logChannelId, embed);
     }
 
     #endregion
@@ -245,6 +255,9 @@ public sealed class DiscordService : IDisposable
     {
         _logger.LogInformation($"Discord Bot logado como {_client.CurrentUser}");
 
+        // Renomear canais
+        await RenameChannelsAsync();
+
         // Registrar comandos slash
         try
         {
@@ -253,6 +266,40 @@ public sealed class DiscordService : IDisposable
         catch (HttpException ex)
         {
             _logger.LogError(ex, "Erro ao registrar comandos slash");
+        }
+    }
+
+    private async Task RenameChannelsAsync()
+    {
+        var channelMappings = new Dictionary<ulong, string>
+        {
+            { _chatChannelId, "💬・chat-global" },
+            { _dropChannelId, "📦・drops" },
+            { _tradeChannelId, "🤝・trades" },
+            { _playerJoinChannelId, "🟢・entradas" },
+            { _playerLeaveChannelId, "🔴・saidas" },
+            { _playerDeathChannelId, "💀・mortes" },
+            { _levelUpChannelId, "⭐・level-up" },
+            { _adminChannelId, "🛡️・admin" }
+        };
+
+        foreach (var mapping in channelMappings)
+        {
+            if (mapping.Key == 0) continue;
+
+            try
+            {
+                var channel = _client.GetChannel(mapping.Key) as SocketTextChannel;
+                if (channel != null && channel.Name != mapping.Value)
+                {
+                    await channel.ModifyAsync(properties => properties.Name = mapping.Value);
+                    _logger.LogInformation($"Canal {mapping.Key} renomeado para {mapping.Value}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Erro ao renomear canal {mapping.Key} para {mapping.Value}");
+            }
         }
     }
 

@@ -359,7 +359,11 @@ internal static class Bootstrapper
                         config.Channels.ChatChannelId,
                         config.Channels.DropChannelId,
                         config.Channels.TradeChannelId,
-                        config.Channels.AdminChannelId
+                        config.Channels.AdminChannelId,
+                        config.Channels.PlayerJoinChannelId,
+                        config.Channels.PlayerLeaveChannelId,
+                        config.Channels.PlayerDeathChannelId,
+                        config.Channels.LevelUpChannelId
                     );
                 }
                 catch (Exception ex)

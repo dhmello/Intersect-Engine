@@ -194,6 +194,19 @@ public partial class Client : IPacketSender
             return;
         }
 
+        // ✅ Discord Hook: Log player leave (antes de desconectar)
+        try
+        {
+            if (Entity != null && !loggingOut)
+            {
+                Intersect.Server.Discord.DiscordIntegration.LogPlayerLeave(Entity.Name, reason ?? "disconnected");
+            }
+        }
+        catch
+        {
+            // Não falhar se Discord não estiver configurado
+        }
+
         if (!loggingOut)
         {
             Logout(force: shutdown, logoutCompletionSource: logoutCompletionSource);
