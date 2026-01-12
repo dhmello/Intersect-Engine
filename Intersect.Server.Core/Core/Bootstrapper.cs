@@ -346,6 +346,8 @@ internal static class Bootstrapper
 
             // Criar e iniciar serviço Discord
             var logger = Context.Logger;
+            _ = Intersect.Server.Discord.DiscordLinkManager.Instance; // Force initialization
+            Intersect.Server.Discord.DiscordLinkManager.SetLogger(logger);
             var discordService = new Intersect.Server.Discord.DiscordService(logger);
             
             // Iniciar de forma assíncrona
@@ -363,7 +365,9 @@ internal static class Bootstrapper
                         config.Channels.PlayerJoinChannelId,
                         config.Channels.PlayerLeaveChannelId,
                         config.Channels.PlayerDeathChannelId,
-                        config.Channels.LevelUpChannelId
+                        config.Channels.LevelUpChannelId,
+                        config.Channels.VerifiedRoleId,
+                        config.GuildId
                     );
                 }
                 catch (Exception ex)

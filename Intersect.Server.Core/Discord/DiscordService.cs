@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using DiscordColor = Discord.Color;
 using IntersectColor = Intersect.Color;
+using Intersect.Enums;
 
 namespace Intersect.Server.Discord;
 
@@ -26,6 +27,7 @@ public sealed class DiscordService : IDisposable
     private readonly ConcurrentQueue<DiscordLogEntry> _logQueue;
     private readonly Timer _logFlushTimer;
     private bool _isRunning;
+    private ulong _guildId;
 
     // Configurações
     private string _botToken = string.Empty;
@@ -38,6 +40,7 @@ public sealed class DiscordService : IDisposable
     private ulong _playerLeaveChannelId;
     private ulong _playerDeathChannelId;
     private ulong _levelUpChannelId;
+    private ulong _verifiedRoleId;
 
     public DiscordService(ILogger logger)
     {
@@ -69,7 +72,7 @@ public sealed class DiscordService : IDisposable
     public async Task StartAsync(string token, ulong logChannelId, ulong chatChannelId, 
         ulong dropChannelId, ulong tradeChannelId, ulong adminChannelId,
         ulong playerJoinChannelId, ulong playerLeaveChannelId, 
-        ulong playerDeathChannelId, ulong levelUpChannelId)
+        ulong playerDeathChannelId, ulong levelUpChannelId, ulong verifiedRoleId, ulong guildId)
     {
         if (_isRunning)
         {
@@ -86,6 +89,8 @@ public sealed class DiscordService : IDisposable
         _playerLeaveChannelId = playerLeaveChannelId;
         _playerDeathChannelId = playerDeathChannelId;
         _levelUpChannelId = levelUpChannelId;
+        _verifiedRoleId = verifiedRoleId;
+        _guildId = guildId;
 
         try
         {
@@ -344,15 +349,45 @@ public sealed class DiscordService : IDisposable
             .AddOption("message", ApplicationCommandOptionType.String, "Mensagem", isRequired: true)
             .Build();
 
+        // Comando: /discord [codigo] - Vincula conta
+        var discordCommand = new SlashCommandBuilder()
+            .WithName("discord")
+            .WithDescription("Vincula sua conta do jogo com o Discord")
+            .AddOption("codigo", ApplicationCommandOptionType.String, "O código de 6 dígitos gerado no jogo (/discord)", isRequired: true)
+            .Build();
+
         try
         {
-            await _client.CreateGlobalApplicationCommandAsync(onlineCommand);
-            await _client.CreateGlobalApplicationCommandAsync(giveItemCommand);
-            await _client.CreateGlobalApplicationCommandAsync(setVariableCommand);
-            await _client.CreateGlobalApplicationCommandAsync(kickCommand);
-            await _client.CreateGlobalApplicationCommandAsync(announceCommand);
+            if (_guildId != 0)
+            {
+                var guild = _client.GetGuild(_guildId);
+                if (guild != null)
+                {
+                    await guild.CreateApplicationCommandAsync(onlineCommand);
+                    await guild.CreateApplicationCommandAsync(giveItemCommand);
+                    await guild.CreateApplicationCommandAsync(setVariableCommand);
+                    await guild.CreateApplicationCommandAsync(kickCommand);
+                    await guild.CreateApplicationCommandAsync(announceCommand);
+                    await guild.CreateApplicationCommandAsync(discordCommand);
 
-            _logger.LogInformation("Comandos slash registrados com sucesso");
+                    _logger.LogInformation("Comandos slash registrados na guild com sucesso");
+                }
+                else
+                {
+                    _logger.LogError("Guild não encontrada para registrar comandos");
+                }
+            }
+            else
+            {
+                await _client.CreateGlobalApplicationCommandAsync(onlineCommand);
+                await _client.CreateGlobalApplicationCommandAsync(giveItemCommand);
+                await _client.CreateGlobalApplicationCommandAsync(setVariableCommand);
+                await _client.CreateGlobalApplicationCommandAsync(kickCommand);
+                await _client.CreateGlobalApplicationCommandAsync(announceCommand);
+                await _client.CreateGlobalApplicationCommandAsync(discordCommand);
+
+                _logger.LogInformation("Comandos slash registrados globalmente com sucesso");
+            }
         }
         catch (HttpException ex)
         {
@@ -363,15 +398,27 @@ public sealed class DiscordService : IDisposable
 
     private async Task SlashCommandHandler(SocketSlashCommand command)
     {
-        // Verificar se o comando é no canal admin
-        if (command.Channel.Id != _adminChannelId)
-        {
-            await command.RespondAsync("⛔ Este comando só pode ser usado no canal admin!", ephemeral: true);
-            return;
-        }
-
         try
         {
+            switch (command.Data.Name)
+            {
+                case "online":
+                case "giveitem":
+                case "setvariable":
+                case "kick":
+                case "announce":
+                    // Verificar se o comando é no canal admin
+                    if (command.Channel.Id != _adminChannelId)
+                    {
+                        await command.RespondAsync("⛔ Este comando só pode ser usado no canal admin!", ephemeral: true);
+                        return;
+                    }
+                    break;
+                case "discord":
+                    // Pode ser usado em qualquer canal
+                    break;
+            }
+
             switch (command.Data.Name)
             {
                 case "online":
@@ -388,6 +435,9 @@ public sealed class DiscordService : IDisposable
                     break;
                 case "announce":
                     await HandleAnnounceCommand(command);
+                    break;
+                case "discord":
+                    await HandleDiscordCommand(command);
                     break;
             }
         }
@@ -482,6 +532,38 @@ public sealed class DiscordService : IDisposable
         await command.RespondAsync($"📢 Mensagem enviada para todos os jogadores:\n> {message}");
     }
 
+    private async Task HandleDiscordCommand(SocketSlashCommand command)
+    {
+        var code = command.Data.Options.First(o => o.Name == "codigo").Value.ToString();
+        var discordUser = command.User;
+
+        if (DiscordLinkManager.Instance.VerifyCode(code, discordUser.Id, out var gameUserId))
+        {
+            await command.RespondAsync("✅ Conta vinculada com sucesso! Você agora tem o cargo de verificado.", ephemeral: true);
+
+            // Give Role
+            try
+            {
+                if (_verifiedRoleId != 0 && command.Channel is SocketGuildChannel guildChannel)
+                {
+                    var user = guildChannel.Guild.GetUser(discordUser.Id);
+                    var role = guildChannel.Guild.GetRole(_verifiedRoleId);
+                    if (user != null && role != null)
+                    {
+                        await user.AddRoleAsync(role);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to assign verified role.");
+            }
+        }
+        else
+        {
+            await command.RespondAsync("❌ Código inválido ou expirado. Digite `/discord` no jogo novamente para gerar um novo código.", ephemeral: true);
+        }
+    }
     #endregion
 
     #region Helpers
@@ -540,11 +622,11 @@ public sealed class DiscordService : IDisposable
     {
         return messageType switch
         {
-            ChatMessageType.Global => DiscordColor.Blue,
             ChatMessageType.Local => DiscordColor.Green,
+            ChatMessageType.Global => DiscordColor.Blue,
             ChatMessageType.Party => new DiscordColor(128, 0, 128), // Purple
             ChatMessageType.Guild => DiscordColor.Orange,
-            ChatMessageType.Private => new DiscordColor(0, 128, 128), // Teal
+            ChatMessageType.PM => new DiscordColor(0, 128, 128), // Teal
             ChatMessageType.Admin => DiscordColor.Red,
             _ => new DiscordColor(211, 211, 211) // LightGray (Default)
         };
@@ -570,14 +652,4 @@ public sealed class DiscordService : IDisposable
         public Embed Embed { get; set; } = null!;
         public DateTime Timestamp { get; set; }
     }
-}
-
-public enum ChatMessageType
-{
-    Local,
-    Global,
-    Party,
-    Guild,
-    Private,
-    Admin
 }

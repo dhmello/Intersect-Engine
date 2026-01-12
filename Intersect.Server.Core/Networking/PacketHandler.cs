@@ -32,6 +32,7 @@ using LoginPacket = Intersect.Network.Packets.Client.LoginPacket;
 using PartyInvitePacket = Intersect.Network.Packets.Client.PartyInvitePacket;
 using PingPacket = Intersect.Network.Packets.Client.PingPacket;
 using TradeRequestPacket = Intersect.Network.Packets.Client.TradeRequestPacket;
+using Intersect.Server.Discord;
 
 namespace Intersect.Server.Networking;
 
@@ -588,8 +589,8 @@ internal sealed partial class PacketHandler
 
         if (disconnectedClients)
         {
-            var disconnectionCount = logoutCompletionSources.Count;
-            ApplicationContext.Context.Value?.Logger.LogInformation($"Login of {username} waiting on {disconnectionCount} clients before continuing...");
+            var disconnection = logoutCompletionSources.Count;
+            ApplicationContext.Context.Value?.Logger.LogInformation($"Login of {username} waiting on {disconnection} clients before continuing...");
 
             Task.WaitAll(logoutCompletionSources.Select(source => source.Task).ToArray());
 
@@ -949,8 +950,14 @@ internal sealed partial class PacketHandler
                 chatColor = CustomColors.Chat.ModLocalChat;
             }
 
+            string playerDisplayName = player.Name;
+            if (DiscordLinkManager.Instance.IsLinked(player.User.Id))
+            {
+                playerDisplayName = "✅ " + player.Name;
+            }
+
             PacketSender.SendProximityMsgToLayer(
-                Strings.Chat.Local.ToString(player.Name, msg), ChatMessageType.Local, player.MapId, player.MapInstanceId, chatColor,
+                Strings.Chat.Local.ToString(playerDisplayName, msg), ChatMessageType.Local, player.MapId, player.MapInstanceId, chatColor,
                 player.Name
             );
             PacketSender.SendChatBubble(player.Id, player.MapInstanceId, (int)EntityType.GlobalEntity, msg, player.MapId);
@@ -973,7 +980,13 @@ internal sealed partial class PacketHandler
                 chatColor = CustomColors.Chat.ModGlobalChat;
             }
 
-            PacketSender.SendGlobalMsg(Strings.Chat.Global.ToString(player.Name, msg), chatColor, player.Name);
+            string playerDisplayName = player.Name;
+            if (DiscordLinkManager.Instance.IsLinked(player.User.Id))
+            {
+                playerDisplayName = "✅ " + player.Name;
+            }
+
+            PacketSender.SendGlobalMsg(Strings.Chat.Global.ToString(playerDisplayName, msg), chatColor, player.Name);
             ChatHistory.LogMessage(player, msg.Trim(), ChatMessageType.Global, Guid.Empty);
         }
         else if (cmd == Strings.Chat.PartyCommand)
@@ -985,8 +998,14 @@ internal sealed partial class PacketHandler
 
             if (player.InParty(player))
             {
+                string playerDisplayName = player.Name;
+                if (DiscordLinkManager.Instance.IsLinked(player.User.Id))
+                {
+                    playerDisplayName = "✅ " + player.Name;
+                }
+
                 PacketSender.SendPartyMsg(
-                    player, Strings.Chat.Party.ToString(player.Name, msg), CustomColors.Chat.PartyChat, player.Name
+                    player, Strings.Chat.Party.ToString(playerDisplayName, msg), CustomColors.Chat.PartyChat, player.Name
                 );
                 ChatHistory.LogMessage(player, msg.Trim(), ChatMessageType.Party, Guid.Empty);
             }
@@ -1025,7 +1044,12 @@ internal sealed partial class PacketHandler
 
             //Normalize Rank
             var rank = Options.Instance.Guild.Ranks[Math.Max(0, Math.Min(player.GuildRank, Options.Instance.Guild.Ranks.Length - 1))].Title;
-            PacketSender.SendGuildMsg(player, Strings.Guilds.GuildChat.ToString(rank, player.Name, msg), CustomColors.Chat.GuildChat);
+            string playerDisplayName = rank + " " + player.Name;
+            if (DiscordLinkManager.Instance.IsLinked(player.User.Id))
+            {
+                playerDisplayName = "✅ " + playerDisplayName;
+            }
+            PacketSender.SendGuildMsg(player, Strings.Guilds.GuildChat.ToString(playerDisplayName, msg), CustomColors.Chat.GuildChat);
             ChatHistory.LogMessage(player, msg.Trim(), ChatMessageType.Guild, player.Guild.Id);
 
         }
@@ -1140,6 +1164,13 @@ internal sealed partial class PacketHandler
             }
 
             //No common event /command, invalid command.
+            if (cmd == "/discord")
+            {
+                var code = Intersect.Server.Discord.DiscordLinkManager.Instance.GenerateCode(client.User.Id);
+                PacketSender.SendChatMsg(player, $"Seu código de vinculação é: {code}. Digite '/discord {code}' no servidor do Discord para vincular.", ChatMessageType.Notice, Color.Green);
+                return;
+            }
+
             PacketSender.SendChatMsg(player, Strings.Commands.invalid, ChatMessageType.Error, CustomColors.Alerts.Error);
         }
     }
@@ -2224,51 +2255,48 @@ internal sealed partial class PacketHandler
         var target = packet.TradeId;
         if (player.Trading.Requester != null && player.Trading.Requester.Id == target)
         {
-            if (player.Trading.Requester.IsValidPlayer)
+            if (packet.AcceptingInvite)
             {
-                if (packet.AcceptingInvite)
+                if (player.Trading.Requester.Trading.Counterparty == null
+                ) //They could have accepted another trade since.
                 {
-                    if (player.Trading.Requester.Trading.Counterparty == null
-                    ) //They could have accepted another trade since.
+                    if (player.InRangeOf(player.Trading.Requester, Options.Instance.Player.TradeRange))
                     {
-                        if (player.InRangeOf(player.Trading.Requester, Options.Instance.Player.TradeRange))
-                        {
-                            //Check if still in range lolz
-                            player.Trading.Requester.StartTrade(player);
-                        }
-                        else
-                        {
-                            PacketSender.SendChatMsg(
-                                player, Strings.Trading.OutOfRange.ToString(), ChatMessageType.Trading, CustomColors.Combat.NoTarget
-                            );
-                        }
+                        //Check if still in range lolz
+                        player.Trading.Requester.StartTrade(player);
                     }
                     else
                     {
                         PacketSender.SendChatMsg(
-                            player, Strings.Trading.Busy.ToString(player.Trading.Requester.Name), ChatMessageType.Trading, Color.Red
+                            player, Strings.Trading.OutOfRange.ToString(), ChatMessageType.Trading, CustomColors.Combat.NoTarget
                         );
                     }
                 }
                 else
                 {
                     PacketSender.SendChatMsg(
-                        player.Trading.Requester, Strings.Trading.Declined.ToString(player.Name),
-                        ChatMessageType.Trading,
-                        CustomColors.Alerts.Declined
+                        player, Strings.Trading.Busy.ToString(player.Trading.Requester.Name), ChatMessageType.Trading, Color.Red
                     );
+                }
+            }
+            else
+            {
+                PacketSender.SendChatMsg(
+                    player.Trading.Requester, Strings.Trading.Declined.ToString(player.Name),
+                    ChatMessageType.Trading,
+                    CustomColors.Alerts.Declined
+                );
 
-                    if (player.Trading.Requests.ContainsKey(player.Trading.Requester))
-                    {
-                        player.Trading.Requests[player.Trading.Requester] =
-                            Timing.Global.Milliseconds + Options.Instance.Player.RequestTimeout;
-                    }
-                    else
-                    {
-                        player.Trading.Requests.Add(
-                            player.Trading.Requester, Timing.Global.Milliseconds + Options.Instance.Player.RequestTimeout
-                        );
-                    }
+                if (player.Trading.Requests.ContainsKey(player.Trading.Requester))
+                {
+                    player.Trading.Requests[player.Trading.Requester] =
+                        Timing.Global.Milliseconds + Options.Instance.Player.RequestTimeout;
+                }
+                else
+                {
+                    player.Trading.Requests.Add(
+                        player.Trading.Requester, Timing.Global.Milliseconds + Options.Instance.Player.RequestTimeout
+                    );
                 }
             }
         }

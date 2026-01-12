@@ -85,6 +85,9 @@ public class DiscordChannels
 
     [JsonProperty("LevelUpChannelId")]
     public ulong LevelUpChannelId { get; set; }
+
+    [JsonProperty("VerifiedRoleId")]
+    public ulong VerifiedRoleId { get; set; } = 0; // Adicione o ID do cargo de verificado aqui
 }
 
 public class DiscordFeatures

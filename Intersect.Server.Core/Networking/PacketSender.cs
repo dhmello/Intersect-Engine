@@ -711,27 +711,6 @@ public static partial class PacketSender
         }
 
         player.SendPacket(new ChatMsgPacket(message, type, color, target), TransmissionMode.All);
-        
-        // ✅ Discord Hook: Log chat message
-        try
-        {
-            var discordType = type switch
-            {
-                ChatMessageType.Local => Intersect.Server.Discord.ChatMessageType.Local,
-                ChatMessageType.Global => Intersect.Server.Discord.ChatMessageType.Global,
-                ChatMessageType.Party => Intersect.Server.Discord.ChatMessageType.Party,
-                ChatMessageType.Guild => Intersect.Server.Discord.ChatMessageType.Guild,
-                ChatMessageType.PM => Intersect.Server.Discord.ChatMessageType.Private,
-                ChatMessageType.Admin => Intersect.Server.Discord.ChatMessageType.Admin,
-                _ => Intersect.Server.Discord.ChatMessageType.Local
-            };
-            
-            Intersect.Server.Discord.DiscordIntegration.LogChat(player.Name, message, discordType);
-        }
-        catch
-        {
-            // Não falhar se Discord não estiver configurado
-        }
     }
 
     //GameDataPacket

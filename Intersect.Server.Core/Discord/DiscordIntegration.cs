@@ -1,3 +1,16 @@
+using Intersect.Server.Discord;
+using Intersect.Server.Database.PlayerData.Players;
+using Intersect.Server.Entities;
+using Intersect.Server.General;
+using Intersect.Server.Localization;
+using Intersect.Server.Networking;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System.Collections.Concurrent;
+using DiscordColor = Discord.Color;
+using IntersectColor = Intersect.Color;
+using Intersect.Enums;
+
 namespace Intersect.Server.Discord;
 
 /// <summary>
