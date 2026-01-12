@@ -223,3 +223,5 @@ packages/
 Custom*.props
 vendor/dockpanelsuite
 /vendor
+/server
+*.md
