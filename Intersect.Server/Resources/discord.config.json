@@ -1,0 +1,23 @@
+{
+  "Discord": {
+    "Enabled": false,
+    "BotToken": "SEU_TOKEN_AQUI",
+    "GuildId": 0,
+    "Channels": {
+      "LogChannelId": 0,
+      "ChatChannelId": 0,
+      "DropChannelId": 0,
+      "TradeChannelId": 0,
+      "AdminChannelId": 0
+    },
+    "Features": {
+      "LogChat": true,
+      "LogDrops": true,
+      "LogTrades": true,
+      "LogPlayerJoin": true,
+      "LogPlayerLeave": true,
+      "LogPlayerDeath": true,
+      "LogLevelUp": true
+    }
+  }
+}

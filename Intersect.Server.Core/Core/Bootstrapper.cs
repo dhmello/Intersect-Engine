@@ -19,6 +19,7 @@ using Intersect.Plugins.Contexts;
 using Intersect.Plugins.Helpers;
 using Intersect.Server.Database;
 using Intersect.Server.Database.PlayerData.Players;
+using Intersect.Server.Discord;
 using Intersect.Server.Entities;
 using Intersect.Server.General;
 using Intersect.Server.Localization;
@@ -314,7 +315,69 @@ internal static class Bootstrapper
             Guild.WipeStaleGuilds();
         }
 
+        // Inicializar Discord Bot
+        InitializeDiscordBot();
+
         return true;
+    }
+
+    private static void InitializeDiscordBot()
+    {
+        try
+        {
+            Console.WriteLine();
+            Console.WriteLine("Initializing Discord Bot...");
+
+            // Carregar configuração
+            var configPath = Path.Combine(ServerContext.ResourceDirectory, "discord.config.json");
+            var config = Intersect.Server.Discord.DiscordConfig.Load(configPath);
+
+            if (!config.Enabled)
+            {
+                Console.WriteLine("Discord Bot is disabled in config.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(config.BotToken))
+            {
+                Console.WriteLine("Discord Bot token not configured. Skipping Discord initialization.");
+                return;
+            }
+
+            // Criar e iniciar serviço Discord
+            var logger = Context.Logger;
+            var discordService = new Intersect.Server.Discord.DiscordService(logger);
+            
+            // Iniciar de forma assíncrona
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await discordService.StartAsync(
+                        config.BotToken,
+                        config.Channels.LogChannelId,
+                        config.Channels.ChatChannelId,
+                        config.Channels.DropChannelId,
+                        config.Channels.TradeChannelId,
+                        config.Channels.AdminChannelId
+                    );
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to start Discord Bot");
+                }
+            });
+
+            // Armazenar referência global para o serviço
+            DiscordIntegration.Initialize(discordService, config);
+
+            Console.WriteLine("Discord Bot initialization started.");
+        }
+        catch (Exception ex)
+        {
+            Context?.Logger.LogError(ex, "Error initializing Discord Bot");
+            Console.WriteLine($"Discord Bot initialization failed: {ex.Message}");
+        }
     }
 
     private static void PrintIntroduction()
