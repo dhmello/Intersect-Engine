@@ -167,4 +167,30 @@ public class DiscordLinkManager
             return false;
         }
     }
+
+    public Dictionary<Guid, ulong> GetAllLinks()
+    {
+        var links = new Dictionary<Guid, ulong>();
+        try
+        {
+            using var connection = new SqliteConnection($"Data Source={_dbPath};");
+            connection.Open();
+
+            string query = "SELECT GameUserId, DiscordUserId FROM Links";
+            using var command = new SqliteCommand(query, connection);
+            using var reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                var gameUserId = Guid.Parse(reader.GetString(0));
+                var discordUserId = (ulong)(long)reader.GetInt64(1);
+                links[gameUserId] = discordUserId;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to retrieve all Discord links.");
+        }
+        return links;
+    }
 }

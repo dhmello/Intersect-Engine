@@ -32,8 +32,42 @@ public class DiscordConfig
         }
 
         var json = File.ReadAllText(filePath);
-        var config = JsonConvert.DeserializeObject<RootConfig>(json);
-        return config?.Discord ?? new DiscordConfig();
+        var config = JsonConvert.DeserializeObject<RootConfig>(json)?.Discord ?? new DiscordConfig();
+
+        // Ensure all default values are set if missing
+        var defaults = new DiscordConfig();
+        if (config.Enabled == default && defaults.Enabled != default) config.Enabled = defaults.Enabled;
+        if (config.BotToken == default && defaults.BotToken != default) config.BotToken = defaults.BotToken;
+        if (config.GuildId == default && defaults.GuildId != default) config.GuildId = defaults.GuildId;
+
+        // Channels
+        if (config.Channels == null) config.Channels = new DiscordChannels();
+        if (config.Channels.LogChannelId == default && defaults.Channels.LogChannelId != default) config.Channels.LogChannelId = defaults.Channels.LogChannelId;
+        if (config.Channels.ChatChannelId == default && defaults.Channels.ChatChannelId != default) config.Channels.ChatChannelId = defaults.Channels.ChatChannelId;
+        if (config.Channels.DropChannelId == default && defaults.Channels.DropChannelId != default) config.Channels.DropChannelId = defaults.Channels.DropChannelId;
+        if (config.Channels.TradeChannelId == default && defaults.Channels.TradeChannelId != default) config.Channels.TradeChannelId = defaults.Channels.TradeChannelId;
+        if (config.Channels.AdminChannelId == default && defaults.Channels.AdminChannelId != default) config.Channels.AdminChannelId = defaults.Channels.AdminChannelId;
+        if (config.Channels.PlayerJoinChannelId == default && defaults.Channels.PlayerJoinChannelId != default) config.Channels.PlayerJoinChannelId = defaults.Channels.PlayerJoinChannelId;
+        if (config.Channels.PlayerLeaveChannelId == default && defaults.Channels.PlayerLeaveChannelId != default) config.Channels.PlayerLeaveChannelId = defaults.Channels.PlayerLeaveChannelId;
+        if (config.Channels.PlayerDeathChannelId == default && defaults.Channels.PlayerDeathChannelId != default) config.Channels.PlayerDeathChannelId = defaults.Channels.PlayerDeathChannelId;
+        if (config.Channels.LevelUpChannelId == default && defaults.Channels.LevelUpChannelId != default) config.Channels.LevelUpChannelId = defaults.Channels.LevelUpChannelId;
+        if (config.Channels.VerifiedRoleId == default && defaults.Channels.VerifiedRoleId != default) config.Channels.VerifiedRoleId = defaults.Channels.VerifiedRoleId;
+        if (config.Channels.UnverifiedRoleId == default && defaults.Channels.UnverifiedRoleId != default) config.Channels.UnverifiedRoleId = defaults.Channels.UnverifiedRoleId;
+
+        // Features
+        if (config.Features == null) config.Features = new DiscordFeatures();
+        if (config.Features.LogChat == default && defaults.Features.LogChat != default) config.Features.LogChat = defaults.Features.LogChat;
+        if (config.Features.LogDrops == default && defaults.Features.LogDrops != default) config.Features.LogDrops = defaults.Features.LogDrops;
+        if (config.Features.LogTrades == default && defaults.Features.LogTrades != default) config.Features.LogTrades = defaults.Features.LogTrades;
+        if (config.Features.LogPlayerJoin == default && defaults.Features.LogPlayerJoin != default) config.Features.LogPlayerJoin = defaults.Features.LogPlayerJoin;
+        if (config.Features.LogPlayerLeave == default && defaults.Features.LogPlayerLeave != default) config.Features.LogPlayerLeave = defaults.Features.LogPlayerLeave;
+        if (config.Features.LogPlayerDeath == default && defaults.Features.LogPlayerDeath != default) config.Features.LogPlayerDeath = defaults.Features.LogPlayerDeath;
+        if (config.Features.LogLevelUp == default && defaults.Features.LogLevelUp != default) config.Features.LogLevelUp = defaults.Features.LogLevelUp;
+
+        // Save the updated config back to file
+        Save(config, filePath);
+
+        return config;
     }
 
     public static void Save(DiscordConfig config, string filePath)
@@ -88,6 +122,9 @@ public class DiscordChannels
 
     [JsonProperty("VerifiedRoleId")]
     public ulong VerifiedRoleId { get; set; } = 0; // Adicione o ID do cargo de verificado aqui
+
+    [JsonProperty("UnverifiedRoleId")]
+    public ulong UnverifiedRoleId { get; set; } = 0; // Adicione o ID do cargo de não verificado aqui
 }
 
 public class DiscordFeatures

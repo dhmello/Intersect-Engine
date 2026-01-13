@@ -26,8 +26,10 @@ public sealed class DiscordService : IDisposable
     private readonly ILogger _logger;
     private readonly ConcurrentQueue<DiscordLogEntry> _logQueue;
     private readonly Timer _logFlushTimer;
+    private readonly Timer _syncTimer;
     private bool _isRunning;
     private ulong _guildId;
+    private ulong _botId;
 
     // Configurações
     private string _botToken = string.Empty;
@@ -41,6 +43,7 @@ public sealed class DiscordService : IDisposable
     private ulong _playerDeathChannelId;
     private ulong _levelUpChannelId;
     private ulong _verifiedRoleId;
+    private ulong _unverifiedRoleId;
 
     public DiscordService(ILogger logger)
     {
@@ -51,7 +54,8 @@ public sealed class DiscordService : IDisposable
         {
             GatewayIntents = GatewayIntents.Guilds | 
                            GatewayIntents.GuildMessages | 
-                           GatewayIntents.MessageContent,
+                           GatewayIntents.MessageContent |
+                           GatewayIntents.GuildMembers,
             LogLevel = LogSeverity.Info
         };
 
@@ -61,9 +65,13 @@ public sealed class DiscordService : IDisposable
         _client.Log += LogAsync;
         _client.Ready += ReadyAsync;
         _client.SlashCommandExecuted += SlashCommandHandler;
+        _client.UserJoined += UserJoinedAsync;
 
         // Timer para flush de logs (a cada 5 segundos)
-        _logFlushTimer = new Timer(FlushLogs, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        _logFlushTimer = new Timer(FlushLogs, null, 5000, 5000);
+
+        // Timer para sincronização de roles (a cada 2 minutos e 30 segundos)
+        _syncTimer = new Timer(SyncRoles, null, 150000, 150000);
     }
 
     /// <summary>
@@ -72,7 +80,7 @@ public sealed class DiscordService : IDisposable
     public async Task StartAsync(string token, ulong logChannelId, ulong chatChannelId, 
         ulong dropChannelId, ulong tradeChannelId, ulong adminChannelId,
         ulong playerJoinChannelId, ulong playerLeaveChannelId, 
-        ulong playerDeathChannelId, ulong levelUpChannelId, ulong verifiedRoleId, ulong guildId)
+        ulong playerDeathChannelId, ulong levelUpChannelId, ulong verifiedRoleId, ulong unverifiedRoleId, ulong guildId)
     {
         if (_isRunning)
         {
@@ -90,6 +98,7 @@ public sealed class DiscordService : IDisposable
         _playerDeathChannelId = playerDeathChannelId;
         _levelUpChannelId = levelUpChannelId;
         _verifiedRoleId = verifiedRoleId;
+        _unverifiedRoleId = unverifiedRoleId;
         _guildId = guildId;
 
         try
@@ -137,7 +146,7 @@ public sealed class DiscordService : IDisposable
     /// <summary>
     /// Loga mensagem de chat do jogo
     /// </summary>
-    public void LogChat(string playerName, string message, ChatMessageType messageType)
+    public void LogChat(string playerName, string message, Enums.ChatMessageType messageType)
     {
         var embed = new EmbedBuilder()
             .WithTitle("💬 Chat")
@@ -258,7 +267,8 @@ public sealed class DiscordService : IDisposable
 
     private async Task ReadyAsync()
     {
-        _logger.LogInformation($"Discord Bot logado como {_client.CurrentUser}");
+        _botId = _client.CurrentUser.Id;
+        _logger.LogInformation($"Discord Bot logado como {_client.CurrentUser} ({_botId})");
 
         // Renomear canais
         await RenameChannelsAsync();
@@ -271,6 +281,60 @@ public sealed class DiscordService : IDisposable
         catch (HttpException ex)
         {
             _logger.LogError(ex, "Erro ao registrar comandos slash");
+        }
+        
+        // Executar sincronização inicial de roles após 10 segundos
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(10000);
+            await SyncRolesAsync();
+        });
+    }
+
+    private async Task UserJoinedAsync(SocketGuildUser user)
+    {
+        try
+        {
+            // Skip bots
+            if (user.IsBot || user.Id == _botId || user.Id == 1460349640531640484)
+            {
+                return;
+            }
+
+            // Check if user is already linked
+            var links = DiscordLinkManager.Instance.GetAllLinks();
+            var isLinked = links.Values.Contains(user.Id);
+
+            if (isLinked)
+            {
+                // Give verified role
+                if (_verifiedRoleId != 0)
+                {
+                    var role = user.Guild.GetRole(_verifiedRoleId);
+                    if (role != null)
+                    {
+                        await user.AddRoleAsync(role);
+                        _logger.LogInformation($"✅ New member {user.Username} ({user.Id}) joined and received verified role (already linked)");
+                    }
+                }
+            }
+            else
+            {
+                // Give unverified role
+                if (_unverifiedRoleId != 0)
+                {
+                    var role = user.Guild.GetRole(_unverifiedRoleId);
+                    if (role != null)
+                    {
+                        await user.AddRoleAsync(role);
+                        _logger.LogInformation($"⚠️ New member {user.Username} ({user.Id}) joined and received unverified role");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error handling user join for {user.Username} ({user.Id})");
         }
     }
 
@@ -541,22 +605,39 @@ public sealed class DiscordService : IDisposable
         {
             await command.RespondAsync("✅ Conta vinculada com sucesso! Você agora tem o cargo de verificado.", ephemeral: true);
 
-            // Give Role
+            // Give verified role and remove unverified role
             try
             {
-                if (_verifiedRoleId != 0 && command.Channel is SocketGuildChannel guildChannel)
+                if (command.Channel is SocketGuildChannel guildChannel)
                 {
                     var user = guildChannel.Guild.GetUser(discordUser.Id);
-                    var role = guildChannel.Guild.GetRole(_verifiedRoleId);
-                    if (user != null && role != null)
+                    
+                    // Add verified role
+                    if (_verifiedRoleId != 0 && user != null)
                     {
-                        await user.AddRoleAsync(role);
+                        var verifiedRole = guildChannel.Guild.GetRole(_verifiedRoleId);
+                        if (verifiedRole != null && !user.Roles.Contains(verifiedRole))
+                        {
+                            await user.AddRoleAsync(verifiedRole);
+                            _logger.LogInformation($"✅ Added verified role to {user.Username} ({user.Id}) after linking");
+                        }
+                    }
+                    
+                    // Remove unverified role
+                    if (_unverifiedRoleId != 0 && user != null)
+                    {
+                        var unverifiedRole = guildChannel.Guild.GetRole(_unverifiedRoleId);
+                        if (unverifiedRole != null && user.Roles.Contains(unverifiedRole))
+                        {
+                            await user.RemoveRoleAsync(unverifiedRole);
+                            _logger.LogInformation($"🗑️ Removed unverified role from {user.Username} ({user.Id}) after linking");
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to assign verified role.");
+                _logger.LogError(ex, "Failed to update roles after linking.");
             }
         }
         else
@@ -618,16 +699,131 @@ public sealed class DiscordService : IDisposable
         }
     }
 
-    private DiscordColor GetColorForMessageType(ChatMessageType messageType)
+    private async void SyncRoles(object? state)
+    {
+        await SyncRolesAsync();
+    }
+
+    private async Task SyncRolesAsync()
+    {
+        if (!_isRunning || _guildId == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var guild = _client.GetGuild(_guildId);
+            if (guild == null)
+            {
+                _logger.LogWarning("Guild not found for role sync");
+                return;
+            }
+
+            // Download all guild members if not already cached
+            _logger.LogInformation("Downloading guild members...");
+            await guild.DownloadUsersAsync();
+            _logger.LogInformation($"Guild members downloaded. Total: {guild.MemberCount}");
+
+            var links = DiscordLinkManager.Instance.GetAllLinks();
+            var linkedDiscordIds = new HashSet<ulong>(links.Values);
+
+            _logger.LogInformation($"Starting role sync. Guild has {guild.Users.Count} cached members, {guild.MemberCount} total members, {linkedDiscordIds.Count} linked accounts");
+
+            int verifiedCount = 0;
+            int unverifiedCount = 0;
+            int skippedCount = 0;
+            int errorCount = 0;
+
+            foreach (var member in guild.Users)
+            {
+                try
+                {
+                    // Skip bots
+                    if (member.IsBot || member.Id == _botId || member.Id == 1460349640531640484)
+                    {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    bool isLinked = linkedDiscordIds.Contains(member.Id);
+                    bool hasVerifiedRole = _verifiedRoleId != 0 && member.Roles.Any(r => r.Id == _verifiedRoleId);
+                    bool hasUnverifiedRole = _unverifiedRoleId != 0 && member.Roles.Any(r => r.Id == _unverifiedRoleId);
+
+                    if (isLinked)
+                    {
+                        // User is linked - should have verified role and not have unverified role
+                        if (_verifiedRoleId != 0 && !hasVerifiedRole)
+                        {
+                            var role = guild.GetRole(_verifiedRoleId);
+                            if (role != null)
+                            {
+                                await member.AddRoleAsync(role);
+                                _logger.LogInformation($"✅ Added verified role to {member.Username} ({member.Id})");
+                                verifiedCount++;
+                            }
+                        }
+                        
+                        if (_unverifiedRoleId != 0 && hasUnverifiedRole)
+                        {
+                            var role = guild.GetRole(_unverifiedRoleId);
+                            if (role != null)
+                            {
+                                await member.RemoveRoleAsync(role);
+                                _logger.LogInformation($"🗑️ Removed unverified role from {member.Username} ({member.Id})");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // User is NOT linked - should have unverified role and not have verified role
+                        if (_unverifiedRoleId != 0 && !hasUnverifiedRole)
+                        {
+                            var role = guild.GetRole(_unverifiedRoleId);
+                            if (role != null)
+                            {
+                                await member.AddRoleAsync(role);
+                                _logger.LogInformation($"⚠️ Added unverified role to {member.Username} ({member.Id})");
+                                unverifiedCount++;
+                            }
+                        }
+                        
+                        if (_verifiedRoleId != 0 && hasVerifiedRole)
+                        {
+                            var role = guild.GetRole(_verifiedRoleId);
+                            if (role != null)
+                            {
+                                await member.RemoveRoleAsync(role);
+                                _logger.LogInformation($"🗑️ Removed verified role from {member.Username} ({member.Id})");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Failed to sync role for Discord user {member.Username} ({member.Id})");
+                    errorCount++;
+                }
+            }
+
+            _logger.LogInformation($"Role sync completed: {verifiedCount} verified, {unverifiedCount} unverified, {skippedCount} skipped, {errorCount} errors");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync roles");
+        }
+    }
+
+    private DiscordColor GetColorForMessageType(Enums.ChatMessageType messageType)
     {
         return messageType switch
         {
-            ChatMessageType.Local => DiscordColor.Green,
-            ChatMessageType.Global => DiscordColor.Blue,
-            ChatMessageType.Party => new DiscordColor(128, 0, 128), // Purple
-            ChatMessageType.Guild => DiscordColor.Orange,
-            ChatMessageType.PM => new DiscordColor(0, 128, 128), // Teal
-            ChatMessageType.Admin => DiscordColor.Red,
+            Enums.ChatMessageType.Local => DiscordColor.Green,
+            Enums.ChatMessageType.Global => DiscordColor.Blue,
+            Enums.ChatMessageType.Party => new DiscordColor(128, 0, 128), // Purple
+            Enums.ChatMessageType.Guild => DiscordColor.Orange,
+            Enums.ChatMessageType.PM => new DiscordColor(0, 128, 128), // Teal
+            Enums.ChatMessageType.Admin => DiscordColor.Red,
             _ => new DiscordColor(211, 211, 211) // LightGray (Default)
         };
     }
@@ -643,6 +839,7 @@ public sealed class DiscordService : IDisposable
     public void Dispose()
     {
         _logFlushTimer?.Dispose();
+        _syncTimer?.Dispose();
         _client?.Dispose();
     }
 

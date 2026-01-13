@@ -367,6 +367,7 @@ internal static class Bootstrapper
                         config.Channels.PlayerDeathChannelId,
                         config.Channels.LevelUpChannelId,
                         config.Channels.VerifiedRoleId,
+                        config.Channels.UnverifiedRoleId,
                         config.GuildId
                     );
                 }
