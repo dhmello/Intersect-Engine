@@ -2,10 +2,13 @@ using Intersect.Client.Core;
 using Intersect.Client.Framework.File_Management;
 using Intersect.Client.Framework.Gwen;
 using Intersect.Client.Framework.Gwen.Control;
+using Intersect.Client.Framework.Gwen.Control.EventArguments;
 using Intersect.Client.Interface.Shared;
+using Intersect.Client.Localization;
 using Intersect.Framework;
 using Intersect.Framework.Core;
 using Intersect.Network;
+using Intersect.Utilities;
 
 namespace Intersect.Client.Interface.Menu;
 
@@ -13,6 +16,9 @@ public partial class MainMenu : MutableInterface
 {
     private readonly Canvas _menuCanvas;
     private readonly MainMenuWindow _mainMenuWindow;
+    
+    // Discord button
+    private readonly Button _discordButton;
 
     private bool _shouldOpenCharacterCreation;
     private bool _shouldOpenCharacterSelection;
@@ -108,6 +114,19 @@ public partial class MainMenu : MutableInterface
 
         var logo = new ImagePanel(menuCanvas, "Logo");
         logo.LoadJsonUi(GameContentManager.UI.Menu, Graphics.Renderer.GetResolutionString());
+
+        // Create Discord button
+        _discordButton = new Button(_menuCanvas, "DiscordButton", disableText: true)
+        {
+            Alignment = [Alignments.Left, Alignments.Top],
+            AlignmentPadding = new Padding { Left = 16, Top = 16 },
+            Size = new Point(48, 48),
+        };
+        _discordButton.SetStateTexture(ComponentState.Normal, "discord.png");
+        _discordButton.SetStateTexture(ComponentState.Hovered, "discord.png");
+        _discordButton.SetStateTexture(ComponentState.Active, "discord.png");
+        _discordButton.SetToolTipText(Strings.MainMenu.Discord);
+        _discordButton.Clicked += DiscordButton_Clicked;
 
         NetworkStatusChanged += HandleNetworkStatusChanged;
     }
@@ -313,5 +332,10 @@ public partial class MainMenu : MutableInterface
             NetworkStatusChanged?.Invoke();
         }
         LastNetworkStatusChangeTime = resetStatusCheck ? -1 : Timing.Global.MillisecondsUtc;
+    }
+
+    private void DiscordButton_Clicked(Base sender, MouseButtonState arguments)
+    {
+        BrowserUtils.Open("https://discord.gg/CP9umREpfk");
     }
 }
